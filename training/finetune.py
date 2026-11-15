@@ -19,11 +19,8 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from transformers import AutoModelForCausalLM
-
 import sequences
-
-BASE_MODEL = "stanford-crfm/music-small-800k"
+from model import BASE_MODEL, load_model
 
 
 def batches(data, batch_size, device, shuffle, rng):
@@ -108,7 +105,7 @@ def main():
     if len(train) == 0 or len(val) == 0:
         raise SystemExit("not enough data: need at least one training and one validation sequence")
 
-    model = AutoModelForCausalLM.from_pretrained(args.base).to(device).train()
+    model = load_model(args.base).to(device).train()
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=0.01)
     steps_per_epoch = math.ceil(len(train) / args.batch_size)
     total = min(int(steps_per_epoch * args.epochs), args.max_steps or 10**12)

@@ -30,12 +30,11 @@ from anticipation import ops
 from anticipation.convert import midi_to_events
 from fastapi import FastAPI, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
-from transformers import AutoModelForCausalLM
 
 import sampler
 import tracks
+from model import BASE_MODEL, load_model
 
-BASE_MODEL = "stanford-crfm/music-small-800k"
 CHECKPOINTS = Path(__file__).resolve().parent.parent / "checkpoints"
 STYLES = ("lofi", "bossa")
 MAX_SECONDS = 180
@@ -56,7 +55,7 @@ def get_model(style):
         raise HTTPException(422, f"style must be one of {STYLES}")
     source = model_source(style)
     if source not in _models:
-        _models[source] = AutoModelForCausalLM.from_pretrained(source).to(device).eval()
+        _models[source] = load_model(source).to(device).eval()
     return _models[source]
 
 

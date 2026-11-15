@@ -20,9 +20,8 @@ from anticipation.config import EVENT_SIZE, M
 from anticipation.convert import events_to_midi, midi_to_events
 from anticipation.sample import generate
 from anticipation.vocab import AUTOREGRESS, CONTROL_OFFSET
-from transformers import AutoModelForCausalLM
 
-MODEL = "stanford-crfm/music-small-800k"
+from model import BASE_MODEL as MODEL, load_model
 SECONDS = 12
 
 
@@ -36,7 +35,7 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
     device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
 
-    model = AutoModelForCausalLM.from_pretrained(MODEL).to(device).eval()
+    model = load_model(MODEL).to(device).eval()
     params = sum(p.numel() for p in model.parameters()) / 1e6
     print(f"loaded {MODEL}: {params:.0f}M parameters on {device}")
 
