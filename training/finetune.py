@@ -34,9 +34,12 @@ def batches(data, batch_size, device, shuffle, rng):
         yield rows.masked_fill(~mask, 0), mask, rows.masked_fill(~mask, -100)
 
 
+AMP = True   # mixed precision on CUDA; turned off by --no-amp
+
+
 def forward(model, batch, device):
     ids, mask, labels = batch
-    with torch.autocast(device_type="cuda", dtype=torch.bfloat16, enabled=device == "cuda"):
+    with torch.autocast(device_type="cuda", dtype=torch.bfloat16, enabled=AMP and device == "cuda"):
         return model(ids, attention_mask=mask, labels=labels).loss
 
 
@@ -70,12 +73,20 @@ def main():
     ap.add_argument("--eval-batches", type=int, default=200, help="0 = whole validation set")
     ap.add_argument("--max-steps", type=int, help="stop early (for quick checks)")
     ap.add_argument("--limit-files", type=int, help="use only this many files (for quick checks)")
+    ap.add_argument("--no-amp", action="store_true", help="full precision on CUDA (slower, more memory)")
+    ap.add_argument("--eval-only", action="store_true",
+                    help="print the validation loss of the base model and exit")
     ap.add_argument("--rebuild", action="store_true", help="ignore cached training sequences")
     ap.add_argument("--save-last", action="store_true",
                     help="also save the final weights to <out>-last, whatever the validation loss")
     ap.add_argument("--seed", type=int, default=0)
     args = ap.parse_args()
 
+    global AMP
+    AMP = not args.no_amp
+    import sys
+    import transformers
+    print(f"python {sys.version.split()[0]}, torch {torch.__version__}, transformers {transformers.__version__}")
     out = args.out or Path("checkpoints") / args.style
     device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
     torch.manual_seed(args.seed)
@@ -107,6 +118,9 @@ def main():
         else 0.5 * (1 + math.cos(math.pi * (s - warmup) / max(total - warmup, 1)))))
 
     baseline = evaluate(model, val, args.batch_size, device, args.eval_batches)
+    if args.eval_only:
+        print(f"{device}{'' if AMP else ' (no amp)'}: validation loss of {args.base} = {baseline:.4f}")
+        return
     print(f"{device}: {total} steps, {steps_per_epoch} per epoch; "
           f"validation loss before training {baseline:.4f}")
     log = {"style": args.style, "base": args.base, "args": {k: str(v) for k, v in vars(args).items()},
