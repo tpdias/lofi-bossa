@@ -1,0 +1,13 @@
+# data pipeline (runs anywhere, no GPU needed)
+pretty_midi
+numpy
+
+# model work (install on the GPU box; large)
+# torch
+# transformers
+# peft
+# anticipation @ git+https://github.com/jthickstun/anticipation.git
+
+# inference server
+fastapi
+uvicorn

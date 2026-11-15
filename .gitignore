@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+
+# datasets and derived data never go in git
+datasets/
+processed/
+checkpoints/
+
+# Xcode
+app/**/xcuserdata/
+app/**/DerivedData/
+app/**/.build/
