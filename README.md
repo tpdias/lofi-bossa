@@ -95,44 +95,98 @@ MIDI file. A style uses `checkpoints/<style>/` if that folder exists, otherwise 
 
 ## Training data
 
-There is no ready-made multitrack dataset for lo-fi or bossa nova. The training set has to be
-assembled by filtering general MIDI collections and adding small style-specific sets.
+There is no ready-made dataset for either style, and no public collection labels them:
+**GigaMIDI has zero files tagged bossa nova or lo-fi** among its 2.1 million, and MidiCaps has
+none either. The training set is therefore assembled like this:
 
-| Dataset | What it offers | License |
-|---|---|---|
-| [GigaMIDI](https://huggingface.co/datasets/Metacreation/GigaMIDI) | Large multitrack collection with style labels; the main candidate | CC BY-NC 4.0, access on request |
-| [MidiCaps](https://huggingface.co/datasets/amaai-lab/MidiCaps) | 168k captioned multitrack files; only useful as a "jazz / latin" wide tier | CC BY 4.0 |
-| [GuitarSet](https://zenodo.org/records/3371780) | Real bossa nova guitar comping (guitar only) | CC BY 4.0 |
-| [Groove MIDI](https://magenta.tensorflow.org/datasets/groove) | Human-played drums, including bossa and hip-hop takes (drums only) | CC BY 4.0 |
-| [Lo-Fi Hip Hop MIDIs](https://www.kaggle.com/datasets/zakarii/lofi-hip-hop-midi) | Small lo-fi set, mostly melodies | see Kaggle page |
+- **Bossa nova** is found in [GigaMIDI](https://huggingface.co/datasets/Metacreation/GigaMIDI)
+  by artist (Jobim, João Gilberto, Bonfá, Baden Powell and others) and by standard song titles
+  (Desafinado, Corcovado, Garota de Ipanema and so on). A wider tier adds other Brazilian
+  popular music, sambas and files labelled latin.
+- **Lo-fi** has no direct source. It is approximated by hip-hop and downtempo files at
+  55–105 BPM, with jazz, R&B, soul and funk at the same tempos as the wider tier. Much of
+  what makes lo-fi sound like lo-fi is production, which the app's sound design covers.
+- [GuitarSet](https://zenodo.org/records/3371780) adds real bossa nova guitar comping and
+  [Groove MIDI](https://magenta.tensorflow.org/datasets/groove) adds human-played drums.
 
-What the pipeline found so far ("core" = tagged as the style, "wide" = neighbouring genres):
+Every file is reduced to the four tracks. What that produced:
 
-| Source | Bossa core | Bossa wide | Lo-fi core | Lo-fi wide |
-|---|---|---|---|---|
-| GuitarSet | 72 | 72 | 0 | 72 |
-| Groove MIDI | 2 | 46 | 35 | 78 |
-| MidiCaps (metadata scan) | 0 | 4,594 | 2 | 780 |
+| Style | Tier | Files | Hours |
+|---|---|---|---|
+| Bossa nova | core | 304 | 9.3 |
+| Bossa nova | wide | 1,937 | 39.6 |
+| Lo-fi | core | 554 | 30.7 |
+| Lo-fi | wide | 1,975 | 107.6 |
 
-MidiCaps has no bossa nova tag at all and almost no hip-hop or chillout (8 and 17 files out of
-168,385), so real multitrack examples of either style still have to come from GigaMIDI.
+665 of the bossa-side files and 900 of the lo-fi-side files have all four tracks; the rest
+have one to three (solo piano or guitar arrangements, drum takes) and are still used.
 
-Run the pipeline:
+| Dataset | License |
+|---|---|
+| GigaMIDI | CC BY-NC 4.0, access on request |
+| GuitarSet | CC BY 4.0 |
+| Groove MIDI | CC BY 4.0 |
+
+### Build the training set
+
+Download GigaMIDI's `Final_GigaMIDI_V1.1_Final` folder into `data/` and log in to Hugging
+Face (`hf auth login`) with an account that has access. Then:
+
+```bash
+.venv/bin/python training/data/gigamidi_meta.py
+```
 
 ```bash
 .venv/bin/python training/data/download.py groove guitarset
 ```
 
 ```bash
-.venv/bin/python training/data/build_manifest.py --midicaps-meta https://huggingface.co/datasets/amaai-lab/MidiCaps/resolve/main/train.json
+.venv/bin/python training/data/build_manifest.py
+```
+
+```bash
+.venv/bin/python training/data/gigamidi_extract.py
 ```
 
 ```bash
 .venv/bin/python training/preprocess.py
 ```
 
-This writes clean four-track MIDI to `processed/midi/<style>/` and a summary to
-`processed/report.md`. Style rules are in `training/data/styles.py`.
+The result is `processed/` (clean four-track MIDI, an index and `report.md`). Style rules
+are in `training/data/styles.py`.
+
+## Fine-tuning
+
+Fine-tuning is meant for a CUDA GPU. Copy the repository and the `processed/` folder to
+the GPU machine, install the requirements, and run one job per style:
+
+```bash
+.venv/bin/python training/finetune.py --style bossa --batch-size 16
+```
+
+```bash
+.venv/bin/python training/finetune.py --style lofi --batch-size 16
+```
+
+With the default settings the bossa set is 47,249 training sequences of 1,024 tokens and the
+lo-fi set is 105,628 (about 2,950 and 6,600 steps per epoch at batch size 16).
+
+Each run builds its training sequences once (cached in `processed/sequences/`), reports the
+validation loss before training, and saves the checkpoint with the lowest validation loss to
+`checkpoints/<style>/`. Copy that folder back next to the server and it is used automatically
+for that style. `checkpoints/<style>/training_log.json` records the losses.
+
+Each file is used several times: once plain, and several times with a random subset of its
+tracks held fixed while the model learns to write the others. That second form is what
+per-track regeneration relies on.
+
+Useful options: `--tiers core` trains on the core tier only, `--epochs`, `--lr`,
+`--save-last` (also keep the final weights), and `--limit-files 40 --max-steps 30
+--batch-size 2` for a two-minute check on a Mac.
+
+**Not yet run at full scale.** The loop has only been checked on a Mac with 23–50 files,
+where training loss fell but validation loss did not improve. Whether fine-tuning gives an
+audible change in style is still to be shown.
 
 ## Repository layout
 
@@ -140,6 +194,8 @@ This writes clean four-track MIDI to `processed/midi/<style>/` and a summary to
 training/
   data/            download, style rules, manifest builder
   preprocess.py    collapse any MIDI to piano / guitar / bass / drums
+  sequences.py     training sequences from the preprocessed files
+  finetune.py      fine-tune one checkpoint per style
   tracks.py        track definitions, model events <-> MIDI
   sampler.py       cached, instrument-restricted sampling
   server.py        local HTTP API used by the app
@@ -162,7 +218,7 @@ app/
 
 ## Roadmap
 
-1. Build the multitrack training set from GigaMIDI and fine-tune one checkpoint per style.
+1. Run the fine-tuning on a GPU and compare each style against the pretrained model by ear.
 2. Piano-roll note editing.
 3. Tempo-aware generation and a bar grid.
 4. Run the model inside the app (Core ML or MLX) so no Python process is needed.

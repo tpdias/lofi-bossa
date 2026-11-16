@@ -12,3 +12,6 @@ checkpoints/
 app/**/xcuserdata/
 app/**/DerivedData/
 app/**/.build/
+
+# local dataset downloads (repo root only)
+/data/

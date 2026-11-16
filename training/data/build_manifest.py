@@ -4,6 +4,8 @@
 
 Each manifest row: {id, source, style, tier, path, tempo, multitrack}
 `path` is relative to datasets/<source>/. Sources that are not downloaded are skipped.
+GigaMIDI rows need data/gigamidi_styles.jsonl (see gigamidi_meta.py); their MIDI files are
+pulled out of the downloaded zips afterwards by gigamidi_extract.py.
 
 MidiCaps metadata can be streamed instead of downloaded:
     --midicaps-meta https://huggingface.co/datasets/amaai-lab/MidiCaps/resolve/main/train.json
@@ -18,7 +20,7 @@ import json
 import urllib.request
 from pathlib import Path
 
-from styles import STYLES, classify_prefix, classify_tags
+from styles import STYLES, classify_gigamidi, classify_prefix, classify_tags
 
 FAMILY_PROGRAMS = {"piano": range(0, 8), "guitar": range(24, 32), "bass": range(32, 40)}
 
@@ -103,11 +105,28 @@ def kaggle_lofi(root):
         yield row("kaggle_lofi", mid.relative_to(root), "lofi", "core", None, False)
 
 
+def gigamidi(meta):
+    """Rows come from gigamidi_meta.py; files are extracted later to datasets/gigamidi/<md5>.mid."""
+    seen = set()
+    with open(meta) as f:
+        for line in f:
+            m = json.loads(line)
+            for style, tier in classify_gigamidi(m):
+                if (m["md5"], style) in seen:
+                    continue
+                seen.add((m["md5"], style))
+                # only full-band files must contain several of our tracks; solo piano or guitar
+                # arrangements and drum-only files are kept as single-track material
+                multitrack = m["type"] == "all-instruments-with-drums"
+                yield row("gigamidi", f"{m['md5']}.mid", style, tier, m.get("tempo"), multitrack)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--root", default="datasets", type=Path)
     ap.add_argument("--out", default="processed/manifest.jsonl", type=Path)
     ap.add_argument("--midicaps-meta", help="path or URL of MidiCaps train.json")
+    ap.add_argument("--gigamidi-meta", default="data/gigamidi_styles.jsonl", type=Path)
     ap.add_argument("--min-families", type=int, default=3,
                     help="multitrack files must contain this many of piano/guitar/bass/drums")
     args = ap.parse_args()
@@ -116,6 +135,8 @@ def main():
     meta = args.midicaps_meta or args.root / "midicaps" / "train.json"
     if str(meta).startswith("http") or Path(meta).exists():
         rows += midicaps(meta, args.min_families)
+    if args.gigamidi_meta.exists():
+        rows += gigamidi(args.gigamidi_meta)
     for name, scan in (("groove", groove), ("guitarset", guitarset), ("kaggle_lofi", kaggle_lofi)):
         if (args.root / name).exists():
             rows += scan(args.root / name)
