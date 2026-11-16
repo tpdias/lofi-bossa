@@ -2,14 +2,24 @@ import AVFoundation
 import SwiftUI
 
 @main
-enum Main {
-    static func main() {
+struct LofiBossaApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
+    @StateObject private var state = AppState()
+
+    init() {
         let args = CommandLine.arguments
         if let flag = args.firstIndex(of: "--render"), args.count > flag + 3 {
             // Headless check of the audio path:  LofiBossa --render song.json lofi|bossa out.wav
-            exit(renderHeadless(song: args[flag + 1], style: args[flag + 2], output: args[flag + 3]))
+            exit(Self.renderHeadless(song: args[flag + 1], style: args[flag + 2], output: args[flag + 3]))
         }
-        LofiBossaApp.main()
+    }
+
+    var body: some Scene {
+        WindowGroup("Lo-Fi & Bossa") {
+            ContentView()
+                .environmentObject(state)
+                .frame(minWidth: 900, minHeight: 500)
+        }
     }
 
     private static func renderHeadless(song path: String, style name: String, output: String) -> Int32 {
@@ -38,19 +48,6 @@ enum Main {
         } catch {
             print("render failed: \(error)")
             return 1
-        }
-    }
-}
-
-struct LofiBossaApp: App {
-    @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
-    @StateObject private var state = AppState()
-
-    var body: some Scene {
-        WindowGroup("Lo-Fi & Bossa") {
-            ContentView()
-                .environmentObject(state)
-                .frame(minWidth: 900, minHeight: 500)
         }
     }
 }

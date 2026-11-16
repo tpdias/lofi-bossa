@@ -143,7 +143,8 @@ final class AppState: ObservableObject {
             isPlaying = true
             ticker?.invalidate()
             ticker = Timer.scheduledTimer(withTimeInterval: 1.0 / 30, repeats: true) { [weak self] _ in
-                Task { @MainActor in self?.tick() }
+                // Timers fire on the main run loop, so no task hop is needed 30 times a second.
+                MainActor.assumeIsolated { self?.tick() }
             }
         } catch {
             self.error = "Couldn't start audio: \(error.localizedDescription)"
