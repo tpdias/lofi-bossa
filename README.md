@@ -76,7 +76,14 @@ cd app && swift run
 The dot in the top-right corner turns green when the app can reach the generator.
 `⌘G` generates, `Space` plays and pauses, clicking a track's note overview seeks.
 
-You can also open `app/Package.swift` in Xcode and run from there.
+### In Xcode
+
+Open `app/LofiBossa.xcodeproj` and press Run (`⌘R`). This builds a regular `LofiBossa.app`
+bundle. The project picks up every file under `app/Sources/LofiBossa/` automatically, so new
+Swift files added to that folder need no project changes. The generator still has to be
+running (step 2).
+
+`app/Package.swift` builds the same sources from the command line (`swift run`).
 
 ### Server API
 

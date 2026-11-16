@@ -64,6 +64,7 @@ private struct GenerateBar: View {
             HStack(spacing: 8) {
                 Text("Length")
                     .foregroundStyle(.secondary)
+                    .fixedSize()
                 Slider(value: $state.seconds, in: 15...180, step: 15)
                     .frame(width: 150)
                 Text(timecode(state.seconds))

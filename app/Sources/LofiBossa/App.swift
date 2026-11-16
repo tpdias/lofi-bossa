@@ -71,9 +71,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private static func saveWindowImage(to url: URL) {
         guard let window = NSApp.windows.first(where: { $0.isVisible }),
               let view = window.contentView?.superview ?? window.contentView,
-              let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }
+              let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) else {
+            print("screenshot: no visible window (\(NSApp.windows.count) windows)")
+            return
+        }
         view.cacheDisplay(in: view.bounds, to: bitmap)
-        try? bitmap.representation(using: .png, properties: [:])?.write(to: url)
+        do {
+            try bitmap.representation(using: .png, properties: [:])?.write(to: url)
+        } catch {
+            print("screenshot: \(error.localizedDescription)")
+        }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
