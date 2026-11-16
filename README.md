@@ -14,6 +14,8 @@ mix each track, swap its instrument, or have the model rewrite just that one par
 ## What it does
 
 - **Generate** a 15–180 second song in a chosen style.
+- **Choose the model**: for a style that has a fine-tuned checkpoint, switch between it and
+  the pretrained model to compare them.
 - **Regenerate one track**: the model writes a new part for that instrument that fits the
   other three, which come back note-for-note unchanged. One level of undo.
 - **Mix**: mute, solo and volume per track; pick the instrument sound per track.
@@ -98,7 +100,9 @@ curl -o song2.mid --data-binary @song.mid "localhost:8765/regenerate_track?track
 ```
 
 Add `"format": "json"` (or send JSON to `/regenerate_track`) to get notes as JSON instead of a
-MIDI file. A style uses `checkpoints/<style>/` if that folder exists, otherwise the pretrained model.
+MIDI file. `"model"` is `auto` (default: the style's `checkpoints/<style>/` if it exists, otherwise
+the pretrained model), `pretrained` or `finetuned`. `/health` lists the styles that have a
+fine-tuned checkpoint.
 
 ## Training data
 

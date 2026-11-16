@@ -82,6 +82,14 @@ enum Style: String, CaseIterable, Identifiable {
     }
 }
 
+/// Which weights write the notes. Raw values match the server's "model" parameter.
+enum ModelChoice: String, CaseIterable, Identifiable {
+    case finetuned, pretrained
+
+    var id: String { rawValue }
+    var title: String { self == .finetuned ? "Fine-tuned" : "Pretrained" }
+}
+
 /// Master effect amounts, each 0...1.
 struct Effects: Equatable {
     var warmth: Double   // low-pass: 0 = open, 1 = very muffled

@@ -24,6 +24,7 @@ WINDOW = 1017           # event/control tokens the model sees (plus 1 mode token
 KEEP = 678              # tokens kept when the window is rebuilt
 MAX_SPAN = 6000         # ticks; relative times must stay well under MAX_TIME (100 s)
 MAX_SAME_TICK = 12      # notes allowed to start on one 10 ms tick before time is forced forward
+MAX_STEP = 150          # ticks; the furthest one event may be from the previous one (1.5 s)
 MAX_AHEAD = 120         # fixed notes shown ahead of the current time; the rest of the window is history
 
 
@@ -88,7 +89,8 @@ def _sample(logits, top_p, rng):
 
 @torch.no_grad()
 def generate(model, start_time, end_time, inputs=None, controls=None, instruments=None,
-             top_p=0.98, seed=None, progress=None, rest_penalty=0.0, max_notes_per_second=24):
+             top_p=0.98, seed=None, progress=None, rest_penalty=0.0, max_notes_per_second=24,
+             max_rests=2):
     """Generate events between start_time and end_time (seconds).
 
     inputs       events to continue from (those after start_time are kept fixed)
@@ -97,6 +99,9 @@ def generate(model, start_time, end_time, inputs=None, controls=None, instrument
     progress     optional callback(fraction between 0 and 1)
     max_notes_per_second  new notes allowed in any one-second span; time is pushed forward
                  beyond that (the pretrained model can otherwise produce absurdly dense parts)
+    max_rests    consecutive one-second rests allowed before the next event must be a note.
+                 Stops the model from drifting into silence and staying there, which the
+                 fine-tuned checkpoints do on longer songs.
     rest_penalty amount subtracted from the "rest" logit; math.inf forbids rests, so every
                  event is a note. Used when the model would otherwise leave a track silent.
     Returns the new events merged with `inputs`; controls are not included.
@@ -127,6 +132,9 @@ def generate(model, start_time, end_time, inputs=None, controls=None, instrument
     ctx = _Context(model, mode)
     ctx.rebuild(tokens, current)
     same_tick = 0
+    rest_run = 0
+    no_rest = allowed.clone()
+    no_rest[MAX_NOTE] = False
     recent = collections.deque(maxlen=max_notes_per_second)   # start times of the latest new notes
     ahead = collections.deque()                               # times of revealed fixed notes still to come
     next_fixed = 0                                            # index into `pending`
@@ -159,6 +167,10 @@ def generate(model, start_time, end_time, inputs=None, controls=None, instrument
             break
         logits = ctx.logits[TIME_OFFSET:TIME_OFFSET + MAX_TIME].clone()
         logits[:earliest - ctx.offset] = -math.inf
+        # Silence is written as a rest every second, so a longer jump is never needed. Without
+        # this cap the fine-tuned checkpoints sometimes leap many seconds ahead, or past the end
+        # of the song, which ends generation early.
+        logits[earliest - ctx.offset + MAX_STEP + 1:] = -math.inf
         rel_time = _sample(logits, top_p, rng)
         new_time = rel_time + ctx.offset
         if new_time >= end:
@@ -166,12 +178,14 @@ def generate(model, start_time, end_time, inputs=None, controls=None, instrument
         ctx.feed_one(TIME_OFFSET + rel_time)
 
         logits = ctx.logits[DUR_OFFSET:DUR_OFFSET + MAX_DUR].clone()
-        if rest_penalty > 0:
+        force_note = rest_run >= max_rests
+        if rest_penalty > 0 or force_note:
             logits[0] = -math.inf   # zero duration only makes sense for a rest
         dur = _sample(logits, top_p, rng)
         ctx.feed_one(DUR_OFFSET + dur)
 
-        logits = (ctx.logits[NOTE_OFFSET:NOTE_OFFSET + MAX_NOTE + 1] + note_bias).masked_fill(~allowed, -math.inf)
+        logits = (ctx.logits[NOTE_OFFSET:NOTE_OFFSET + MAX_NOTE + 1] + note_bias).masked_fill(
+            ~(no_rest if force_note else allowed), -math.inf)
         note = _sample(logits, top_p, rng)
         ctx.feed_one(NOTE_OFFSET + note)
 
@@ -179,6 +193,9 @@ def generate(model, start_time, end_time, inputs=None, controls=None, instrument
         same_tick = same_tick + 1 if new_time == current else 0
         if note != MAX_NOTE:
             recent.append(new_time)
+            rest_run = 0
+        else:
+            rest_run += 1
         current = new_time
         if progress:
             progress((current - start) / max(end - start, 1))
@@ -198,7 +215,7 @@ def accompany(model, fixed_events, seconds, instruments, top_p=0.98, seed=None, 
     for rest_penalty in (0.0, 4.0, math.inf):
         new = generate(model, 0, seconds, controls=controls, instruments=instruments,
                        top_p=top_p, seed=seed, progress=progress, rest_penalty=rest_penalty,
-                       max_notes_per_second=12)
+                       max_notes_per_second=12, max_rests=8)
         if len(new) // 3 >= min_notes_per_second * seconds:
             break
     return new

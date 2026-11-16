@@ -3,8 +3,11 @@
     .venv/bin/python training/server.py            # http://127.0.0.1:8765
 
     GET  /health
-    POST /generate           JSON {style, seconds, seed?, top_p?, format?}
-    POST /regenerate_track   ?track=bass&style=lofi&seed=&top_p=, body = a song
+    POST /generate           JSON {style, seconds, model?, seed?, top_p?, format?}
+    POST /regenerate_track   ?track=bass&style=lofi&model=&seed=&top_p=, body = a song
+
+"model" is auto (default), pretrained or finetuned. /health lists which styles have a
+fine-tuned checkpoint.
 
 A song is 4 tracks (piano, guitar, bass, drums) in one of two formats:
   midi  a standard MIDI file; the seed used comes back in the X-Seed header
@@ -45,15 +48,28 @@ _models = {}
 _lock = threading.Lock()  # one generation at a time
 
 
-def model_source(style):
-    folder = CHECKPOINTS / style
-    return str(folder) if folder.is_dir() else BASE_MODEL
+MODEL_CHOICES = ("auto", "pretrained", "finetuned")
 
 
-def get_model(style):
+def has_finetuned(style):
+    return (CHECKPOINTS / style / "config.json").is_file()
+
+
+def model_source(style, choice="auto"):
+    """auto = the style's fine-tuned checkpoint when there is one, otherwise the pretrained model."""
+    if choice == "pretrained" or (choice == "auto" and not has_finetuned(style)):
+        return BASE_MODEL
+    return str(CHECKPOINTS / style)
+
+
+def get_model(style, choice="auto"):
     if style not in STYLES:
         raise HTTPException(422, f"style must be one of {STYLES}")
-    source = model_source(style)
+    if choice not in MODEL_CHOICES:
+        raise HTTPException(422, f"model must be one of {MODEL_CHOICES}")
+    if choice == "finetuned" and not has_finetuned(style):
+        raise HTTPException(422, f"there is no fine-tuned model for {style} (checkpoints/{style}/ is missing)")
+    source = model_source(style, choice)
     if source not in _models:
         _models[source] = load_model(source).to(device).eval()
     return _models[source]
@@ -94,6 +110,7 @@ def respond(pm, seed, fmt):
 
 class GenerateRequest(BaseModel):
     style: str = "lofi"
+    model: str = "auto"
     seconds: float = Field(30, ge=5, le=MAX_SECONDS)
     seed: int | None = None
     top_p: float = Field(0.98, gt=0, le=1)
@@ -103,12 +120,13 @@ class GenerateRequest(BaseModel):
 @app.get("/health")
 def health():
     return {"device": device, "tracks": tracks.TRACKS,
-            "styles": {s: model_source(s) for s in STYLES}}
+            "styles": {s: model_source(s) for s in STYLES},
+            "finetuned": [s for s in STYLES if has_finetuned(s)]}
 
 
 @app.post("/generate")
 def generate(req: GenerateRequest):
-    model = get_model(req.style)
+    model = get_model(req.style, req.model)
     seed = req.seed if req.seed is not None else random.randrange(2**31)
     with _lock:
         events = sampler.generate(model, 0, req.seconds, top_p=req.top_p, seed=seed,
@@ -126,6 +144,7 @@ def generate(req: GenerateRequest):
 
 @app.post("/regenerate_track")
 async def regenerate_track(request: Request, track: str = Query(...), style: str = "lofi",
+                           model: str = "auto",
                            seed: int | None = None, top_p: float = Query(0.98, gt=0, le=1)):
     if track not in tracks.TRACKS:
         raise HTTPException(422, f"track must be one of {tracks.TRACKS}")
@@ -139,7 +158,7 @@ async def regenerate_track(request: Request, track: str = Query(...), style: str
             body = buf.getvalue()
         except Exception as e:
             raise HTTPException(400, f"could not read song JSON: {e}")
-    model = get_model(style)
+    model = get_model(style, model)
     seed = seed if seed is not None else random.randrange(2**31)
 
     with tempfile.NamedTemporaryFile(suffix=".mid") as f:
