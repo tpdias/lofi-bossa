@@ -16,25 +16,29 @@ struct API {
         return URLSession(configuration: config)
     }()
 
-    func isUp() async -> Bool {
+    /// Styles that have a fine-tuned checkpoint, or nil when the generator can't be reached.
+    func health() async -> Set<Style>? {
         var request = URLRequest(url: base.appending(path: "health"))
         request.timeoutInterval = 2
-        guard let (_, response) = try? await Self.session.data(for: request) else { return false }
-        return (response as? HTTPURLResponse)?.statusCode == 200
+        guard let (data, response) = try? await Self.session.data(for: request),
+              (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+        let names = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["finetuned"] as? [String]
+        return Set((names ?? []).compactMap(Style.init(rawValue:)))
     }
 
-    func generate(style: Style, seconds: Double) async throws -> Song {
+    func generate(style: Style, model: ModelChoice, seconds: Double) async throws -> Song {
         var request = URLRequest(url: base.appending(path: "generate"))
         request.httpBody = try JSONSerialization.data(withJSONObject: [
-            "style": style.rawValue, "seconds": seconds, "format": "json",
+            "style": style.rawValue, "model": model.rawValue, "seconds": seconds, "format": "json",
         ])
         return try await send(request)
     }
 
-    func regenerate(_ track: TrackKind, in song: Song, style: Style) async throws -> Song {
+    func regenerate(_ track: TrackKind, in song: Song, style: Style, model: ModelChoice) async throws -> Song {
         let url = base.appending(path: "regenerate_track").appending(queryItems: [
             URLQueryItem(name: "track", value: track.rawValue),
             URLQueryItem(name: "style", value: style.rawValue),
+            URLQueryItem(name: "model", value: model.rawValue),
         ])
         var request = URLRequest(url: url)
         request.httpBody = try JSONEncoder().encode(song)

@@ -16,6 +16,13 @@ final class AppState: ObservableObject {
     @Published private(set) var busy: Busy?
     @Published var error: String?
     @Published private(set) var serverUp = false
+    /// Styles the generator has a fine-tuned checkpoint for.
+    @Published private(set) var finetunedStyles: Set<Style> = []
+    /// The user's preference; `activeModel` is what is actually used for the current style.
+    @Published var model: ModelChoice = .finetuned
+
+    var hasFinetuned: Bool { finetunedStyles.contains(style) }
+    var activeModel: ModelChoice { hasFinetuned ? model : .pretrained }
     @Published private(set) var isPlaying = false
     @Published private(set) var position: Double = 0
 
@@ -84,7 +91,7 @@ final class AppState: ObservableObject {
 
     func generate() async {
         await run(.generating) {
-            let new = try await self.api.generate(style: self.style, seconds: self.seconds)
+            let new = try await self.api.generate(style: self.style, model: self.activeModel, seconds: self.seconds)
             self.undoSong = nil
             self.applySound(of: self.style)
             self.show(new, at: 0, playing: true)
@@ -94,7 +101,7 @@ final class AppState: ObservableObject {
     func regenerate(_ kind: TrackKind) async {
         guard let current = song else { return }
         await run(.regenerating(kind)) {
-            var new = try await self.api.regenerate(kind, in: current, style: self.style)
+            var new = try await self.api.regenerate(kind, in: current, style: self.style, model: self.activeModel)
             new.seconds = max(new.seconds, current.seconds)
             self.undoSong = current
             self.show(new, at: self.position, playing: self.isPlaying)
@@ -125,7 +132,9 @@ final class AppState: ObservableObject {
 
     private func watchServer() async {
         while !Task.isCancelled {
-            serverUp = await api.isUp()
+            let health = await api.health()
+            serverUp = health != nil
+            if let health { finetunedStyles = health }
             try? await Task.sleep(for: .seconds(serverUp ? 5 : 2))
         }
     }

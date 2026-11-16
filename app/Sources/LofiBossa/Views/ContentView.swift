@@ -61,6 +61,16 @@ private struct GenerateBar: View {
             .labelsHidden()
             .fixedSize()
 
+            Picker("Model", selection: Binding(get: { state.activeModel }, set: { state.model = $0 })) {
+                ForEach(ModelChoice.allCases) { Text($0.title).tag($0) }
+            }
+            .labelsHidden()
+            .fixedSize()
+            .disabled(!state.hasFinetuned)
+            .help(state.hasFinetuned
+                  ? "Which model writes the notes for this style"
+                  : "No fine-tuned model for \(state.style.title) yet, so the pretrained one is used")
+
             HStack(spacing: 8) {
                 Text("Length")
                     .foregroundStyle(.secondary)
