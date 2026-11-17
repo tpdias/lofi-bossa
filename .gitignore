@@ -15,3 +15,8 @@ app/**/.build/
 
 # local dataset downloads (repo root only)
 /data/
+
+# Claude Design handoff package: the design is implemented in app/, this is the
+# source material (23 artboards, tokens.json, icon masters) kept locally for reference
+/LoFiBossa-handoff/
+/LoFiBossa-handoff.zip
