@@ -1,56 +1,76 @@
 # Lo-Fi & Bossa
 
 A macOS app that writes background music for vlogs. It generates a four-track song
-(piano, guitar, bass, drums) with a symbolic music model running locally, and lets you
-mix each track, swap its instrument, or have the model rewrite just that one part.
+(piano, guitar, bass, drums) with a symbolic music model running locally, keeps every
+take as a version you can go back to, and lets you mix each track, swap its instrument,
+rewrite just one part, or open a piano roll and edit the notes by hand.
 
-![The app with a generated lo-fi song: four track rows with note overviews, mute/solo, volume and regenerate controls](docs/screenshots/lofi.png)
+![The library: a project grid with a first-launch welcome screen, style cards and a length slider](docs/screenshots/first_launch.png)
 
-> **Status: working prototype.** Generation, per-track regeneration, mixing, effects and
-> export all work end to end. The model is still the general-purpose pretrained checkpoint:
-> it has **not** been fine-tuned on lo-fi or bossa nova yet, so the two styles currently differ
-> only in sound design (instruments and effects), not in the notes. See [Roadmap](#roadmap).
+> **Status: working app, built to a design.** Projects, versions, generation, per-track
+> rewriting, the mixer, effects and export all work end to end, built to a design produced
+> with Claude Design (the handoff is kept in `docs/design/` and, locally, in
+> `LoFiBossa-handoff/`, gitignored). See [Known limitations](#known-limitations) for what is
+> simplified from that design, and [Roadmap](#roadmap) for what's next — starting with
+> actually fine-tuning the model, which hasn't been shown to change the sound yet.
 
 ## What it does
 
-- **Generate** a 15–180 second song in a chosen style.
-- **Choose the model**: for a style that has a fine-tuned checkpoint, switch between it and
-  the pretrained model to compare them.
-- **Regenerate one track**: the model writes a new part for that instrument that fits the
-  other three, which come back note-for-note unchanged. One level of undo.
-- **Mix**: mute, solo and volume per track; pick the instrument sound per track.
-- **Style sound design**: Lo-Fi loads electric piano, a room kit, a low-pass filter, reverb and
-  vinyl hiss and crackle. Bossa Nova loads grand piano, nylon guitar, acoustic bass and a
-  brush kit with the filter open.
-- **Export** the mix to WAV or M4A (rendered offline, faster than real time), or the notes to MIDI.
+- **Projects, autosaved.** A library of songs, each saved under
+  `~/Library/Application Support/LoFiBossa/`, no Save command needed. Rename, duplicate,
+  delete (to Recently Deleted for 30 days, then gone), search.
+- **Generate** a 15–180 second song in a chosen style, with a seed field: pin a seed to
+  reproduce a take, or leave it on "random" and copy out whichever seed you liked.
+- **Versions.** Every generate, rewrite, note-editing session and restore adds a version.
+  Listen to an old one from the current playhead position without disturbing the current
+  take, star ones worth keeping, and restore one as a new version (nothing is ever lost).
+- **Rewrite one track**: the model writes a new part for that instrument that fits the
+  other three, which come back unchanged.
+- **Edit notes by hand** in a piano-roll editor: select, draw, move, resize, delete, snap,
+  and adjust loudness, with the other three parts visible as ghost notes for context.
+- **Mix**: mute, solo, volume and instrument per track, plus master Warmth (low-pass),
+  Reverb and Vinyl hiss/crackle, each with a style default and a one-click Reset.
+- **Loop a range** of the song for preview or for export.
+- **Export** to WAV or M4A (rendered offline, faster than real time) or notes-only MIDI,
+  for the whole song or just the loop range.
+- **The app starts its own generator.** No terminal step: launching the app launches
+  `training/server.py` for you (see [How it works](#how-it-works)).
 
-| Bossa Nova sound | Before the first song |
+| Working on a song | Piano-roll editor |
 |---|---|
-| ![The same app with the Bossa Nova style: nylon guitar, acoustic bass, brush kit](docs/screenshots/bossa.png) | ![Empty state prompting to pick a style and length](docs/screenshots/empty.png) |
+| ![A loaded bossa nova project: four track rows with notes, the seed field, versioning in the toolbar, and the Sound inspector](docs/screenshots/project.png) | ![The piano-roll editor open on the guitar track, with the other three tracks shown as compact rows above](docs/screenshots/editor.png) |
 
 ## How it works
 
 ```
-┌──────────────── macOS app (Swift) ────────────────┐        ┌────── Python (local) ──────┐
-│ SwiftUI mixer ── AppState ── API client ──────────┼─ HTTP ─┤ FastAPI server             │
-│                     │                             │  JSON  │   └ cached sampler         │
-│              AVAudioEngine                        │        │       └ Anticipatory Music │
-│  4 samplers → mix → low-pass → reverb → output    │        │         Transformer (128M) │
-│                        vinyl noise ───────┘       │        └────────────────────────────┘
-└───────────────────────────────────────────────────┘
+┌────────────────────── macOS app (Swift) ───────────────────────┐   ┌─── Python (local) ──┐
+│ SwiftUI (library, stage, piano roll, inspector)                 │   │ FastAPI server       │
+│   └ ProjectViewModel ── GeneratorClient ────────────────────────┼─HTTP─ cached sampler     │
+│        │                    │                                   │ JSON │  Anticipatory     │
+│   ProjectStore         GeneratorProcess ─ launches & supervises ─┼──────│  Music Transformer│
+│   (autosave JSON)           │                                   │      │  (128M)           │
+│                       AVAudioEngine                              │   └──────────────────────┘
+│            4 samplers → mix → low-pass → reverb → output         │
+│                        vinyl noise ───────┘                      │
+└───────────────────────────────────────────────────────────────┘
 ```
 
 - **Model.** [Anticipatory Music Transformer](https://arxiv.org/abs/2306.08620)
   (`stanford-crfm/music-small-800k`, Apache 2.0). It models notes, not audio, and can write
-  around notes that are held fixed, which is what makes single-track regeneration possible.
+  around notes that are held fixed, which is what makes single-track rewriting possible.
 - **Sampler** (`training/sampler.py`). A replacement for the library's sampling loop with
   key/value caching, an instrument whitelist, a notes-per-second cap, and a retry that stops
-  the model from answering with a silent track.
+  the model from answering with a silent (or endlessly silent) track.
+- **Generator process.** `GeneratorProcess.swift` launches `training/server.py` itself as a
+  child process and supervises it (the "Generator offline/starting/ready" pill and the
+  "Restart Generator" button), rather than expecting you to start it by hand. Because of how
+  it locates the repo (see the comment in that file), this only works run straight from a
+  checkout on the machine that built the app — exactly how this project is used.
 - **Audio.** The app plays the notes itself through `AVAudioEngine` using the General MIDI
   sound bank that ships with macOS, so nothing has to be downloaded for sound.
 
-Measured on an M1 Pro (16 GB): a 30 s song generates in about 13 s, and regenerating one
-track takes 3–4 s.
+Measured on an M1 Pro (16 GB): a 20 s song generates in well under a minute, and rewriting
+one track takes a few seconds.
 
 ## Run it
 
@@ -63,29 +83,36 @@ The first generation downloads the model weights (about 500 MB) from Hugging Fac
 python3 -m venv .venv && .venv/bin/pip install -r training/requirements.txt
 ```
 
-2. Start the generator and leave it running:
-
-```bash
-.venv/bin/python training/server.py
-```
-
-3. In another terminal, start the app:
+2. Start the app — it launches the generator itself:
 
 ```bash
 cd app && swift run
 ```
 
-The dot in the top-right corner turns green when the app can reach the generator.
-`⌘G` generates, `Space` plays and pauses, clicking a track's note overview seeks.
+The pill in the bottom-left reads "Generator starting…" for a few seconds, then
+"Generator ready". If you'd rather run the generator yourself (for the server API below, or
+to watch its log in a terminal), start `.venv/bin/python training/server.py` first; the app
+detects it's already running and uses it instead of starting its own.
+
+`⌘G` generates (or `⌘↩` in the recipe bar), `Space` plays and pauses, double-click a track
+opens its piano-roll editor, `⌘Z`/`⌘⇧Z` undo and redo, `⌘E` exports.
 
 ### In Xcode
 
 Open `app/LofiBossa.xcodeproj` and press Run (`⌘R`). This builds a regular `LofiBossa.app`
-bundle. The project picks up every file under `app/Sources/LofiBossa/` automatically, so new
-Swift files added to that folder need no project changes. The generator still has to be
-running (step 2).
+bundle, with its own icon. The project picks up every file under `app/Sources/LofiBossa/`
+automatically, so new Swift files added to that folder need no project changes.
 
 `app/Package.swift` builds the same sources from the command line (`swift run`).
+
+### Dev flags
+
+A few command-line flags, kept for this project's own testing (and handy if you're changing
+the app): `--render song.json style out.wav` renders a generator wire-format song to audio
+without a window; `--screenshot out.png [delaySeconds]` saves a picture of the window and
+quits; `--window WIDTHxHEIGHT` sets an exact frame (bypassing AppKit's restored window size);
+`--demo [style] [lengthSeconds]` creates a project and generates, as the UI would, for a
+quick end-to-end check; add `--editor` to also open the piano roll once that finishes.
 
 ### Server API
 
@@ -212,27 +239,60 @@ training/
   server.py        local HTTP API used by the app
   check_model.py   smoke test for the pretrained checkpoint
 app/
+  Assets.xcassets/   app icon only (see "Design tokens" below for why colors aren't here)
   Sources/LofiBossa/
-    Model/         Song, styles, API client
-    Audio/         AVAudioEngine graph, vinyl noise, export
-    Views/         generate bar, track rows, transport and effects
+    DesignSystem/    colors, spacing, radii, type — see docs/design/tokens.json
+    Models/          Project, Version, SongSnapshot, Track, Note, TrackID, MusicStyle
+    Services/        API client, GeneratorClient/GeneratorProcess, ProjectStore (autosave)
+    ViewModels/      ProjectViewModel: generation, versions, transport, mix, export
+    Views/           library, project stage, piano roll, inspector, export sheet
+docs/
+  design/            tokens.json and the design handoff doc (text only; no binaries)
 ```
+
+## Design tokens
+
+Colors are defined in Swift (`DesignSystem/Tokens.swift`) as dynamic light/dark values, not
+as an Asset Catalog colorset, so the same source compiles under both `swift run` (SwiftPM,
+whose plain executables have no reliable path to a compiled asset catalog) and the Xcode
+project (a native target, which has no `Bundle.module`). The values themselves are exactly
+the ones in `docs/design/tokens.json`. The app icon, which does need a real Asset Catalog,
+lives only in `app/Assets.xcassets/` (outside `Sources/LofiBossa/`, so SwiftPM's build
+ignores it and only the Xcode build picks it up).
 
 ## Known limitations
 
-- **Not fine-tuned.** Notes come from a general pretrained model; output quality varies a lot
-  from seed to seed and does not yet sound specifically like either style.
-- **No tempo or key control.** The model works in absolute time, so there is no bar grid.
-- **No dynamics.** The model has no note velocity; each track plays at a fixed loudness.
-- **The generator is a separate process** that you start yourself.
+Built faithfully to the design handoff (`docs/design/HANDOFF.md`) with a few knowing
+simplifications, called out where they matter in code comments:
+
+- **Not fine-tuned.** Notes still come from the general pretrained model for both styles (or
+  the bossa checkpoint from an early, barely-different training run — see `training/`'s own
+  README section); output quality varies a lot from seed to seed. This is the main thing left
+  to actually finish.
+- **No tempo or key control; no dynamics from the model.** The model works in absolute time
+  with no note velocity. The piano roll's Loudness lane is real (it edits MIDI velocity for
+  playback) but the model never writes a non-default velocity itself.
+- **Piano roll shows the whole song, not a scrollable/zoomable 24 s window.** Editing is
+  fully functional; true zoom can be layered on without changing the note model.
+- **Undo/Redo is a version pointer, not the system `UndoManager`.** It steps backward and
+  forward through the version list rather than integrating with the Edit menu's undo stack.
+- **Arrow-key nudge/transpose in the piano roll has no modifier distinction** (SwiftUI's
+  `onMoveCommand` doesn't report modifier keys): left/right nudge by the snap value, up/down
+  transpose by a semitone, with no separate "hold Option" gesture.
+- **The write-head streaming animation isn't wired up** — the local server returns a finished
+  song, not a stream, so whole-song generation shows the per-track sweep (as the design
+  itself anticipates for a non-streaming generator) rather than notes appearing as they're written.
+- **Drums has no custom SF Symbol**; its track tile draws four small dots instead.
 - Regenerating a track on an extremely dense song can still come back nearly empty.
 
 ## Roadmap
 
-1. Run the fine-tuning on a GPU and compare each style against the pretrained model by ear.
-2. Piano-roll note editing.
+1. Actually fine-tune both styles on a GPU (see `training/`'s README section) and compare
+   against the pretrained model by ear — nothing above the model layer will sound different
+   until this happens.
+2. True zoom/scroll in the piano roll; a proper `UndoManager` integration.
 3. Tempo-aware generation and a bar grid.
-4. Run the model inside the app (Core ML or MLX) so no Python process is needed.
+4. Run the model inside the app (Core ML or MLX) so no Python process is needed at all.
 5. Optional audio model for texture.
 
 ## Licensing notes

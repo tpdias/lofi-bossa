@@ -1,12 +1,12 @@
 import AVFoundation
 
-/// Plays a Song: one sampler per track -> track mix -> low-pass -> reverb -> output,
+/// Plays a SongSnapshot: one sampler per track -> track mix -> low-pass -> reverb -> output,
 /// with vinyl noise mixed in after the effects.
 final class AudioEngine {
     enum ExportFormat { case wav, m4a }
 
     private let engine = AVAudioEngine()
-    private var samplers: [TrackKind: AVAudioUnitSampler] = [:]
+    private var samplers: [TrackID: AVAudioUnitSampler] = [:]
     private let trackMix = AVAudioMixerNode()
     private let lowPass = AVAudioUnitEQ(numberOfBands: 1)
     private let reverb = AVAudioUnitReverb()
@@ -22,11 +22,11 @@ final class AudioEngine {
     init() {
         let format = AVAudioFormat(standardFormatWithSampleRate: 44100, channels: 2)!
         for node in [trackMix, lowPass, reverb, vinyl.node] as [AVAudioNode] { engine.attach(node) }
-        for kind in TrackKind.allCases {
+        for id in TrackID.allCases {
             let sampler = AVAudioUnitSampler()
             engine.attach(sampler)
             engine.connect(sampler, to: trackMix, format: format)
-            samplers[kind] = sampler
+            samplers[id] = sampler
         }
         engine.connect(trackMix, to: lowPass, format: format)
         engine.connect(lowPass, to: reverb, format: format)
@@ -44,17 +44,17 @@ final class AudioEngine {
 
     // MARK: Sound
 
-    func setInstrument(_ preset: InstrumentPreset, for kind: TrackKind) {
-        let bank = kind == .drums ? kAUSampler_DefaultPercussionBankMSB : kAUSampler_DefaultMelodicBankMSB
-        try? samplers[kind]?.loadSoundBankInstrument(
-            at: Self.soundBank, program: preset.program, bankMSB: UInt8(bank), bankLSB: 0)
+    func setInstrument(_ program: UInt8, for id: TrackID) {
+        let bank = id == .drums ? kAUSampler_DefaultPercussionBankMSB : kAUSampler_DefaultMelodicBankMSB
+        try? samplers[id]?.loadSoundBankInstrument(
+            at: Self.soundBank, program: program, bankMSB: UInt8(bank), bankLSB: 0)
     }
 
-    func setVolume(_ volume: Double, for kind: TrackKind) {
-        samplers[kind]?.volume = Float(volume)
+    func setVolume(_ volume: Double, for id: TrackID) {
+        samplers[id]?.volume = Float(volume)
     }
 
-    func apply(_ effects: Effects) {
+    func apply(_ effects: MixEffects) {
         // warmth 0 -> 18 kHz (open), 1 -> 900 Hz (muffled), on a log scale
         lowPass.bands[0].frequency = Float(18000 * pow(900.0 / 18000.0, effects.warmth))
         reverb.wetDryMix = Float(effects.reverb * 60)
@@ -63,21 +63,21 @@ final class AudioEngine {
 
     // MARK: Song and transport
 
-    func load(_ song: Song) {
+    func load(_ snapshot: SongSnapshot) {
         sequencer.stop()
         for track in sequencer.tracks { sequencer.removeTrack(track) }
         sequencer.tempoTrack.addEvent(AVExtendedTempoEvent(tempo: 60 * Self.beatsPerSecond), at: 0)
-        for kind in TrackKind.allCases {
+        for id in TrackID.allCases {
             let track = sequencer.createAndAppendTrack()
-            track.destinationAudioUnit = samplers[kind]
-            for note in song.notes(kind) {
+            track.destinationAudioUnit = samplers[id]
+            for note in snapshot.track(id).notes {
                 let event = AVMIDINoteEvent(
                     channel: 0, key: UInt32(note.pitch), velocity: UInt32(note.velocity),
                     duration: note.duration * Self.beatsPerSecond)
                 track.addEvent(event, at: note.start * Self.beatsPerSecond)
             }
         }
-        seconds = song.seconds
+        seconds = snapshot.lengthSeconds
         sequencer.currentPositionInSeconds = 0
     }
 
@@ -101,8 +101,9 @@ final class AudioEngine {
 
     // MARK: Export
 
-    /// Renders the loaded song through the current mix and effects, faster than real time.
-    func export(to url: URL, format: ExportFormat, tail: Double = 2.5) throws {
+    /// Renders `range` (default: the whole song) through the current mix and effects, faster
+    /// than real time.
+    func export(to url: URL, format: ExportFormat, range: ClosedRange<Double>? = nil, tail: Double = 2.5) throws {
         stop()
         engine.stop()
         let renderFormat = AVAudioFormat(standardFormatWithSampleRate: 44100, channels: 2)!
@@ -115,7 +116,9 @@ final class AudioEngine {
             try? engine.start()
         }
         try engine.start()
-        sequencer.currentPositionInSeconds = 0
+        let start = range?.lowerBound ?? 0
+        let end = range?.upperBound ?? seconds
+        sequencer.currentPositionInSeconds = start
         sequencer.prepareToPlay()
         try sequencer.start()
 
@@ -132,7 +135,8 @@ final class AudioEngine {
         let file = try AVAudioFile(forWriting: url, settings: settings)
         let buffer = AVAudioPCMBuffer(
             pcmFormat: engine.manualRenderingFormat, frameCapacity: engine.manualRenderingMaximumFrameCount)!
-        let total = AVAudioFramePosition((seconds + tail) * renderFormat.sampleRate)
+        let duration = max(end - start, 0) + tail
+        let total = AVAudioFramePosition(duration * renderFormat.sampleRate)
 
         while engine.manualRenderingSampleTime < total {
             let frames = AVAudioFrameCount(
