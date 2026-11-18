@@ -5,6 +5,7 @@
     GET  /health
     POST /generate           JSON {style, seconds, model?, seed?, top_p?, format?}
     POST /regenerate_track   ?track=bass&style=lofi&model=&seed=&top_p=, body = a song
+                             [&start=&end=] (seconds) rewrites only that stretch
 
 "model" is auto (default), pretrained or finetuned. /health lists which styles have a
 fine-tuned checkpoint.
