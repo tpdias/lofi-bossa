@@ -73,6 +73,16 @@ final class AudioEngine {
 
     // MARK: Sound
 
+    /// Plays one note on a track's own sound and effects for a moment (auditioning a note while
+    /// editing). Works whether or not the song is playing.
+    func preview(pitch: Int, velocity: Int, track id: TrackID, length: Double = 0.35) {
+        guard (0...127).contains(pitch), let sampler = samplers[id] else { return }
+        try? start()
+        let note = UInt8(pitch)
+        sampler.startNote(note, withVelocity: UInt8(min(max(velocity, 1), 127)), onChannel: 0)
+        DispatchQueue.main.asyncAfter(deadline: .now() + length) { sampler.stopNote(note, onChannel: 0) }
+    }
+
     func setInstrument(_ program: UInt8, for id: TrackID) {
         let bank = id == .drums ? kAUSampler_DefaultPercussionBankMSB : kAUSampler_DefaultMelodicBankMSB
         try? samplers[id]?.loadSoundBankInstrument(

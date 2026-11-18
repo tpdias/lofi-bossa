@@ -432,6 +432,11 @@ final class ProjectViewModel {
 
     // MARK: Piano-roll editing session
 
+    /// Sounds a note through the track's instrument and effects, for auditioning while editing.
+    func previewNote(pitch: Int, velocity: Int, track: TrackID) {
+        audio.preview(pitch: pitch, velocity: velocity, track: track)
+    }
+
     func openEditor(for track: TrackID) {
         editingTrack = track
         editingSnapshotBeforeSession = project.currentSnapshot

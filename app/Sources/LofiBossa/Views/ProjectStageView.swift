@@ -328,6 +328,11 @@ private struct RulerAndTracks: View {
                 }
             }
             overlay
+                // While the roll is open the playhead there belongs to the roll's own (zoomed)
+                // time axis, so the stage's overlay covers only the ruler and the compact rows.
+                .frame(height: model.isPianoRollOpen
+                       ? LFBSize.rulerHeight + 1 + 4 * LFBSize.trackRowCompactHeight : nil,
+                       alignment: .top)
         }
         // Section shortcuts. Handled here, not as Edit-menu key equivalents, because Cut/Copy/Paste
         // there belong to the text fields (seed, rename) and must keep working in them.
