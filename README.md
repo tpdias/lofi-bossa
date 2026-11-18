@@ -33,7 +33,15 @@ rewrite just one part, or open a piano roll and edit the notes by hand.
   what was there, a note is never left ringing into a cleared stretch, and each edit is a
   version, so Undo and the Versions tab cover it.
 - **Edit notes by hand** in a piano-roll editor: select, draw, move, resize, delete, snap,
-  and adjust loudness, with the other three parts visible as ghost notes for context.
+  with the other three parts visible as ghost notes for context. It zooms and scrolls in time
+  (pinch, `⌘+` / `⌘−` / `⌘0`, or the buttons), has its own ruler (click to seek, drag to loop),
+  opens on the part's own pitch range, and can follow the playhead. Notes sound as you click,
+  draw or drag them. Drag the stems in the Loudness lane to set how hard each note is played.
+  Keys: `V` select, `P` draw, `⌘A`, `⌘C` `⌘X` `⌘V` (pastes at the playhead) `⌘D`, `⌫`, `←` `→`
+  nudge by the snap, `↑` `↓` a semitone, `⇧↑` `⇧↓` an octave, `Esc`. Shift-click adds to the
+  selection; Option-drag drags a copy.
+
+![The piano roll zoomed in on a guitar part, with its own ruler and loudness stems](docs/screenshots/piano-roll-zoom.png)
 - **Mix**: mute, solo, volume and instrument per track, plus master Warmth (low-pass),
   Reverb and Vinyl hiss/crackle, each with a style default and a one-click Reset.
 - **Effects per track**: the slider button on each track row opens Warmth, Grit (a crunchy
@@ -130,7 +138,7 @@ quits; `--window WIDTHxHEIGHT` sets an exact frame (bypassing AppKit's restored 
 `--demo [style] [lengthSeconds]` creates a project and generates, as the UI would, for a
 quick end-to-end check; add `--editor` to also open the piano roll once that finishes.
 `--data-dir PATH` keeps a run's projects in `PATH` instead of the real library — use it with
-`--demo`, which creates projects. `--sections` (with `--demo`) drives every section operation
+`--demo`, which creates projects. `--roll-zoom N [seconds]` (with `--editor`) opens the roll zoomed N times, scrolled to a time. `--sections` (with `--demo`) drives every section operation
 through the real app and prints what happened; add `--stress` for forty edits in a row.
 `--hit-sweep [delaySeconds]` hit-tests every point of the window and prints where it stops if
 SwiftUI's hit testing ever crashes. `--fx piano.warmth=1,drums.grit=0.8` (with `--render`) sets
@@ -297,13 +305,8 @@ simplifications, called out where they matter in code comments:
 - **No tempo or key control; no dynamics from the model.** The model works in absolute time
   with no note velocity. The piano roll's Loudness lane is real (it edits MIDI velocity for
   playback) but the model never writes a non-default velocity itself.
-- **Piano roll shows the whole song, not a scrollable/zoomable 24 s window.** Editing is
-  fully functional; true zoom can be layered on without changing the note model.
 - **Undo/Redo is a version pointer, not the system `UndoManager`.** It steps backward and
   forward through the version list rather than integrating with the Edit menu's undo stack.
-- **Arrow-key nudge/transpose in the piano roll has no modifier distinction** (SwiftUI's
-  `onMoveCommand` doesn't report modifier keys): left/right nudge by the snap value, up/down
-  transpose by a semitone, with no separate "hold Option" gesture.
 - **The write-head streaming animation isn't wired up** — the local server returns a finished
   song, not a stream, so whole-song generation shows the per-track sweep (as the design
   itself anticipates for a non-streaming generator) rather than notes appearing as they're written.
