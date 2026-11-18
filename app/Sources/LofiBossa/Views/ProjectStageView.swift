@@ -366,6 +366,7 @@ private struct RulerAndTracks: View {
             isSelected: model.selectedTrack == id,
             isDimmedBySolo: model.isDimmedBySolo(id),
             isRewriting: model.rewritingTrack == id,
+            rewritingRange: model.rewritingTrack == id ? model.rewritingRange : nil,
             isGeneratorBusy: model.isGeneratorBusy,
             onSeek: { model.seek(to: $0) },
             onSelect: { model.openEditor(for: id) },
@@ -385,6 +386,7 @@ private struct RulerAndTracks: View {
                 case .delete: model.deleteSection()
                 case .duplicate: model.duplicateSection()
                 case .useAsLoop: model.useSectionAsLoop()
+                case .rewrite: model.rewriteSection()
                 case .clear: model.clearSectionSelection()
                 }
             }

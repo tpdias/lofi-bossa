@@ -16,6 +16,7 @@ struct TrackRowView: View {
     var isSelected = false
     var isDimmedBySolo = false
     var isRewriting = false
+    var rewritingRange: ClosedRange<Double>? = nil   // set when only part of the track is rewritten
     var isGeneratorBusy = false
     var compact = false                       // true while the piano roll is open
     var onSeek: (Double) -> Void = { _ in }
@@ -109,6 +110,23 @@ struct TrackRowView: View {
         .opacity(track.isMuted || isDimmedBySolo ? 0.55 : 1)
     }
 
+    /// Sweep and Stop over just the stretch being rewritten; the rest of the lane stays as it is.
+    private func rangeRewriteOverlay(_ range: ClosedRange<Double>) -> some View {
+        GeometryReader { geo in
+            let x = CGFloat(range.lowerBound / max(duration, 0.001)) * geo.size.width
+            let w = max(CGFloat((range.upperBound - range.lowerBound) / max(duration, 0.001)) * geo.size.width, 2)
+            ZStack {
+                Color.lfbSurface.opacity(0.8)
+                SweepView(color: track.id.color)
+                if w > 120 { RewritePill(text: "Rewriting…", action: onCancelRewrite) }
+                else { Button("Stop", action: onCancelRewrite).buttonStyle(.plain).font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.lfbAccentText) }
+            }
+            .frame(width: w)
+            .clipped()
+            .offset(x: x)
+        }
+    }
+
     // MARK: Lane (notes, states)
 
     private var lane: some View {
@@ -117,10 +135,14 @@ struct TrackRowView: View {
             if isSelected { track.id.color.opacity(0.06) }
             NoteLaneView(notes: track.notes, duration: duration,
                          color: track.isMuted ? .lfbTextTertiary : track.id.color, onSeek: onSeek)
-                .opacity(isRewriting ? 0.2 : (track.isMuted ? 0.45 : (isDimmedBySolo ? 0.3 : 1)))
+                .opacity(isRewriting && rewritingRange == nil ? 0.2 : (track.isMuted ? 0.45 : (isDimmedBySolo ? 0.3 : 1)))
             if isRewriting {
-                SweepView(color: track.id.color)
-                RewritePill(text: "Rewriting the \(track.id.rawValue) to fit the other three…", action: onCancelRewrite)
+                if let range = rewritingRange {
+                    rangeRewriteOverlay(range)
+                } else {
+                    SweepView(color: track.id.color)
+                    RewritePill(text: "Rewriting the \(track.id.rawValue) to fit the other three…", action: onCancelRewrite)
+                }
             }
             if isEmpty { EmptyLane(trackName: track.id.rawValue, action: onRewrite) }
         }

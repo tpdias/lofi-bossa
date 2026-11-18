@@ -219,3 +219,42 @@ def accompany(model, fixed_events, seconds, instruments, top_p=0.98, seed=None, 
         if len(new) // 3 >= min_notes_per_second * seconds:
             break
     return new
+
+
+def rewrite_range(model, events, instruments, start, end, top_p=0.98, seed=None, progress=None,
+                  min_notes_per_second=0.5):
+    """Rewrite one instrument group between `start` and `end` seconds; everything else is kept.
+
+    events       the whole song as event triples
+    instruments  model instrument ids being rewritten
+    Returns only the new events, all starting inside [start, end). The model sees the music
+    before the range as its prompt and every other event (other tracks throughout, and these
+    instruments after the range) as fixed notes to write around. The wanted instruments' own
+    notes that start inside the range are withheld, so it writes them fresh.
+    Like `accompany`, a near-silent answer is retried with rests discouraged, then forbidden.
+    """
+    from anticipation.vocab import DUR_OFFSET, NOTE_OFFSET, TIME_OFFSET
+
+    start_tick, end_tick = int(TIME_RESOLUTION * start), int(TIME_RESOLUTION * end)
+    wanted = set(instruments)
+    kept = []
+    for i in range(0, len(events), 3):
+        time = events[i] - TIME_OFFSET
+        instr = (events[i + 2] - NOTE_OFFSET) // MAX_PITCH
+        if instr in wanted and start_tick <= time < end_tick:
+            continue
+        kept.extend(events[i:i + 3])
+    for rest_penalty in (0.0, 4.0, math.inf):
+        merged = generate(model, start, end, inputs=kept, instruments=instruments, top_p=top_p,
+                          seed=seed, progress=progress, rest_penalty=rest_penalty,
+                          max_notes_per_second=12, max_rests=8)
+        new = []
+        for i in range(0, len(merged), 3):
+            time = merged[i] - TIME_OFFSET
+            instr = (merged[i + 2] - NOTE_OFFSET) // MAX_PITCH
+            if instr in wanted and start_tick <= time < end_tick:
+                dur = min(merged[i + 1] - DUR_OFFSET, end_tick - time)
+                new.extend([merged[i], DUR_OFFSET + dur, merged[i + 2]])
+        if len(new) // 3 >= min_notes_per_second * (end - start):
+            break
+    return new

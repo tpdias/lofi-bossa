@@ -69,14 +69,19 @@ struct API {
         return try await send(request)
     }
 
-    func regenerate(_ track: TrackID, in song: WireSong, style: MusicStyle, model: NoteModel, seed: UInt32) async throws -> WireSong {
-        let url = base.appending(path: "regenerate_track").appending(queryItems: [
+    func regenerate(_ track: TrackID, in song: WireSong, style: MusicStyle, model: NoteModel, seed: UInt32,
+                    range: ClosedRange<Double>? = nil) async throws -> WireSong {
+        var items = [
             URLQueryItem(name: "track", value: track.rawValue),
             URLQueryItem(name: "style", value: style.rawValue),
             URLQueryItem(name: "model", value: model.apiValue),
             URLQueryItem(name: "seed", value: String(seed)),
-        ])
-        var request = URLRequest(url: url)
+        ]
+        if let range {   // rewrite only this stretch; the server keeps everything outside it
+            items.append(URLQueryItem(name: "start", value: String(range.lowerBound)))
+            items.append(URLQueryItem(name: "end", value: String(range.upperBound)))
+        }
+        var request = URLRequest(url: base.appending(path: "regenerate_track").appending(queryItems: items))
         request.httpBody = try JSONEncoder().encode(song)
         return try await send(request)
     }

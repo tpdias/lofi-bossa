@@ -202,6 +202,23 @@ enum DevTools {
         m.redo()
         say("redo -> guitar 0-2 notes = \(notes(.guitar, 0, 2)) (expect 0)")
 
+        // rewrite just a section with the model (needs the generator)
+        func key(_ n: Note) -> String { "\(n.pitch)@\(Int((n.start * 1000).rounded()))" }   // the server rounds to ms
+        func outside(_ t: TrackID, _ lo: Double, _ hi: Double) -> [Note] {
+            (m.displayedSnapshot?.track(t).notes ?? []).filter { $0.start < lo || $0.start >= hi }
+        }
+        let guitarOutside = outside(.guitar, 4, 8), othersBefore = [TrackID.piano, .bass, .drums].map { m.displayedSnapshot?.track($0).notes ?? [] }
+        let insideBefore = NoteEditing.notes(m.displayedSnapshot?.track(.guitar).notes ?? [], in: 4...8).map { key($0) }
+        let versionsBefore = m.project.versions.count
+        m.selectSection(track: .guitar, from: 4, to: 8)
+        m.rewriteSection()
+        say("rewrite section started: rewriting \(String(describing: m.rewritingTrack)) range \(String(describing: m.rewritingRange))")
+        while m.isGeneratorBusy { try? await Task.sleep(for: .milliseconds(300)) }
+        let insideAfter = NoteEditing.notes(m.displayedSnapshot?.track(.guitar).notes ?? [], in: 4...8).map { key($0) }
+        let sameOutside = outside(.guitar, 4, 8).map { key($0) } == guitarOutside.map { key($0) }
+        let othersSame = [TrackID.piano, .bass, .drums].map { m.displayedSnapshot?.track($0).notes ?? [] } == othersBefore
+        say("rewrote guitar 4-8: versions \(versionsBefore) -> \(m.project.versions.count), last '\(m.project.versions.last?.kind.title ?? "?")', inside \(insideBefore.count) -> \(insideAfter.count) notes, changed=\(insideBefore != insideAfter), guitar outside unchanged=\(sameOutside), other tracks unchanged=\(othersSame), selection kept=\(String(describing: m.sectionSelection?.range)), phase idle=\(m.rewritingTrack == nil)")
+
         // guards
         m.selectSection(track: .guitar, from: 3, to: 3.1)
         say("too-small selection ignored: \(m.sectionSelection == nil)")

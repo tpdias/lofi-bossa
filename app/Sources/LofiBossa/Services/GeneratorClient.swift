@@ -48,8 +48,10 @@ protocol GeneratorClient: AnyObject, Observable {
     func generate(style: MusicStyle, model: NoteModel, length: Double, seed: UInt32?) -> AsyncThrowingStream<GenerationEvent, Error>
 
     /// Rewrites one track so it fits the other three. Seed is derived from the song seed plus
-    /// the track by the caller.
-    func rewrite(track: TrackID, model: NoteModel, in song: SongSnapshot, seed: UInt32) async throws -> [Note]
+    /// the track by the caller. With a `range` only that stretch (seconds) is rewritten; the
+    /// track's notes outside it come back unchanged.
+    func rewrite(track: TrackID, model: NoteModel, in song: SongSnapshot, seed: UInt32,
+                 range: ClosedRange<Double>?) async throws -> [Note]
 
     /// Wired to "Restart generator" in the offline banner.
     func restart() async throws
@@ -129,8 +131,10 @@ final class LocalGeneratorClient: GeneratorClient {
         }
     }
 
-    func rewrite(track: TrackID, model: NoteModel, in song: SongSnapshot, seed: UInt32) async throws -> [Note] {
-        let wire = try await api.regenerate(track, in: WireSong(from: song), style: song.style, model: model, seed: seed)
+    func rewrite(track: TrackID, model: NoteModel, in song: SongSnapshot, seed: UInt32,
+                 range: ClosedRange<Double>?) async throws -> [Note] {
+        let wire = try await api.regenerate(track, in: WireSong(from: song), style: song.style, model: model,
+                                            seed: seed, range: range)
         return wire.notes(track)
     }
 }
