@@ -22,6 +22,9 @@ struct TrackRowView: View {
     var onSelect: () -> Void = {}
     var onRewrite: () -> Void = {}
     var onCancelRewrite: () -> Void = {}
+    var onResetEffects: () -> Void = {}
+
+    @State private var showEffects = false
 
     private var isEmpty: Bool { track.notes.isEmpty && !isRewriting }
 
@@ -63,6 +66,18 @@ struct TrackRowView: View {
                     }
                     .labelsHidden()
                     .controlSize(.small)
+                    Button { showEffects.toggle() } label: {
+                        Image(systemName: "slider.horizontal.3")
+                            .foregroundStyle(track.effects.isNeutral ? Color.lfbTextSecondary : track.id.ink)
+                            .padding(3)
+                            .background(track.effects.isNeutral ? .clear : track.id.color.opacity(0.2),
+                                        in: RoundedRectangle(cornerRadius: 4))
+                    }
+                    .help("Effects for this track")
+                    .accessibilityLabel("\(track.id.title) effects")
+                    .popover(isPresented: $showEffects, arrowEdge: .bottom) {
+                        TrackEffectsPopover(track: track.id, effects: $track.effects, onReset: onResetEffects)
+                    }
                     if isRewriting {
                         Button(action: onCancelRewrite) { Image(systemName: "stop.fill") }
                             .help("Stop rewriting")

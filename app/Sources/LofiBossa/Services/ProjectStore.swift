@@ -20,6 +20,12 @@ final class ProjectStore {
     private var unsaved: [Project.ID: Project] = [:]   // latest value behind each pending debounce
 
     private let root: URL = {
+        // `--data-dir PATH` keeps a test run out of the real library (the dev flags create
+        // projects, and nothing should ever have to delete the real folder to get a clean start).
+        let args = CommandLine.arguments
+        if let flag = args.firstIndex(of: "--data-dir"), args.count > flag + 1 {
+            return URL(fileURLWithPath: args[flag + 1], isDirectory: true).appendingPathComponent("Projects", isDirectory: true)
+        }
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         return base.appendingPathComponent("LoFiBossa/Projects", isDirectory: true)
     }()

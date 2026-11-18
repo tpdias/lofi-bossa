@@ -30,6 +30,10 @@ rewrite just one part, or open a piano roll and edit the notes by hand.
   and adjust loudness, with the other three parts visible as ghost notes for context.
 - **Mix**: mute, solo, volume and instrument per track, plus master Warmth (low-pass),
   Reverb and Vinyl hiss/crackle, each with a style default and a one-click Reset.
+- **Effects per track**: the slider button on each track row opens Warmth, Grit (a crunchy
+  tape-like texture), Echo, Reverb and Pan for just that instrument. Lo-Fi starts with a
+  little grit and warmth on piano and drums, Bossa Nova with a little room on the guitar. They
+  are part of exports too.
 - **Loop a range** of the song for preview or for export.
 - **Export** to WAV or M4A (rendered offline, faster than real time) or notes-only MIDI,
   for the whole song or just the loop range.
@@ -113,6 +117,12 @@ without a window; `--screenshot out.png [delaySeconds]` saves a picture of the w
 quits; `--window WIDTHxHEIGHT` sets an exact frame (bypassing AppKit's restored window size);
 `--demo [style] [lengthSeconds]` creates a project and generates, as the UI would, for a
 quick end-to-end check; add `--editor` to also open the piano roll once that finishes.
+`--data-dir PATH` keeps a run's projects in `PATH` instead of the real library — use it with
+`--demo`, which creates projects. `--fx piano.warmth=1,drums.grit=0.8` (with `--render`) sets
+exactly those per-track effects, `--fx none` renders every track unprocessed, and
+`--render-fx-popover out.png` draws the effects popover to an image.
+
+Tests: `cd app && swift test` (decoding of projects saved by older versions, among others).
 
 ### Server API
 

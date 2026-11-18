@@ -7,6 +7,7 @@ final class AudioEngine {
 
     private let engine = AVAudioEngine()
     private var samplers: [TrackID: AVAudioUnitSampler] = [:]
+    private var chains: [TrackID: TrackChain] = [:]
     private let trackMix = AVAudioMixerNode()
     private let lowPass = AVAudioUnitEQ(numberOfBands: 1)
     private let reverb = AVAudioUnitReverb()
@@ -19,14 +20,42 @@ final class AudioEngine {
     private static let beatsPerSecond = 2.0
     private(set) var seconds: Double = 0
 
+    /// One track's effects, in signal order: sampler -> eq -> distortion -> delay -> reverb ->
+    /// pan. The pan stage is a mixer node because pan belongs to a node's connection into a
+    /// mixer (AVAudioMixing), and plain effect units don't carry it.
+    private struct TrackChain {
+        let eq = AVAudioUnitEQ(numberOfBands: 1)
+        let distortion = AVAudioUnitDistortion()
+        let delay = AVAudioUnitDelay()
+        let reverb = AVAudioUnitReverb()
+        let pan = AVAudioMixerNode()
+
+        var nodes: [AVAudioNode] { [eq, distortion, delay, reverb, pan] }
+
+        init() {
+            eq.bands[0].filterType = .lowPass
+            eq.bands[0].bypass = false
+            distortion.loadFactoryPreset(.multiDecimated2)
+            delay.delayTime = 0.375
+            delay.feedback = 35
+            delay.lowPassCutoff = 6000
+            reverb.loadFactoryPreset(.mediumRoom)
+        }
+    }
+
     init() {
         let format = AVAudioFormat(standardFormatWithSampleRate: 44100, channels: 2)!
         for node in [trackMix, lowPass, reverb, vinyl.node] as [AVAudioNode] { engine.attach(node) }
         for id in TrackID.allCases {
             let sampler = AVAudioUnitSampler()
+            let chain = TrackChain()
             engine.attach(sampler)
-            engine.connect(sampler, to: trackMix, format: format)
+            for node in chain.nodes { engine.attach(node) }
+            let path: [AVAudioNode] = [sampler] + chain.nodes + [trackMix]
+            for (from, to) in zip(path, path.dropFirst()) { engine.connect(from, to: to, format: format) }
             samplers[id] = sampler
+            chains[id] = chain
+            apply(TrackEffects(), for: id)
         }
         engine.connect(trackMix, to: lowPass, format: format)
         engine.connect(lowPass, to: reverb, format: format)
@@ -52,6 +81,21 @@ final class AudioEngine {
 
     func setVolume(_ volume: Double, for id: TrackID) {
         samplers[id]?.volume = Float(volume)
+    }
+
+    /// Sets one track's effects. A stage at zero is bypassed, so an untouched track is
+    /// exactly the unprocessed sampler (and costs nothing).
+    func apply(_ effects: TrackEffects, for id: TrackID) {
+        guard let chain = chains[id] else { return }
+        chain.eq.bypass = effects.warmth <= 0
+        chain.eq.bands[0].frequency = Float(18000 * pow(900.0 / 18000.0, effects.warmth))
+        chain.distortion.bypass = effects.grit <= 0
+        chain.distortion.wetDryMix = Float(effects.grit * 100)
+        chain.delay.bypass = effects.echo <= 0
+        chain.delay.wetDryMix = Float(effects.echo * 60)
+        chain.reverb.bypass = effects.reverb <= 0
+        chain.reverb.wetDryMix = Float(effects.reverb * 60)
+        chain.pan.pan = Float(min(max(effects.pan, -1), 1))
     }
 
     func apply(_ effects: MixEffects) {
