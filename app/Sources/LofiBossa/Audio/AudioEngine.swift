@@ -109,7 +109,13 @@ final class AudioEngine {
 
     func load(_ snapshot: SongSnapshot) {
         sequencer.stop()
-        for track in sequencer.tracks { sequencer.removeTrack(track) }
+        // Every song gets a brand-new sequencer, never an edited one. On macOS 27.2.1, changing
+        // a sequencer that already has tracks is unreliable: removeTrack raised an NSRangeException
+        // from inside AVAudioSequencer ("range {2, 1} extends beyond bounds [0 .. 1]", even when
+        // iterating a copy of the tracks), and clearing the tempo track never returned. The app
+        // hit this on the second song loaded into a project, as a freeze or a crash. Building a
+        // sequencer from scratch is the path that works; the old one is simply released.
+        sequencer = AVAudioSequencer(audioEngine: engine)
         sequencer.tempoTrack.addEvent(AVExtendedTempoEvent(tempo: 60 * Self.beatsPerSecond), at: 0)
         for id in TrackID.allCases {
             let track = sequencer.createAndAppendTrack()
