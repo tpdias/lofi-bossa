@@ -12,7 +12,10 @@ final class AudioEngine {
     private let lowPass = AVAudioUnitEQ(numberOfBands: 1)
     private let reverb = AVAudioUnitReverb()
     private let vinyl = VinylNoise()
-    private lazy var sequencer = AVAudioSequencer(audioEngine: engine)
+    /// Created by `load` and nowhere else. It must not exist before the first song: a second
+    /// sequencer on the same engine (the one a lazy property made just to be stopped, then
+    /// replaced) left the real one silent in live playback while offline renders still worked.
+    private var sequencer: AVAudioSequencer?
 
     private static let soundBank = URL(
         fileURLWithPath: "/System/Library/Components/CoreAudio.component/Contents/Resources/gs_instruments.dls")
@@ -67,6 +70,9 @@ final class AudioEngine {
         reverb.loadFactoryPreset(.mediumRoom)
     }
 
+    /// For tests that listen to the output.
+    var outputNode: AVAudioNode { engine.mainMixerNode }
+
     func start() throws {
         if !engine.isRunning { try engine.start() }
     }
@@ -118,14 +124,15 @@ final class AudioEngine {
     // MARK: Song and transport
 
     func load(_ snapshot: SongSnapshot) {
-        sequencer.stop()
+        sequencer?.stop()
         // Every song gets a brand-new sequencer, never an edited one. On macOS 27.2.1, changing
         // a sequencer that already has tracks is unreliable: removeTrack raised an NSRangeException
         // from inside AVAudioSequencer ("range {2, 1} extends beyond bounds [0 .. 1]", even when
         // iterating a copy of the tracks), and clearing the tempo track never returned. The app
         // hit this on the second song loaded into a project, as a freeze or a crash. Building a
         // sequencer from scratch is the path that works; the old one is simply released.
-        sequencer = AVAudioSequencer(audioEngine: engine)
+        let sequencer = AVAudioSequencer(audioEngine: engine)
+        self.sequencer = sequencer
         sequencer.tempoTrack.addEvent(AVExtendedTempoEvent(tempo: 60 * Self.beatsPerSecond), at: 0)
         for id in TrackID.allCases {
             let track = sequencer.createAndAppendTrack()
@@ -141,14 +148,15 @@ final class AudioEngine {
         sequencer.currentPositionInSeconds = 0
     }
 
-    var isPlaying: Bool { sequencer.isPlaying }
+    var isPlaying: Bool { sequencer?.isPlaying ?? false }
 
     var position: Double {
-        get { sequencer.currentPositionInSeconds }
-        set { sequencer.currentPositionInSeconds = max(0, min(newValue, seconds)) }
+        get { sequencer?.currentPositionInSeconds ?? 0 }
+        set { sequencer?.currentPositionInSeconds = max(0, min(newValue, seconds)) }
     }
 
     func play() throws {
+        guard let sequencer else { return }
         try start()
         if position >= seconds { position = 0 }
         sequencer.prepareToPlay()
@@ -156,7 +164,7 @@ final class AudioEngine {
     }
 
     func stop() {
-        sequencer.stop()
+        sequencer?.stop()
     }
 
     // MARK: Export
@@ -164,6 +172,7 @@ final class AudioEngine {
     /// Renders `range` (default: the whole song) through the current mix and effects, faster
     /// than real time.
     func export(to url: URL, format: ExportFormat, range: ClosedRange<Double>? = nil, tail: Double = 2.5) throws {
+        guard let sequencer else { return }
         stop()
         engine.stop()
         let renderFormat = AVAudioFormat(standardFormatWithSampleRate: 44100, channels: 2)!
@@ -210,6 +219,7 @@ final class AudioEngine {
     }
 
     func midiData() throws -> Data {
+        guard let sequencer else { return Data() }
         var error: NSError?
         let data = sequencer.data(withSMPTEResolution: 0, error: &error)
         if let error { throw error }
