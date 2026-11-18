@@ -85,6 +85,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
+        // `--hit-sweep` hit-tests the window point by point after it settles and prints each
+        // point first, so if SwiftUI's hit testing crashes the last line says where.
+        if args.contains("--hit-sweep") {
+            let delay = Double(args.firstIndex(of: "--hit-sweep").flatMap { args.count > $0 + 1 ? args[$0 + 1] : nil } ?? "") ?? 25
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                guard let view = NSApp.windows.first(where: { $0.isVisible })?.contentView else { return }
+                let b = view.bounds
+                print("HITSWEEP start \(b.size)"); fflush(stdout)
+                for y in stride(from: 3.0, to: b.height, by: 7) {
+                    for x in stride(from: 3.0, to: b.width, by: 7) {
+                        print("HITSWEEP \(Int(x)),\(Int(y))"); fflush(stdout)
+                        _ = view.hitTest(NSPoint(x: x, y: y))
+                    }
+                }
+                print("HITSWEEP done, no crash"); fflush(stdout)
+            }
+        }
+
         // `--screenshot out.png` saves a picture of the window and quits (used for the README
         // and for this build's own QA, since this session has no way to click inside the app).
         if let flag = args.firstIndex(of: "--screenshot"), args.count > flag + 1 {
@@ -121,6 +139,82 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 /// Command-line checks that don't need a window: audio rendering and (via --screenshot above)
 /// a picture of a real running window.
 enum DevTools {
+    /// Drives every section operation through the real view model and prints what happened
+    /// (`--demo --sections`), since the gestures themselves can't be clicked from a script.
+    @MainActor static func runSectionDemo(_ m: ProjectViewModel) async {
+        func notes(_ t: TrackID, _ lo: Double, _ hi: Double) -> Int {
+            NoteEditing.notes(m.displayedSnapshot?.track(t).notes ?? [], in: lo...hi).count
+        }
+        func say(_ s: String) { print("SECTIONS \(s)"); fflush(stdout) }
+        // `--stress`: forty section edits in a row (each one reloads the song into the audio
+        // engine), the pattern that used to freeze or crash the app after the first one.
+        if CommandLine.arguments.contains("--stress") {
+            for i in 0..<40 {
+                m.selectSection(track: TrackID.allCases[i % 4], from: Double(i % 8), to: Double(i % 8) + 3)
+                if i % 2 == 0 { m.copySection(); m.seek(to: Double((i * 3) % 14)); m.pasteSection() } else { m.duplicateSection() }
+                if i % 10 == 9 { say("stress \(i + 1) edits, versions \(m.project.versions.count)") }
+                try? await Task.sleep(for: .milliseconds(100))
+            }
+            m.undo(); m.undo(); m.redo()
+            say("stress done, versions \(m.project.versions.count), current v\(m.project.current?.number ?? -1)")
+            return
+        }
+        let len = m.duration
+        say("song \(len)s, versions \(m.project.versions.count), guitar notes \(m.displayedSnapshot?.track(.guitar).notes.count ?? 0)")
+
+        m.selectSection(track: .guitar, from: 2.1, to: 5.9)        // snaps to 2.0...6.0
+        say("selected \(String(describing: m.sectionSelection?.range))  (expect 2.0...6.0)")
+        let inside = notes(.guitar, 2, 6)
+        m.copySection()
+        say("copied: clipboard has \(m.clipboard?.notes.count ?? -1) notes (expect \(inside)), length \(m.clipboard?.length ?? -1)")
+
+        m.seek(to: 10)
+        m.pasteSection()
+        say("pasted at 10: guitar notes in 10...14 = \(notes(.guitar, 10, 14)) (expect \(inside)); selection \(String(describing: m.sectionSelection?.range))")
+
+        m.selectSection(track: .drums, from: 0, to: 4)
+        let drumsBefore = notes(.drums, 0, 4)
+        m.cutSection()
+        say("cut drums 0-4: \(drumsBefore) -> \(notes(.drums, 0, 4)) notes (expect 0); clipboard \(m.clipboard?.notes.count ?? -1)")
+
+        m.seek(to: 12)
+        m.pasteSection()          // clipboard source is drums, selection is drums
+        say("pasted drums at 12: notes in 12...16 = \(notes(.drums, 12, 16)) (expect \(drumsBefore))")
+
+        m.selectSection(track: .bass, from: 4, to: 8)
+        let bassBefore = notes(.bass, 4, 8)
+        m.duplicateSection()
+        say("duplicated bass 4-8: notes in 8...12 = \(notes(.bass, 8, 12)) (>= \(bassBefore)), original still \(notes(.bass, 4, 8)) (expect \(bassBefore))")
+
+        m.selectSection(track: .piano, from: 4, to: 8)
+        let pianoBefore = notes(.piano, 4, 8)
+        m.moveSection(by: 6)
+        say("moved piano 4-8 by +6: old place \(notes(.piano, 4, 8)) (expect 0), new place 10...14 = \(notes(.piano, 10, 14)) (>= \(pianoBefore)); selection \(String(describing: m.sectionSelection?.range))")
+
+        m.selectSection(track: .guitar, from: 0, to: 2)
+        m.deleteSection()
+        say("deleted guitar 0-2: \(notes(.guitar, 0, 2)) notes (expect 0)")
+
+        say("versions now: " + m.project.versions.map { "v\($0.number) \($0.kind.title)" }.joined(separator: " | "))
+        let before = m.project.versions.count
+        m.undo()
+        say("undo -> current version \(m.project.current?.number ?? -1) of \(before); guitar 0-2 notes back = \(notes(.guitar, 0, 2))")
+        m.redo()
+        say("redo -> guitar 0-2 notes = \(notes(.guitar, 0, 2)) (expect 0)")
+
+        // guards
+        m.selectSection(track: .guitar, from: 3, to: 3.1)
+        say("too-small selection ignored: \(m.sectionSelection == nil)")
+        m.generate(); m.cutSection()
+        say("cut while generating blocked: versions \(m.project.versions.count) (unchanged by the cut)")
+        m.cancelGenerate()
+        while m.isGeneratorBusy { try? await Task.sleep(for: .milliseconds(200)) }
+        m.dismissError()
+        say("after cancel: phase idle, versions \(m.project.versions.count)")
+        m.selectSection(track: .guitar, from: 6, to: 12)    // leave a selection for the screenshot
+        say("final selection \(String(describing: m.sectionSelection?.range)), canEdit \(m.canEditSections)")
+    }
+
     @MainActor static func renderEffectsPopover(to path: String) {
         struct Preview: View {
             @State var effects = TrackEffects(warmth: 0.35, grit: 0.6, echo: 0, reverb: 0.2, pan: -0.4)

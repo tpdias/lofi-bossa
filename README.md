@@ -26,6 +26,12 @@ rewrite just one part, or open a piano roll and edit the notes by hand.
   take, star ones worth keeping, and restore one as a new version (nothing is ever lost).
 - **Rewrite one track**: the model writes a new part for that instrument that fits the
   other three, which come back unchanged.
+- **Edit a section of one instrument**: drag on a track's lane to pick a stretch of time
+  (snapped to a quarter second), then cut, copy, paste at the playhead, duplicate, delete, or
+  drag the picked stretch to move it. A small pill over the selection, the lane's right-click
+  menu and the keyboard (`⌘X ⌘C ⌘V ⌘D`, `⌫`, `Esc`) all do the same things. Pasting replaces
+  what was there, a note is never left ringing into a cleared stretch, and each edit is a
+  version, so Undo and the Versions tab cover it.
 - **Edit notes by hand** in a piano-roll editor: select, draw, move, resize, delete, snap,
   and adjust loudness, with the other three parts visible as ghost notes for context.
 - **Mix**: mute, solo, volume and instrument per track, plus master Warmth (low-pass),
@@ -39,6 +45,8 @@ rewrite just one part, or open a piano roll and edit the notes by hand.
   for the whole song or just the loop range.
 - **The app starts its own generator.** No terminal step: launching the app launches
   `training/server.py` for you (see [How it works](#how-it-works)).
+
+![A guitar section selected on the timeline, with the cut, copy, paste, duplicate, delete and loop pill over it](docs/screenshots/sections.png)
 
 | Working on a song | Piano-roll editor |
 |---|---|
@@ -118,7 +126,10 @@ quits; `--window WIDTHxHEIGHT` sets an exact frame (bypassing AppKit's restored 
 `--demo [style] [lengthSeconds]` creates a project and generates, as the UI would, for a
 quick end-to-end check; add `--editor` to also open the piano roll once that finishes.
 `--data-dir PATH` keeps a run's projects in `PATH` instead of the real library — use it with
-`--demo`, which creates projects. `--fx piano.warmth=1,drums.grit=0.8` (with `--render`) sets
+`--demo`, which creates projects. `--sections` (with `--demo`) drives every section operation
+through the real app and prints what happened; add `--stress` for forty edits in a row.
+`--hit-sweep [delaySeconds]` hit-tests every point of the window and prints where it stops if
+SwiftUI's hit testing ever crashes. `--fx piano.warmth=1,drums.grit=0.8` (with `--render`) sets
 exactly those per-track effects, `--fx none` renders every track unprocessed, and
 `--render-fx-popover out.png` draws the effects popover to an image.
 

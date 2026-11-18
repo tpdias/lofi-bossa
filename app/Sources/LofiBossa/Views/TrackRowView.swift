@@ -23,6 +23,13 @@ struct TrackRowView: View {
     var onRewrite: () -> Void = {}
     var onCancelRewrite: () -> Void = {}
     var onResetEffects: () -> Void = {}
+    // Section editing (see SectionSelectable)
+    var sectionSelection: ClosedRange<Double>? = nil
+    var sectionsEnabled = false
+    var canPasteSection = false
+    var onSelectSection: (Double, Double) -> Void = { _, _ in }
+    var onMoveSection: (Double) -> Void = { _ in }
+    var onSectionAction: (SectionAction) -> Void = { _ in }
 
     @State private var showEffects = false
 
@@ -119,6 +126,11 @@ struct TrackRowView: View {
         }
         .contentShape(Rectangle())
         .onTapGesture(count: 2, perform: onSelect)   // double-click opens the piano-roll editor
+        .modifier(SectionSelectable(
+            track: track.id, duration: duration, selection: sectionSelection,
+            isEnabled: sectionsEnabled && !compact, canPaste: canPasteSection,
+            grid: ProjectViewModel.sectionGrid,
+            onSelect: onSelectSection, onMove: onMoveSection, onAction: onSectionAction))
     }
 }
 

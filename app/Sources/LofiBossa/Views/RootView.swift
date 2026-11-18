@@ -30,6 +30,14 @@ struct RootView: View {
                 selection = .project(project.id)
                 syncActiveModel()
                 activeModel?.generate()
+                if args.contains("--sections") {
+                    Task {
+                        while activeModel?.isGeneratorBusy == true || activeModel?.project.currentSnapshot == nil {
+                            try? await Task.sleep(for: .milliseconds(300))
+                        }
+                        if let model = activeModel { await DevTools.runSectionDemo(model) }
+                    }
+                }
                 if args.contains("--editor") {
                     Task {
                         while activeModel?.isGeneratorBusy == true { try? await Task.sleep(for: .milliseconds(300)) }
