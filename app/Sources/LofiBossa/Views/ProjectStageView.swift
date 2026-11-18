@@ -340,7 +340,8 @@ private struct RulerAndTracks: View {
             onSeek: { model.seek(to: $0) },
             onSelect: { model.openEditor(for: id) },
             onRewrite: { model.rewrite(id) },
-            onCancelRewrite: model.cancelRewrite
+            onCancelRewrite: model.cancelRewrite,
+            onResetEffects: { model.resetTrackEffects(for: id) }
         )
     }
 
@@ -364,6 +365,7 @@ private struct RulerAndTracks: View {
                 if newValue.isSoloed != model.displayedSnapshot?.track(id).isSoloed { model.setSoloed(newValue.isSoloed, for: id) }
                 if newValue.volume != model.displayedSnapshot?.track(id).volume { model.setVolume(newValue.volume, for: id) }
                 if newValue.instrument != model.displayedSnapshot?.track(id).instrument { model.setInstrument(newValue.instrument, for: id) }
+                if newValue.effects != model.displayedSnapshot?.track(id).effects { model.setTrackEffects(newValue.effects, for: id) }
             }
         )
     }

@@ -28,6 +28,11 @@ private struct SoundTab: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: LFBSpace.md) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Master").font(.lfbHeadline)
+                    Text("The whole mix. Each track has its own effects too: use the slider button on its row.")
+                        .font(.lfbCaption).foregroundStyle(Color.lfbTextSecondary)
+                }
                 EffectCard(title: "Warmth", caption: "Low-pass filter", symbol: "thermometer.sun",
                           amount: Binding(get: { effects.warmth }, set: { model.setEffects(MixEffects(warmth: $0, reverb: effects.reverb, vinyl: effects.vinyl)) }))
                 EffectCard(title: "Reverb", caption: "Space and depth", symbol: "waveform.path.ecg",

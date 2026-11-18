@@ -14,7 +14,8 @@ struct WireSong: Codable {
     func snapshot(style: MusicStyle, instruments: [TrackID: String]) -> SongSnapshot {
         SongSnapshot(
             tracks: TrackID.allCases.map {
-                Track(id: $0, instrument: instruments[$0] ?? $0.defaultInstrument, notes: notes($0))
+                Track(id: $0, instrument: instruments[$0] ?? $0.defaultInstrument, notes: notes($0),
+                      effects: style.defaultTrackEffects[$0] ?? TrackEffects())
             },
             effects: style.defaultEffects, style: style, lengthSeconds: seconds, seed: UInt32(truncatingIfNeeded: seed))
     }

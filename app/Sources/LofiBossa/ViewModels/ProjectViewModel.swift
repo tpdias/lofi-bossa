@@ -170,6 +170,7 @@ final class ProjectViewModel {
             result.tracks[i].volume = previous.volume
             result.tracks[i].isMuted = previous.isMuted
             result.tracks[i].isSoloed = previous.isSoloed
+            result.tracks[i].effects = previous.effects
         }
         return result
     }
@@ -241,6 +242,12 @@ final class ProjectViewModel {
     func setSoloed(_ soloed: Bool, for id: TrackID) { mutateCurrentTrack(id) { $0.isSoloed = soloed } }
     func setVolume(_ v: Double, for id: TrackID) { mutateCurrentTrack(id) { $0.volume = v } }
     func setInstrument(_ name: String, for id: TrackID) { mutateCurrentTrack(id) { $0.instrument = name } }
+    func setTrackEffects(_ effects: TrackEffects, for id: TrackID) { mutateCurrentTrack(id) { $0.effects = effects } }
+
+    /// Back to the style's starting effects for this track (neutral if the style gives it none).
+    func resetTrackEffects(for id: TrackID) {
+        setTrackEffects(project.style.defaultTrackEffects[id] ?? TrackEffects(), for: id)
+    }
 
     func setEffects(_ effects: MixEffects) {
         guard let vi = currentIndex else { return }
@@ -265,6 +272,7 @@ final class ProjectViewModel {
             let audible = anySolo ? track.isSoloed : !track.isMuted
             audio.setInstrument(track.id.program(for: track.instrument), for: track.id)
             audio.setVolume(audible ? track.volume : 0, for: track.id)
+            audio.apply(track.effects, for: track.id)
         }
         audio.apply(snapshot.effects)
     }

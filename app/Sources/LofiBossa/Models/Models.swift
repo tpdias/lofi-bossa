@@ -92,6 +92,19 @@ enum MusicStyle: String, CaseIterable, Codable, Identifiable {
         case .bossa: MixEffects(warmth: 0.15, reverb: 0.2, vinyl: 0)
         }
     }
+
+    /// Starting per-track effects, applied on a project's first generate (like instruments).
+    /// Lo-Fi gets a little grit and warmth on piano and drums; Bossa Nova a little room on
+    /// the guitar. Everything else starts neutral.
+    var defaultTrackEffects: [TrackID: TrackEffects] {
+        switch self {
+        case .lofi:
+            [.piano: TrackEffects(warmth: 0.25, grit: 0.15),
+             .drums: TrackEffects(warmth: 0.15, grit: 0.25)]
+        case .bossa:
+            [.guitar: TrackEffects(reverb: 0.2)]
+        }
+    }
 }
 
 enum NoteModel: String, CaseIterable, Codable, Identifiable {
@@ -116,6 +129,18 @@ struct Note: Identifiable, Codable, Hashable {
     enum CodingKeys: String, CodingKey { case pitch, start, duration, velocity }
 }
 
+/// Per-track effects, applied between the track's sampler and the master chain. All neutral
+/// (zero) by default; a track with every effect at zero is audibly unprocessed.
+struct TrackEffects: Codable, Hashable {
+    var warmth: Double = 0      // low-pass: 0 = open, 1 = very muffled
+    var grit: Double = 0        // bit-crush / decimation: the per-track lo-fi texture
+    var echo: Double = 0        // short feedback delay, wet amount
+    var reverb: Double = 0      // wet amount
+    var pan: Double = 0         // -1 (left) ... 1 (right)
+
+    var isNeutral: Bool { self == TrackEffects() }
+}
+
 struct Track: Identifiable, Codable, Hashable {
     var id: TrackID
     var instrument: String
@@ -123,6 +148,28 @@ struct Track: Identifiable, Codable, Hashable {
     var volume: Double = 0.7        // 0...1
     var isMuted = false
     var isSoloed = false
+    var effects = TrackEffects()
+}
+
+// Decoding is written out by hand (in an extension, so the memberwise init survives) because
+// synthesized Decodable fails on a missing key: a project saved before `effects` existed would
+// otherwise fail to load and silently disappear from the library. Anything added to Track
+// later needs a decodeIfPresent line here too.
+extension Track {
+    private enum CodingKeys: String, CodingKey {
+        case id, instrument, notes, volume, isMuted, isSoloed, effects
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(TrackID.self, forKey: .id)
+        instrument = try c.decode(String.self, forKey: .instrument)
+        notes = try c.decodeIfPresent([Note].self, forKey: .notes) ?? []
+        volume = try c.decodeIfPresent(Double.self, forKey: .volume) ?? 0.7
+        isMuted = try c.decodeIfPresent(Bool.self, forKey: .isMuted) ?? false
+        isSoloed = try c.decodeIfPresent(Bool.self, forKey: .isSoloed) ?? false
+        effects = try c.decodeIfPresent(TrackEffects.self, forKey: .effects) ?? TrackEffects()
+    }
 }
 
 struct MixEffects: Codable, Hashable {
@@ -138,6 +185,11 @@ enum VersionKind: Codable, Hashable {
     case rewrite(TrackID)
     case noteEdit(TrackID)
     case restore(fromVersion: Int)
+    /// Cut / paste / delete / duplicate / move of a section; the string is the title,
+    /// e.g. "Cut guitar 0:10–0:18".
+    case sectionEdit(TrackID, String)
+    /// The model rewrote only `start...end` (seconds) of one track.
+    case rewriteSection(TrackID, start: Double, end: Double)
 
     var title: String {
         switch self {
@@ -145,6 +197,9 @@ enum VersionKind: Codable, Hashable {
         case .rewrite(let track): "Rewrote \(track.rawValue)"
         case .noteEdit(let track): "Edited \(track.rawValue) notes"
         case .restore(let n): "Restored version \(n)"
+        case .sectionEdit(_, let title): title
+        case .rewriteSection(let track, let start, let end):
+            "Rewrote \(track.rawValue) \(formatTimecode(start))–\(formatTimecode(end))"
         }
     }
 }
@@ -163,7 +218,10 @@ struct SongSnapshot: Codable, Hashable {
 
     static func empty(style: MusicStyle, length: Double) -> SongSnapshot {
         SongSnapshot(
-            tracks: TrackID.allCases.map { Track(id: $0, instrument: style.defaultInstruments[$0] ?? $0.defaultInstrument) },
+            tracks: TrackID.allCases.map {
+                Track(id: $0, instrument: style.defaultInstruments[$0] ?? $0.defaultInstrument,
+                      effects: style.defaultTrackEffects[$0] ?? TrackEffects())
+            },
             effects: style.defaultEffects, style: style, lengthSeconds: length, seed: 0)
     }
 }

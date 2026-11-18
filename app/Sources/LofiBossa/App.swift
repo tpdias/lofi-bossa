@@ -11,6 +11,12 @@ enum Main {
             // the same shape saved under processed/check/ earlier in this project.
             exit(DevTools.render(wireSongPath: args[flag + 1], style: args[flag + 2], output: args[flag + 3]))
         }
+        if let flag = args.firstIndex(of: "--render-fx-popover"), args.count > flag + 1 {
+            // Draws the per-track effects popover to a PNG (popovers are separate windows, so
+            // --screenshot can't capture them).
+            MainActor.assumeIsolated { DevTools.renderEffectsPopover(to: args[flag + 1]) }
+            exit(0)
+        }
         LoFiBossaApp.main()
     }
 }
@@ -115,15 +121,54 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 /// Command-line checks that don't need a window: audio rendering and (via --screenshot above)
 /// a picture of a real running window.
 enum DevTools {
+    @MainActor static func renderEffectsPopover(to path: String) {
+        struct Preview: View {
+            @State var effects = TrackEffects(warmth: 0.35, grit: 0.6, echo: 0, reverb: 0.2, pan: -0.4)
+            var body: some View {
+                TrackEffectsPopover(track: .guitar, effects: $effects, onReset: {})
+                    .background(Color.lfbRaised)
+                    .environment(\.colorScheme, .dark)
+            }
+        }
+        let renderer = ImageRenderer(content: Preview())
+        renderer.scale = 2
+        guard let image = renderer.nsImage, let tiff = image.tiffRepresentation,
+              let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) else {
+            print("could not render the popover"); return
+        }
+        try? png.write(to: URL(fileURLWithPath: path))
+    }
+
     static func render(wireSongPath: String, style name: String, output: String) -> Int32 {
         do {
             let wire = try JSONDecoder().decode(WireSong.self, from: Data(contentsOf: URL(fileURLWithPath: wireSongPath)))
             let style = MusicStyle(rawValue: name) ?? .lofi
-            let snapshot = wire.snapshot(style: style, instruments: style.defaultInstruments)
+            var snapshot = wire.snapshot(style: style, instruments: style.defaultInstruments)
+            // `--fx piano.warmth=1,drums.grit=0.8` replaces the style's per-track effects with
+            // exactly these (everything else neutral); `--fx none` renders every track unprocessed.
+            if let flag = CommandLine.arguments.firstIndex(of: "--fx"), CommandLine.arguments.count > flag + 1 {
+                for i in snapshot.tracks.indices { snapshot.tracks[i].effects = TrackEffects() }
+                for item in CommandLine.arguments[flag + 1].split(separator: ",") {
+                    let parts = item.split(separator: "=")
+                    let key = parts.first?.split(separator: ".").map(String.init) ?? []
+                    guard parts.count == 2, key.count == 2, let value = Double(parts[1]),
+                          let id = TrackID(rawValue: key[0]),
+                          let i = snapshot.tracks.firstIndex(where: { $0.id == id }) else { continue }
+                    switch key[1] {
+                    case "warmth": snapshot.tracks[i].effects.warmth = value
+                    case "grit": snapshot.tracks[i].effects.grit = value
+                    case "echo": snapshot.tracks[i].effects.echo = value
+                    case "reverb": snapshot.tracks[i].effects.reverb = value
+                    case "pan": snapshot.tracks[i].effects.pan = value
+                    default: break
+                    }
+                }
+            }
             let audio = AudioEngine()
             for id in TrackID.allCases {
                 audio.setInstrument(id.program(for: snapshot.track(id).instrument), for: id)
                 audio.setVolume(0.8, for: id)
+                audio.apply(snapshot.track(id).effects, for: id)
             }
             audio.apply(style.defaultEffects)
             audio.load(snapshot)

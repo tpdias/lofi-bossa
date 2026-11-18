@@ -16,7 +16,7 @@ struct EffectCard: View {
                     .frame(width: geo.size.width * amount)
                     .overlay(alignment: .trailing) { Rectangle().fill(Color.lfbAccent).frame(width: 2) }
                 HStack(spacing: 10) {
-                    Image(systemName: symbol).foregroundStyle(Color.lfbTextSecondary)
+                    Image(systemName: symbol).foregroundStyle(Color.lfbTextSecondary).frame(width: 22)
                     VStack(alignment: .leading, spacing: 0) {
                         Text(title).font(.lfbHeadline)
                         Text(caption).font(.lfbCaption).foregroundStyle(Color.lfbTextSecondary)
