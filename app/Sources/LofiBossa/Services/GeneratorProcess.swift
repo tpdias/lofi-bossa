@@ -45,7 +45,10 @@ final class GeneratorProcess {
         process.standardError = pipe
         pipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
             let data = handle.availableData
-            guard !data.isEmpty, let text = String(data: data, encoding: .utf8) else { return }
+            // Empty data means the child closed its output (it exited). Left installed, the
+            // handler would then fire again immediately, forever, pinning a CPU core.
+            if data.isEmpty { handle.readabilityHandler = nil; return }
+            guard let text = String(data: data, encoding: .utf8) else { return }
             Task { @MainActor in self?.append(log: text) }
         }
         process.terminationHandler = { [weak self] _ in
