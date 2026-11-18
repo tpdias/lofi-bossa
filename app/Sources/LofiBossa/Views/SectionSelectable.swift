@@ -1,7 +1,7 @@
 import SwiftUI
 
 enum SectionAction {
-    case cut, copy, paste, delete, duplicate, useAsLoop, clear
+    case cut, copy, paste, delete, duplicate, useAsLoop, rewrite, clear
 }
 
 /// Makes a track's lane selectable by dragging: drag on empty lane to pick a stretch, drag
@@ -27,7 +27,7 @@ struct SectionSelectable: ViewModifier {
     @State private var moveOffset: Double = 0
 
     private enum DragKind { case select, move }
-    private let pillWidth: CGFloat = 178
+    private let pillWidth: CGFloat = 206
 
     func body(content: Content) -> some View {
         content
@@ -100,6 +100,7 @@ struct SectionSelectable: ViewModifier {
             pillButton("plus.square.on.square", "Duplicate after", .duplicate)
             pillButton("trash", "Delete", .delete)
             pillButton("repeat", "Loop this section", .useAsLoop)
+            pillButton("arrow.triangle.2.circlepath", "Rewrite this section with the model", .rewrite)
         }
         .padding(.horizontal, 4).frame(width: pillWidth, height: 26)
         .background(Color.lfbRaised, in: Capsule())
@@ -128,6 +129,7 @@ struct SectionSelectable: ViewModifier {
             Button("Duplicate Section") { onAction(.duplicate) }.disabled(selection == nil)
             Button("Delete Section", role: .destructive) { onAction(.delete) }.disabled(selection == nil)
             Divider()
+            Button("Rewrite Section") { onAction(.rewrite) }.disabled(selection == nil)
             Button("Use as Loop Range") { onAction(.useAsLoop) }.disabled(selection == nil)
             Button("Clear Selection") { onAction(.clear) }.disabled(selection == nil)
         }

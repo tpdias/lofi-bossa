@@ -141,24 +141,43 @@ final class ProjectViewModel {
         generateTask?.cancel()
     }
 
-    func rewrite(_ track: TrackID) {
+    /// The stretch being rewritten, when only part of `rewritingTrack` is (nil = the whole track).
+    private(set) var rewritingRange: ClosedRange<Double>?
+
+    /// Rewrites just the selected section of its track with the model.
+    func rewriteSection() {
+        guard let sel = sectionSelection, canEditSections else { return }
+        rewrite(sel.track, range: sel.range)
+    }
+
+    func rewrite(_ track: TrackID, range: ClosedRange<Double>? = nil) {
         guard !isGeneratorBusy, let snapshot = project.currentSnapshot else { return }
+        rewritingRange = range
         phase = .rewriting(track, startedAt: .now)
         let attempt = (rewriteAttempts[track] ?? 0) + 1
         rewriteAttempts[track] = attempt
         let seed = rewriteSeed(songSeed: snapshot.seed, track: track, attempt: attempt)
         generateTask = Task {
             do {
-                let notes = try await generator.rewrite(track: track, model: activeModel, in: snapshot, seed: seed)
+                let notes = try await generator.rewrite(track: track, model: activeModel, in: snapshot, seed: seed, range: range)
                 var newSnapshot = snapshot
                 if let i = newSnapshot.tracks.firstIndex(where: { $0.id == track }) {
                     newSnapshot.tracks[i].notes = notes
                 }
-                appendVersion(kind: .rewrite(track), changed: [track], snapshot: newSnapshot)
+                if let range {
+                    appendVersion(kind: .rewriteSection(track, start: range.lowerBound, end: range.upperBound),
+                                  changed: [track], snapshot: newSnapshot)
+                    sectionSelection = SectionSelection(track: track, range: range)   // keep it, to try again
+                } else {
+                    appendVersion(kind: .rewrite(track), changed: [track], snapshot: newSnapshot)
+                }
+                rewritingRange = nil
                 phase = .idle
             } catch is CancellationError {
+                rewritingRange = nil
                 phase = .idle
             } catch {
+                rewritingRange = nil
                 phase = .failed(message: "The \(track.rawValue) didn't finish rewriting.",
                                 detail: (error as? API.ServerError)?.message ?? error.localizedDescription,
                                 trackScope: track)

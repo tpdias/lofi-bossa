@@ -40,13 +40,17 @@ rewrite just one part, or open a piano roll and edit the notes by hand.
   tape-like texture), Echo, Reverb and Pan for just that instrument. Lo-Fi starts with a
   little grit and warmth on piano and drums, Bossa Nova with a little room on the guitar. They
   are part of exports too.
+- **Rewrite just a section** with the model: select a stretch of one instrument and press the
+  rewrite button (or right-click, Rewrite Section). Only that stretch is regenerated, written
+  around the other three instruments and the same instrument's music before and after it.
+  Everything else is untouched, and it is one version you can undo.
 - **Loop a range** of the song for preview or for export.
 - **Export** to WAV or M4A (rendered offline, faster than real time) or notes-only MIDI,
   for the whole song or just the loop range.
 - **The app starts its own generator.** No terminal step: launching the app launches
   `training/server.py` for you (see [How it works](#how-it-works)).
 
-![A guitar section selected on the timeline, with the cut, copy, paste, duplicate, delete and loop pill over it](docs/screenshots/sections.png)
+![A guitar section selected on the timeline, with the cut, copy, paste, duplicate, delete, loop and rewrite pill over it](docs/screenshots/sections.png)
 
 | Working on a song | Piano-roll editor |
 |---|---|

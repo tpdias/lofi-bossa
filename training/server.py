@@ -145,9 +145,14 @@ def generate(req: GenerateRequest):
 @app.post("/regenerate_track")
 async def regenerate_track(request: Request, track: str = Query(...), style: str = "lofi",
                            model: str = "auto",
-                           seed: int | None = None, top_p: float = Query(0.98, gt=0, le=1)):
+                           seed: int | None = None, top_p: float = Query(0.98, gt=0, le=1),
+                           start: float | None = Query(None, ge=0), end: float | None = Query(None, gt=0)):
     if track not in tracks.TRACKS:
         raise HTTPException(422, f"track must be one of {tracks.TRACKS}")
+    if (start is None) != (end is None):
+        raise HTTPException(422, "start and end go together: give both or neither")
+    if start is not None and end - start < 0.5:
+        raise HTTPException(422, "the range to rewrite must be at least half a second")
     body = await request.body()
     fmt = "json" if "json" in request.headers.get("content-type", "") else "midi"
     if fmt == "json":
@@ -175,9 +180,17 @@ async def regenerate_track(request: Request, track: str = Query(...), style: str
         raise HTTPException(400, "MIDI file is empty")
     by_track = tracks.split_events(events)
     fixed = ops.sort([tok for t in tracks.TRACKS if t != track for tok in by_track[t]])
+    ranged = start is not None
+    if ranged:
+        end = min(end, seconds)
+        if start >= end:
+            raise HTTPException(422, "the range to rewrite starts after the song ends")
 
     def run():
         with _lock:
+            if ranged:
+                return sampler.rewrite_range(model, ops.sort(events), tracks.instruments_for([track]),
+                                             start, end, top_p=top_p, seed=seed)
             return sampler.accompany(model, fixed, seconds, tracks.instruments_for([track]),
                                      top_p=top_p, seed=seed)
 
@@ -186,6 +199,31 @@ async def regenerate_track(request: Request, track: str = Query(...), style: str
 
     # Swap only the regenerated track; every other track's notes are returned untouched.
     new_notes = tracks.events_to_midi(new_events).instruments[tracks.TRACKS.index(track)].notes
+    if ranged:
+        # Keep this track's notes outside the range (one ringing into it stops where it starts),
+        # and add the new ones, which all start inside it.
+        if fmt == "json":
+            old = sent["tracks"].get(track, [])
+        else:
+            old = [{"start": n.start, "duration": n.end - n.start, "pitch": n.pitch, "velocity": n.velocity}
+                   for i in song.instruments if tracks.track_of(i.program, i.is_drum) == track for n in i.notes]
+        kept = []
+        for n in old:
+            if start <= n["start"] < end:
+                continue
+            if n["start"] < start < n["start"] + n["duration"]:
+                n = {**n, "duration": start - n["start"]}
+            kept.append(n)
+        added = [{"start": n.start, "duration": n.end - n.start, "pitch": n.pitch, "velocity": n.velocity}
+                 for n in new_notes]
+        merged = sorted(kept + added, key=lambda n: (n["start"], n["pitch"]))
+        if fmt == "json":
+            sent["tracks"][track] = [{"start": round(n["start"], 3), "duration": round(n["duration"], 3),
+                                      "pitch": n["pitch"], "velocity": n["velocity"]} for n in merged]
+            sent["seed"] = seed
+            return sent
+        new_notes = [pretty_midi.Note(int(n["velocity"]), int(n["pitch"]), n["start"], n["start"] + n["duration"])
+                     for n in merged]
     if fmt == "json":  # hand the client's other tracks back exactly as they were sent
         sent["tracks"][track] = [{"start": round(n.start, 3), "duration": round(n.end - n.start, 3),
                                   "pitch": n.pitch, "velocity": n.velocity} for n in new_notes]
