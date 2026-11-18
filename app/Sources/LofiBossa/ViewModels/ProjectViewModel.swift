@@ -2,6 +2,12 @@ import AppKit
 import Observation
 import UniformTypeIdentifiers
 
+/// A stretch of time on one track, picked by dragging on its lane.
+struct SectionSelection: Equatable {
+    var track: TrackID
+    var range: ClosedRange<Double>
+}
+
 enum InspectorTab: String, CaseIterable, Identifiable {
     case sound = "Sound", versions = "Versions"
     var id: String { rawValue }
@@ -39,6 +45,12 @@ final class ProjectViewModel {
     var editingTrack: TrackID?
     private var editingSnapshotBeforeSession: SongSnapshot?
     var selectedNoteIDs: Set<Note.ID> = []
+
+    // Section editing (cut / copy / paste of a stretch of one track)
+    var sectionSelection: SectionSelection?
+    private(set) var clipboard: SectionClip?
+    /// Selections and pastes land on this grid, in seconds.
+    static let sectionGrid = 0.25
 
     // Inspector
     var inspectorTab: InspectorTab = .sound
@@ -182,6 +194,7 @@ final class ProjectViewModel {
         project.currentVersionID = version.id
         project.lengthSeconds = snapshot.lengthSeconds
         if listeningVersionID != nil { listeningVersionID = nil }
+        if case .sectionEdit = kind {} else { sectionSelection = nil }   // a new take, rewrite or restore invalidates it
         persist()
         loadIntoAudio(snapshot, resumeIfPlaying: true)
     }
@@ -192,6 +205,7 @@ final class ProjectViewModel {
         guard let i = currentIndex, i > 0 else { return }
         project.currentVersionID = project.versions[i - 1].id
         listeningVersionID = nil
+        sectionSelection = nil
         persist()
         if let s = project.currentSnapshot { loadIntoAudio(s, resumeIfPlaying: isPlaying) }
     }
@@ -200,6 +214,7 @@ final class ProjectViewModel {
         guard let i = currentIndex, i < project.versions.count - 1 else { return }
         project.currentVersionID = project.versions[i + 1].id
         listeningVersionID = nil
+        sectionSelection = nil
         persist()
         if let s = project.currentSnapshot { loadIntoAudio(s, resumeIfPlaying: isPlaying) }
     }
@@ -226,6 +241,102 @@ final class ProjectViewModel {
         guard let i = project.versions.firstIndex(where: { $0.id == version.id }) else { return }
         project.versions[i].isKept.toggle()
         persist()
+    }
+
+    // MARK: Section editing
+
+    /// Edits apply to the current version, so they are off while listening to a past one, while
+    /// the generator is busy (its result would overwrite them), and while the piano roll is open
+    /// (which has its own editing session).
+    var canEditSections: Bool {
+        project.currentSnapshot != nil && !isListeningToPastVersion && !isGeneratorBusy && !isPianoRollOpen
+    }
+    var canPasteSection: Bool { canEditSections && clipboard != nil }
+    private var pasteTarget: TrackID? { sectionSelection?.track ?? clipboard?.source }
+
+    private func snapToGrid(_ t: Double) -> Double {
+        (t / Self.sectionGrid).rounded() * Self.sectionGrid
+    }
+
+    /// Selects `from...to` on one track, snapped to the grid and kept inside the song.
+    func selectSection(track: TrackID, from: Double, to: Double) {
+        let length = duration
+        let lo = min(max(snapToGrid(min(from, to)), 0), length)
+        let hi = min(max(snapToGrid(max(from, to)), 0), length)
+        guard hi - lo >= Self.sectionGrid else { sectionSelection = nil; return }
+        sectionSelection = SectionSelection(track: track, range: lo...hi)
+    }
+
+    func clearSectionSelection() { sectionSelection = nil }
+
+    private func notes(of track: TrackID) -> [Note] { project.currentSnapshot?.track(track).notes ?? [] }
+
+    private func label(_ range: ClosedRange<Double>) -> String {
+        "\(formatTimecode(range.lowerBound))–\(formatTimecode(range.upperBound))"
+    }
+
+    private func commitSection(_ title: String, track: TrackID, notes newNotes: [Note]) {
+        guard var snapshot = project.currentSnapshot,
+              let i = snapshot.tracks.firstIndex(where: { $0.id == track }) else { return }
+        snapshot.tracks[i].notes = newNotes
+        appendVersion(kind: .sectionEdit(track, title), changed: [track], snapshot: snapshot)
+    }
+
+    func copySection() {
+        guard let sel = sectionSelection, canEditSections else { return }
+        var clip = NoteEditing.copy(notes(of: sel.track), range: sel.range)
+        clip.source = sel.track
+        clipboard = clip
+    }
+
+    func cutSection() {
+        guard let sel = sectionSelection, canEditSections else { return }
+        copySection()
+        commitSection("Cut \(sel.track.rawValue) \(label(sel.range))", track: sel.track,
+                      notes: NoteEditing.removing(notes(of: sel.track), range: sel.range))
+    }
+
+    func deleteSection() {
+        guard let sel = sectionSelection, canEditSections else { return }
+        commitSection("Deleted \(sel.track.rawValue) \(label(sel.range))", track: sel.track,
+                      notes: NoteEditing.removing(notes(of: sel.track), range: sel.range))
+    }
+
+    /// Pastes at the playhead (on the grid), onto the selected track, or the track it was
+    /// copied from if nothing is selected. The pasted stretch becomes the selection.
+    func pasteSection(onto track: TrackID? = nil) {
+        guard canPasteSection, let clip = clipboard, let track = track ?? pasteTarget else { return }
+        let at = min(snapToGrid(position), max(duration - Self.sectionGrid, 0))
+        let result = NoteEditing.pasting(clip, into: notes(of: track), at: at, songLength: duration)
+        let end = min(at + clip.length, duration)
+        commitSection("Pasted into \(track.rawValue) at \(formatTimecode(at))", track: track, notes: result)
+        if end - at >= Self.sectionGrid { sectionSelection = SectionSelection(track: track, range: at...end) }
+    }
+
+    func duplicateSection() {
+        guard let sel = sectionSelection, canEditSections, sel.range.upperBound < duration else { return }
+        let result = NoteEditing.duplicating(notes(of: sel.track), range: sel.range, songLength: duration)
+        let length = sel.range.upperBound - sel.range.lowerBound
+        let newEnd = min(sel.range.upperBound + length, duration)
+        commitSection("Duplicated \(sel.track.rawValue) \(label(sel.range))", track: sel.track, notes: result)
+        sectionSelection = SectionSelection(track: sel.track, range: sel.range.upperBound...newEnd)
+    }
+
+    /// Moves the selected stretch by `seconds` (snapped to the grid), overwriting the destination.
+    func moveSection(by seconds: Double) {
+        guard let sel = sectionSelection, canEditSections else { return }
+        let offset = snapToGrid(seconds)
+        guard abs(offset) >= Self.sectionGrid else { return }
+        let moved = NoteEditing.moving(notes(of: sel.track), range: sel.range, by: offset, songLength: duration)
+        guard moved.range != sel.range else { return }
+        commitSection("Moved \(sel.track.rawValue) \(label(sel.range)) to \(formatTimecode(moved.range.lowerBound))",
+                      track: sel.track, notes: moved.notes)
+        sectionSelection = SectionSelection(track: sel.track, range: moved.range)
+    }
+
+    func useSectionAsLoop() {
+        guard let sel = sectionSelection else { return }
+        setLoopRange(sel.range)
     }
 
     // MARK: Mix (not versioned)

@@ -303,6 +303,7 @@ private struct RulerAndTracks: View {
     @Bindable var model: ProjectViewModel
     let snapshot: SongSnapshot
     @State private var dragStart: Double?
+    @FocusState private var stageFocused: Bool
 
     private var duration: Double { max(snapshot.lengthSeconds, 1) }
     private var laneX: CGFloat { LFBSize.trackHeaderWidth + 1 }
@@ -328,6 +329,35 @@ private struct RulerAndTracks: View {
             }
             overlay
         }
+        // Section shortcuts. Handled here, not as Edit-menu key equivalents, because Cut/Copy/Paste
+        // there belong to the text fields (seed, rename) and must keep working in them.
+        .focusable()
+        .focused($stageFocused)
+        .focusEffectDisabled()
+        .onKeyPress(phases: .down, action: handleKey)
+        .onChange(of: model.sectionSelection) { _, selection in
+            if selection != nil { stageFocused = true }
+        }
+    }
+
+    private func handleKey(_ press: KeyPress) -> KeyPress.Result {
+        guard model.canEditSections else { return .ignored }
+        let command = press.modifiers.contains(.command)
+        if model.sectionSelection != nil {
+            switch press.key {
+            case .escape: model.clearSectionSelection(); return .handled
+            case .delete, .deleteForward: model.deleteSection(); return .handled
+            default: break
+            }
+        }
+        guard command else { return .ignored }
+        switch press.characters.lowercased() {
+        case "x" where model.sectionSelection != nil: model.cutSection(); return .handled
+        case "c" where model.sectionSelection != nil: model.copySection(); return .handled
+        case "d" where model.sectionSelection != nil: model.duplicateSection(); return .handled
+        case "v" where model.canPasteSection: model.pasteSection(); return .handled
+        default: return .ignored
+        }
     }
 
     private func fullRow(_ id: TrackID) -> some View {
@@ -341,7 +371,23 @@ private struct RulerAndTracks: View {
             onSelect: { model.openEditor(for: id) },
             onRewrite: { model.rewrite(id) },
             onCancelRewrite: model.cancelRewrite,
-            onResetEffects: { model.resetTrackEffects(for: id) }
+            onResetEffects: { model.resetTrackEffects(for: id) },
+            sectionSelection: model.sectionSelection?.track == id ? model.sectionSelection?.range : nil,
+            sectionsEnabled: model.canEditSections,
+            canPasteSection: model.canPasteSection,
+            onSelectSection: { model.selectSection(track: id, from: $0, to: $1) },
+            onMoveSection: { model.moveSection(by: $0) },
+            onSectionAction: { action in
+                switch action {
+                case .cut: model.cutSection()
+                case .copy: model.copySection()
+                case .paste: model.pasteSection(onto: id)
+                case .delete: model.deleteSection()
+                case .duplicate: model.duplicateSection()
+                case .useAsLoop: model.useSectionAsLoop()
+                case .clear: model.clearSectionSelection()
+                }
+            }
         )
     }
 
