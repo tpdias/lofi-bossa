@@ -98,7 +98,12 @@ private struct ProjectTitle: View {
                     .onTapGesture { draft = model.project.name; isRenaming = true; focused = true }
             }
             Text(subtitle).font(.lfbCaption).foregroundStyle(Color.lfbTextSecondary)
+                .lineLimit(1).minimumScaleFactor(0.85)
         }
+        // The toolbar draws a capsule around this; without padding and a natural width the
+        // subtitle ran under its rounded ends ("o-Fi · 0:46 · ... Saved" cut at both sides).
+        .padding(.horizontal, 14)
+        .fixedSize(horizontal: true, vertical: false)
     }
 
     private var subtitle: String {
