@@ -11,9 +11,9 @@ struct WireSong: Codable {
 
     /// Combine with a snapshot's non-musical state (instruments, volumes, effects) to get a
     /// full SongSnapshot after a whole-song generation.
-    func snapshot(style: MusicStyle, instruments: [TrackID: String]) -> SongSnapshot {
+    func snapshot(style: MusicStyle, instruments: [TrackID: String], tracks ids: [TrackID] = TrackID.core) -> SongSnapshot {
         SongSnapshot(
-            tracks: TrackID.allCases.map {
+            tracks: ids.map {
                 Track(id: $0, instrument: instruments[$0] ?? $0.defaultInstrument, notes: notes($0),
                       effects: style.defaultTrackEffects[$0] ?? TrackEffects())
             },
@@ -29,7 +29,8 @@ struct WireSong: Codable {
     init(from snapshot: SongSnapshot) {
         seed = Int(snapshot.seed)
         seconds = snapshot.lengthSeconds
-        tracks = Dictionary(uniqueKeysWithValues: snapshot.tracks.map { ($0.id.rawValue, $0.notes) })
+        // Every track, present or not, so the server never sees a missing key; absent ones are empty.
+        tracks = Dictionary(uniqueKeysWithValues: TrackID.allCases.map { ($0.rawValue, snapshot.track($0).notes) })
     }
 }
 
@@ -59,10 +60,12 @@ struct API {
         return Set((names ?? []).compactMap(MusicStyle.init(rawValue:)))
     }
 
-    func generate(style: MusicStyle, model: NoteModel, seconds: Double, seed: UInt32?) async throws -> WireSong {
+    func generate(style: MusicStyle, model: NoteModel, seconds: Double, seed: UInt32?,
+                  tracks: [TrackID] = TrackID.core) async throws -> WireSong {
         var request = URLRequest(url: base.appending(path: "generate"))
         var body: [String: Any] = [
             "style": style.rawValue, "model": model.apiValue, "seconds": seconds, "format": "json",
+            "tracks": tracks.map(\.rawValue),
         ]
         if let seed { body["seed"] = Int(seed) }
         request.httpBody = try JSONSerialization.data(withJSONObject: body)

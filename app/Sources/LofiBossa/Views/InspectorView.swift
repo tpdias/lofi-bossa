@@ -119,7 +119,7 @@ private struct VersionRow: View {
     var body: some View {
         HStack(spacing: LFBSpace.sm) {
             HStack(spacing: 2) {
-                ForEach(TrackID.allCases) { id in
+                ForEach(version.snapshot.trackIDs) { id in
                     RoundedRectangle(cornerRadius: 1)
                         .fill(version.changedTracks.contains(id) ? id.color : Color.lfbControlHairline)
                         .frame(width: 4, height: 16)

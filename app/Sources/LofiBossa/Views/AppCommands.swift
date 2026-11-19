@@ -58,6 +58,20 @@ struct AppCommands: Commands {
             ForEach(Array(TrackID.allCases.enumerated()), id: \.element) { index, id in
                 Button("Select \(id.title)") { model?.selectTrack(id) }
                     .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: .command)
+                    .disabled(model?.displayedSnapshot?.hasTrack(id) != true)
+            }
+            Divider()
+            Menu("Add Track") {
+                ForEach(TrackID.optional) { id in
+                    Button(id.title) { model?.addTrack(id) }
+                        .disabled(model?.addableTracks.contains(id) != true || model?.canChangeTracks != true)
+                }
+            }
+            Menu("Remove Track") {
+                ForEach(TrackID.optional) { id in
+                    Button(id.title) { model?.removeTrack(id) }
+                        .disabled(model?.displayedSnapshot?.hasTrack(id) != true || model?.canChangeTracks != true)
+                }
             }
             Divider()
             Button("Mute Track") { model?.toggleMuteOfSelectedTrack() }
@@ -113,7 +127,7 @@ enum KeyboardShortcuts {
             Item(keys: "⌘L", what: "Loop the selection"),
         ]),
         Group(title: "Tracks", items: [
-            Item(keys: "⌘1 – ⌘4", what: "Select piano, guitar, bass, drums"),
+            Item(keys: "⌘1 – ⌘7", what: "Select the first to seventh track"),
             Item(keys: "⌥⌘M / ⌥⌘S", what: "Mute / solo the selected track"),
             Item(keys: "⌥⌘P", what: "Open the piano roll for the selected track"),
             Item(keys: "⌘R", what: "Rewrite the selected track with the model"),

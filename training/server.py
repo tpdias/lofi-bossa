@@ -83,9 +83,9 @@ def midi_response(pm, seed):
 
 
 def song_json(pm, seed):
-    notes = {t: [] for t in tracks.TRACKS}
+    notes = {t: [] for t in tracks.ALL_TRACKS}
     for inst in pm.instruments:
-        track = tracks.track_of(inst.program, inst.is_drum)
+        track = tracks.all_track_of(inst.program, inst.is_drum)
         if track:
             notes[track] += [{"start": round(n.start, 3), "duration": round(n.end - n.start, 3),
                               "pitch": n.pitch, "velocity": n.velocity} for n in inst.notes]
@@ -96,7 +96,7 @@ def song_json(pm, seed):
 
 def json_to_midi(song):
     pm = pretty_midi.PrettyMIDI()
-    for t in tracks.TRACKS:
+    for t in tracks.ALL_TRACKS:
         inst = pretty_midi.Instrument(program=tracks.OUT_PROGRAM[t], is_drum=(t == "drums"), name=t)
         for n in song.get("tracks", {}).get(t, []):
             inst.notes.append(pretty_midi.Note(int(n["velocity"]), int(n["pitch"]), float(n["start"]),
@@ -116,30 +116,36 @@ class GenerateRequest(BaseModel):
     seed: int | None = None
     top_p: float = Field(0.98, gt=0, le=1)
     format: str = Field("midi", pattern="^(midi|json)$")
+    # which tracks to write; the four core ones unless the project added others
+    tracks: list[str] = Field(default_factory=lambda: list(tracks.TRACKS))
 
 
 @app.get("/health")
 def health():
-    return {"device": device, "tracks": tracks.TRACKS,
+    return {"device": device, "tracks": tracks.ALL_TRACKS,
             "styles": {s: model_source(s) for s in STYLES},
             "finetuned": [s for s in STYLES if has_finetuned(s)]}
 
 
 @app.post("/generate")
 def generate(req: GenerateRequest):
+    wanted = [t for t in tracks.ALL_TRACKS if t in req.tracks]
+    unknown = [t for t in req.tracks if t not in tracks.ALL_TRACKS]
+    if unknown or not wanted:
+        raise HTTPException(422, f"tracks must be from {tracks.ALL_TRACKS}")
     model = get_model(req.style, req.model)
     seed = req.seed if req.seed is not None else random.randrange(2**31)
     with _lock:
         events = sampler.generate(model, 0, req.seconds, top_p=req.top_p, seed=seed,
-                                  instruments=tracks.instruments_for(tracks.TRACKS))
+                                  instruments=tracks.instruments_for(wanted))
         # the model often leaves an instrument out; write a part for any silent track
         by_track = tracks.split_events(events)
-        for t in tracks.TRACKS:
+        for t in wanted:
             if len(by_track[t]) // 3 < 0.25 * req.seconds:
-                fixed = ops.sort([tok for o in tracks.TRACKS if o != t for tok in by_track[o]])
+                fixed = ops.sort([tok for o in wanted if o != t for tok in by_track[o]])
                 by_track[t] = sampler.accompany(model, fixed, req.seconds, tracks.instruments_for([t]),
                                                 top_p=req.top_p, seed=seed)
-        events = ops.sort([tok for t in tracks.TRACKS for tok in by_track[t]])
+        events = ops.sort([tok for t in wanted for tok in by_track[t]])
     return respond(tracks.events_to_midi(events), seed, req.format)
 
 
@@ -148,8 +154,8 @@ async def regenerate_track(request: Request, track: str = Query(...), style: str
                            model: str = "auto",
                            seed: int | None = None, top_p: float = Query(0.98, gt=0, le=1),
                            start: float | None = Query(None, ge=0), end: float | None = Query(None, gt=0)):
-    if track not in tracks.TRACKS:
-        raise HTTPException(422, f"track must be one of {tracks.TRACKS}")
+    if track not in tracks.ALL_TRACKS:
+        raise HTTPException(422, f"track must be one of {tracks.ALL_TRACKS}")
     if (start is None) != (end is None):
         raise HTTPException(422, "start and end go together: give both or neither")
     if start is not None and end - start < 0.5:
@@ -180,7 +186,7 @@ async def regenerate_track(request: Request, track: str = Query(...), style: str
     if seconds < 1:
         raise HTTPException(400, "MIDI file is empty")
     by_track = tracks.split_events(events)
-    fixed = ops.sort([tok for t in tracks.TRACKS if t != track for tok in by_track[t]])
+    fixed = ops.sort([tok for t in tracks.ALL_TRACKS if t != track for tok in by_track[t]])
     ranged = start is not None
     if ranged:
         end = min(end, seconds)
@@ -199,7 +205,7 @@ async def regenerate_track(request: Request, track: str = Query(...), style: str
     new_events = await run_in_threadpool(run)
 
     # Swap only the regenerated track; every other track's notes are returned untouched.
-    new_notes = tracks.events_to_midi(new_events).instruments[tracks.TRACKS.index(track)].notes
+    new_notes = tracks.events_to_midi(new_events).instruments[tracks.ALL_TRACKS.index(track)].notes
     if ranged:
         # Keep this track's notes outside the range (one ringing into it stops where it starts),
         # and add the new ones, which all start inside it.
@@ -207,7 +213,7 @@ async def regenerate_track(request: Request, track: str = Query(...), style: str
             old = sent["tracks"].get(track, [])
         else:
             old = [{"start": n.start, "duration": n.end - n.start, "pitch": n.pitch, "velocity": n.velocity}
-                   for i in song.instruments if tracks.track_of(i.program, i.is_drum) == track for n in i.notes]
+                   for i in song.instruments if tracks.all_track_of(i.program, i.is_drum) == track for n in i.notes]
         kept = []
         for n in old:
             if start <= n["start"] < end:
@@ -233,12 +239,12 @@ async def regenerate_track(request: Request, track: str = Query(...), style: str
         sent["seed"] = seed
         return sent
     song.instruments = [i for i in song.instruments
-                        if tracks.track_of(i.program, i.is_drum) != track]
+                        if tracks.all_track_of(i.program, i.is_drum) != track]
     song.instruments.append(pretty_midi.Instrument(
         program=tracks.OUT_PROGRAM[track], is_drum=(track == "drums"), name=track))
     song.instruments[-1].notes = new_notes
-    order = {t: n for n, t in enumerate(tracks.TRACKS)}
-    song.instruments.sort(key=lambda i: order.get(tracks.track_of(i.program, i.is_drum), 99))
+    order = {t: n for n, t in enumerate(tracks.ALL_TRACKS)}
+    song.instruments.sort(key=lambda i: order.get(tracks.all_track_of(i.program, i.is_drum), 99))
     return respond(song, seed, fmt)
 
 

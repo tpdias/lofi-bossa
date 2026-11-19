@@ -21,8 +21,8 @@ final class FakeGeneratorClient: GeneratorClient {
 
     func restart() async throws {}
 
-    func generate(style: MusicStyle, model: NoteModel, length: Double, seed: UInt32?)
-        -> AsyncThrowingStream<GenerationEvent, Error> {
+    func generate(style: MusicStyle, model: NoteModel, length: Double, seed: UInt32?,
+                  tracks: [TrackID]) -> AsyncThrowingStream<GenerationEvent, Error> {
         generateCalls += 1
         let seed = seed ?? UInt32.random(in: 0...UInt32.max)
         let failure = failure, delay = delay
@@ -31,7 +31,7 @@ final class FakeGeneratorClient: GeneratorClient {
                 do {
                     if delay > .zero { try await Task.sleep(for: delay) }
                     if let failure { throw failure }
-                    continuation.yield(.finished(Self.song(style: style, length: length, seed: seed)))
+                    continuation.yield(.finished(Self.song(style: style, length: length, seed: seed, tracks: tracks)))
                     continuation.finish()
                 } catch {
                     continuation.finish(throwing: error)
@@ -56,8 +56,8 @@ final class FakeGeneratorClient: GeneratorClient {
 
     /// Eight notes per two seconds per track, pitched by track and seed, so different seeds
     /// give different (and checkably different) songs.
-    static func song(style: MusicStyle, length: Double, seed: UInt32) -> SongSnapshot {
-        var song = SongSnapshot.empty(style: style, length: length)
+    static func song(style: MusicStyle, length: Double, seed: UInt32, tracks: [TrackID] = TrackID.core) -> SongSnapshot {
+        var song = SongSnapshot.empty(style: style, length: length, tracks: tracks)
         song.seed = seed
         for i in song.tracks.indices {
             song.tracks[i].notes = notes(for: song.tracks[i].id, length: length, seed: seed)
@@ -72,6 +72,9 @@ final class FakeGeneratorClient: GeneratorClient {
         case .guitar: base = 52
         case .bass: base = 36
         case .drums: base = 36
+        case .keys: base = 55
+        case .lead: base = 72
+        case .vibes: base = 67
         }
         let step = 0.25
         return (0..<Int(length / step)).compactMap { i in

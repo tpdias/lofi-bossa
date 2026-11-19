@@ -3,10 +3,20 @@ import SwiftUI
 // MARK: - Fixed vocabulary
 
 enum TrackID: String, CaseIterable, Codable, Identifiable, Hashable {
-    case piano, guitar, bass, drums
+    case piano, guitar, bass, drums, keys, lead, vibes
     var id: String { rawValue }
 
-    var title: String { rawValue.capitalized }
+    /// Every project starts with these four; the rest are added from the Track menu.
+    static let core: [TrackID] = [.piano, .guitar, .bass, .drums]
+    static let optional: [TrackID] = [.keys, .lead, .vibes]
+    var isCore: Bool { Self.core.contains(self) }
+
+    var title: String {
+        switch self {
+        case .keys: "Keys & Pads"
+        default: rawValue.capitalized
+        }
+    }
 
     /// Fill color for notes, tiles, sliders.
     var color: Color {
@@ -15,6 +25,9 @@ enum TrackID: String, CaseIterable, Codable, Identifiable, Hashable {
         case .guitar: .lfbGuitar
         case .bass: .lfbBass
         case .drums: .lfbDrums
+        case .keys: .lfbKeys
+        case .lead: .lfbLead
+        case .vibes: .lfbVibes
         }
     }
     /// Use for text and icons so contrast stays above 4.5:1.
@@ -24,6 +37,9 @@ enum TrackID: String, CaseIterable, Codable, Identifiable, Hashable {
         case .guitar: .lfbGuitarInk
         case .bass: .lfbBassInk
         case .drums: .lfbDrumsInk
+        case .keys: .lfbKeysInk
+        case .lead: .lfbLeadInk
+        case .vibes: .lfbVibesInk
         }
     }
     /// SF Symbol. Drums has no good system symbol, so it draws a small custom glyph instead
@@ -34,6 +50,9 @@ enum TrackID: String, CaseIterable, Codable, Identifiable, Hashable {
         case .guitar: "guitars"
         case .bass: "waveform.path"
         case .drums: "circle.grid.2x2.fill"
+        case .keys: "waveform"
+        case .lead: "music.quarternote.3"
+        case .vibes: "sparkles"
         }
     }
 
@@ -51,6 +70,15 @@ enum TrackID: String, CaseIterable, Codable, Identifiable, Hashable {
             [.init("Acoustic Bass", 32), .init("Fingered Bass", 33), .init("Fretless Bass", 35)]
         case .drums:
             [.init("Standard Kit", 0), .init("Room Kit", 8), .init("Jazz Kit", 32), .init("Brush Kit", 40)]
+        case .keys:
+            [.init("Warm Pad", 89), .init("String Ensemble", 48), .init("Slow Strings", 49),
+             .init("Choir Aahs", 52), .init("Church Organ", 19)]
+        case .lead:
+            [.init("Flute", 73), .init("Soft Sax", 65), .init("Muted Trumpet", 59),
+             .init("Clarinet", 71), .init("Oboe", 68)]
+        case .vibes:
+            [.init("Vibraphone", 11), .init("Marimba", 12), .init("Glockenspiel", 9),
+             .init("Music Box", 10)]
         }
     }
 
@@ -80,9 +108,11 @@ enum MusicStyle: String, CaseIterable, Codable, Identifiable {
     var defaultInstruments: [TrackID: String] {
         switch self {
         case .lofi:
-            [.piano: "Electric Piano", .guitar: "Jazz Guitar", .bass: "Fingered Bass", .drums: "Room Kit"]
+            [.piano: "Electric Piano", .guitar: "Jazz Guitar", .bass: "Fingered Bass", .drums: "Room Kit",
+             .keys: "Warm Pad", .lead: "Soft Sax", .vibes: "Vibraphone"]
         case .bossa:
-            [.piano: "Grand Piano", .guitar: "Nylon Guitar", .bass: "Acoustic Bass", .drums: "Brush Kit"]
+            [.piano: "Grand Piano", .guitar: "Nylon Guitar", .bass: "Acoustic Bass", .drums: "Brush Kit",
+             .keys: "String Ensemble", .lead: "Flute", .vibes: "Vibraphone"]
         }
     }
 
@@ -190,6 +220,9 @@ enum VersionKind: Codable, Hashable {
     case sectionEdit(TrackID, String)
     /// The model rewrote only `start...end` (seconds) of one track.
     case rewriteSection(TrackID, start: Double, end: Double)
+    /// An optional track was added to / removed from the song.
+    case addTrack(TrackID)
+    case removeTrack(TrackID)
 
     var title: String {
         switch self {
@@ -200,6 +233,8 @@ enum VersionKind: Codable, Hashable {
         case .sectionEdit(_, let title): title
         case .rewriteSection(let track, let start, let end):
             "Rewrote \(track.rawValue) \(formatTimecode(start))–\(formatTimecode(end))"
+        case .addTrack(let track): "Added \(track.title)"
+        case .removeTrack(let track): "Removed \(track.title)"
         }
     }
 }
@@ -212,13 +247,17 @@ struct SongSnapshot: Codable, Hashable {
     var lengthSeconds: Double
     var seed: UInt32
 
+    /// The tracks this song has, in display order (core ones first, then added ones).
+    var trackIDs: [TrackID] { tracks.map(\.id) }
+    func hasTrack(_ id: TrackID) -> Bool { tracks.contains { $0.id == id } }
+
     func track(_ id: TrackID) -> Track {
         tracks.first { $0.id == id } ?? Track(id: id, instrument: id.defaultInstrument)
     }
 
-    static func empty(style: MusicStyle, length: Double) -> SongSnapshot {
+    static func empty(style: MusicStyle, length: Double, tracks ids: [TrackID] = TrackID.core) -> SongSnapshot {
         SongSnapshot(
-            tracks: TrackID.allCases.map {
+            tracks: TrackID.allCases.filter(ids.contains).map {
                 Track(id: $0, instrument: style.defaultInstruments[$0] ?? $0.defaultInstrument,
                       effects: style.defaultTrackEffects[$0] ?? TrackEffects())
             },

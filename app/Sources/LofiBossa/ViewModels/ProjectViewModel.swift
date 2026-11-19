@@ -123,11 +123,11 @@ final class ProjectViewModel {
             do {
                 for try await event in generator.generate(
                     style: project.style, model: activeModel, length: project.lengthSeconds,
-                    seed: project.pinnedSeed
+                    seed: project.pinnedSeed, tracks: project.currentSnapshot?.trackIDs ?? TrackID.core
                 ) {
                     guard case .finished(var snapshot) = event else { continue }
                     snapshot = carryOverMixIfSameStyle(onto: snapshot)
-                    appendVersion(kind: .newTake(seed: snapshot.seed), changed: Set(TrackID.allCases), snapshot: snapshot)
+                    appendVersion(kind: .newTake(seed: snapshot.seed), changed: Set(snapshot.trackIDs), snapshot: snapshot)
                 }
                 phase = .idle
             } catch is CancellationError {
@@ -256,7 +256,7 @@ final class ProjectViewModel {
     /// nothing is lost and the restore is itself undoable.
     func restoreListeningVersion() {
         guard let version = listeningVersion else { return }
-        appendVersion(kind: .restore(fromVersion: version.number), changed: Set(TrackID.allCases), snapshot: version.snapshot)
+        appendVersion(kind: .restore(fromVersion: version.number), changed: Set(version.snapshot.trackIDs), snapshot: version.snapshot)
     }
 
     func toggleKept(_ version: Version) {
@@ -359,6 +359,39 @@ final class ProjectViewModel {
     func useSectionAsLoop() {
         guard let sel = sectionSelection else { return }
         setLoopRange(sel.range)
+    }
+
+    // MARK: Adding and removing tracks
+
+    /// The optional tracks this song doesn't have yet.
+    var addableTracks: [TrackID] {
+        guard let snapshot = displayedSnapshot else { return [] }
+        return TrackID.optional.filter { !snapshot.hasTrack($0) }
+    }
+    var canChangeTracks: Bool {
+        project.currentSnapshot != nil && !isListeningToPastVersion && !isGeneratorBusy && !isPianoRollOpen
+    }
+
+    /// Adds an optional track (as its own version, so it can be undone) and asks the model to
+    /// write it. If the generator can't, the empty track stays and can be rewritten later.
+    func addTrack(_ id: TrackID) {
+        guard canChangeTracks, var snapshot = project.currentSnapshot, !snapshot.hasTrack(id) else { return }
+        snapshot.tracks.append(Track(
+            id: id, instrument: snapshot.style.defaultInstruments[id] ?? id.defaultInstrument,
+            effects: snapshot.style.defaultTrackEffects[id] ?? TrackEffects()))
+        snapshot.tracks.sort { TrackID.allCases.firstIndex(of: $0.id)! < TrackID.allCases.firstIndex(of: $1.id)! }
+        appendVersion(kind: .addTrack(id), changed: [id], snapshot: snapshot)
+        selectedTrack = id
+        rewrite(id)
+    }
+
+    /// Removes an optional track. The four core tracks always stay.
+    func removeTrack(_ id: TrackID) {
+        guard canChangeTracks, !id.isCore, var snapshot = project.currentSnapshot, snapshot.hasTrack(id) else { return }
+        snapshot.tracks.removeAll { $0.id == id }
+        if selectedTrack == id { selectedTrack = nil }
+        if sectionSelection?.track == id { sectionSelection = nil }
+        appendVersion(kind: .removeTrack(id), changed: [id], snapshot: snapshot)
     }
 
     // MARK: Mix (not versioned)
@@ -511,6 +544,7 @@ final class ProjectViewModel {
     /// A click on the ruler moves the playhead; a click inside the loop that's set also removes
     /// that loop (the way to get rid of it without hunting for its ✕).
     func tapRuler(at time: Double) {
+        clearSectionSelection()
         if let range = loopRange, range.contains(time) { clearLoop() }
         seek(to: time)
     }

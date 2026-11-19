@@ -28,6 +28,7 @@ struct PianoRollView: View {
     @State private var viewport: CGSize = CGSize(width: 800, height: 400)
     @State private var didPlaceView = false
     @FocusState private var focused: Bool
+    @State private var pressHandled = false
 
     // dragging notes
     @State private var dragOriginals: [Note.ID: Note] = [:]
@@ -307,6 +308,7 @@ struct PianoRollView: View {
             Color.clear
                 .contentShape(Rectangle())
                 .gesture(canvasDrag)
+                .simultaneousGesture(pressSelect)
                 .onTapGesture(count: 2) { addNote(at: onSurface($0)) }
                 .onTapGesture(count: 1) { tapCanvas(at: onSurface($0)) }
             if let rect = marqueeRect {
@@ -437,6 +439,21 @@ struct PianoRollView: View {
         model.updateEditingNotes(notes + [note], for: track)
         model.selectedNoteIDs = [note.id]
         audition(pitch)
+    }
+
+    /// Pressing on a note selects it right away, so a note that is held down (before any drag, or
+    /// without moving) is already the selection when Delete is pressed.
+    private var pressSelect: some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { g in
+                guard !pressHandled else { return }
+                pressHandled = true
+                focused = true
+                if !shiftHeld, let hit = hitTest(onSurface(g.startLocation)), !model.selectedNoteIDs.contains(hit.note.id) {
+                    model.selectedNoteIDs = [hit.note.id]
+                }
+            }
+            .onEnded { _ in pressHandled = false }
     }
 
     private var canvasDrag: some Gesture {
@@ -573,6 +590,8 @@ struct PianoRollView: View {
         guard !model.selectedNoteIDs.isEmpty else { return }
         model.updateEditingNotes(notes.filter { !model.selectedNoteIDs.contains($0.id) }, for: track)
         model.selectedNoteIDs = []
+        // deleting while a note is held mid-drag: the drag has nothing left to move
+        dragOriginals = [:]; dragMode = nil; dragAnchorID = nil; lastAuditionPitch = nil
     }
 
     private func copySelection() {
