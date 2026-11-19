@@ -296,6 +296,26 @@ final class ProjectViewModelTests: XCTestCase {
         }
     }
 
+    // MARK: loop
+
+    func testClickingInsideTheLoopRemovesItAndMovesThePlayhead() async {
+        await generate(seed: 1)
+        model.setLoopRange(4...8)
+        model.tapRuler(at: 6)
+        XCTAssertNil(model.loopRange)
+        XCTAssertFalse(model.isLoopEnabled)
+        XCTAssertEqual(model.position, 6, accuracy: 0.1)
+    }
+
+    func testClickingOutsideTheLoopKeepsItAndMovesThePlayhead() async {
+        await generate(seed: 1)
+        model.setLoopRange(4...8)
+        model.tapRuler(at: 12)
+        XCTAssertEqual(model.loopRange, 4...8)
+        XCTAssertTrue(model.isLoopEnabled)
+        XCTAssertEqual(model.position, 12, accuracy: 0.1)
+    }
+
     // MARK: audio, in the real flows (each of these was a "no sound" bug once)
 
     /// Loudest sample that reaches the output while `body` runs and for a moment after.

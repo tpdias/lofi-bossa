@@ -508,6 +508,13 @@ final class ProjectViewModel {
 
     func toggleLoop() { isLoopEnabled.toggle() }
 
+    /// A click on the ruler moves the playhead; a click inside the loop that's set also removes
+    /// that loop (the way to get rid of it without hunting for its ✕).
+    func tapRuler(at time: Double) {
+        if let range = loopRange, range.contains(time) { clearLoop() }
+        seek(to: time)
+    }
+
     // MARK: Menu commands (Edit / Transport / Track menus)
 
     /// "New take · seed 5", the version Undo would step back from; nil when there is nothing to undo.
