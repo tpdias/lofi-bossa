@@ -428,4 +428,13 @@ final class ProjectViewModelTests: XCTestCase {
         XCTAssertTrue(model.isPlaying)
         model.pause()
     }
+
+    func testClickingTheRulerDeselectsTheSection() async {
+        await generate(seed: 1)
+        model.selectSection(track: .guitar, from: 2, to: 6)
+        XCTAssertNotNil(model.sectionSelection)
+        model.tapRuler(at: 10)
+        XCTAssertNil(model.sectionSelection)
+        XCTAssertEqual(model.position, 10, accuracy: 0.5)
+    }
 }

@@ -409,7 +409,7 @@ private struct RulerAndTracks: View {
             isRewriting: model.rewritingTrack == id,
             rewritingRange: model.rewritingTrack == id ? model.rewritingRange : nil,
             isGeneratorBusy: model.isGeneratorBusy,
-            onSeek: { model.seek(to: $0) },
+            onSeek: { model.clearSectionSelection(); model.seek(to: $0) },   // a click anywhere else deselects
             onSelect: { model.openEditor(for: id) },
             onRewrite: { model.rewrite(id) },
             onCancelRewrite: model.cancelRewrite,
