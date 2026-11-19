@@ -293,6 +293,13 @@ the ones in `docs/design/tokens.json`. The app icon, which does need a real Asse
 lives only in `app/Assets.xcassets/` (outside `Sources/LofiBossa/`, so SwiftPM's build
 ignores it and only the Xcode build picks it up).
 
+## Keyboard shortcuts
+
+Help ▸ Keyboard Shortcuts (⌘/) lists them all. The menus carry them: Edit (⌘Z / ⇧⌘Z step through
+versions and name what they undo), Song, Transport (⌘[ ⌘] nudge the playhead), Track (⌘1–⌘4 pick a
+track; ⌥⌘M mute, ⌥⌘S solo, ⌥⌘P piano roll, ⌘R rewrite), View (⌥⌘I inspector). Section and
+piano-roll keys work when those have focus.
+
 ## Tests
 
 ```bash

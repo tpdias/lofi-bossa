@@ -238,6 +238,64 @@ final class ProjectViewModelTests: XCTestCase {
         XCTAssertLessThanOrEqual(model.position, 20)
     }
 
+    // MARK: menu commands
+
+    func testUndoAndRedoMenuTitlesNameTheVersion() async {
+        XCTAssertNil(model.undoTitle)
+        await generate(seed: 7)
+        XCTAssertNil(model.undoTitle, "version 1 has nothing before it")
+        model.selectSection(track: .guitar, from: 2, to: 6)
+        model.deleteSection()
+        XCTAssertEqual(model.undoTitle, versions[1].kind.title)
+        XCTAssertTrue(model.undoTitle?.contains("guitar") == true)
+        XCTAssertNil(model.redoTitle)
+        model.undo()
+        XCTAssertEqual(model.redoTitle, versions[1].kind.title)
+        XCTAssertNil(model.undoTitle)
+    }
+
+    func testTrackCommandsActOnTheSelectedTrack() async {
+        await generate(seed: 1)
+        model.toggleMuteOfSelectedTrack()                       // nothing selected: nothing happens
+        XCTAssertTrue(TrackID.allCases.allSatisfy { model.isAudible($0) })
+        model.selectTrack(.bass)
+        model.toggleMuteOfSelectedTrack()
+        XCTAssertFalse(model.isAudible(.bass))
+        model.toggleMuteOfSelectedTrack()
+        XCTAssertTrue(model.isAudible(.bass))
+        model.toggleSoloOfSelectedTrack()
+        XCTAssertTrue(model.isAudible(.bass)); XCTAssertFalse(model.isAudible(.piano))
+        XCTAssertEqual(versions.count, 1, "mix changes are not versions")
+    }
+
+    func testRewriteAndOpenEditorForTheSelectedTrack() async {
+        await generate(seed: 1)
+        model.selectTrack(.piano)
+        model.rewriteSelectedTrack()
+        await waitUntilIdle()
+        if case .rewrite(.piano) = versions[1].kind {} else { XCTFail("expected rewrite(piano)") }
+        model.openEditorForSelectedTrack()
+        XCTAssertEqual(model.editingTrack, .piano)
+        model.closeEditor()
+    }
+
+    func testNudgingThePlayheadStaysInsideTheSong() async {
+        await generate(seed: 1)
+        model.nudgePlayhead(by: -5)
+        XCTAssertEqual(model.position, 0, accuracy: 0.01)
+        model.nudgePlayhead(by: 5)
+        XCTAssertEqual(model.position, 5, accuracy: 0.1)
+        model.nudgePlayhead(by: 100)
+        XCTAssertEqual(model.position, 20, accuracy: 0.1)
+    }
+
+    func testEveryShortcutListedHasText() {
+        for group in KeyboardShortcuts.groups {
+            XCTAssertFalse(group.items.isEmpty)
+            for item in group.items { XCTAssertFalse(item.keys.isEmpty || item.what.isEmpty) }
+        }
+    }
+
     // MARK: audio, in the real flows (each of these was a "no sound" bug once)
 
     /// Loudest sample that reaches the output while `body` runs and for a moment after.

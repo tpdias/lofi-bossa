@@ -11,6 +11,7 @@ struct RootView: View {
     @State private var selection: SidebarSelection = .allProjects
     @State private var activeModel: ProjectViewModel?
     @State private var showInspector = true
+    @State private var showShortcuts = false
 
     var body: some View {
         NavigationSplitView {
@@ -55,6 +56,9 @@ struct RootView: View {
         .onReceive(NotificationCenter.default.publisher(for: .lfbGenerate)) { _ in activeModel?.generate() }
         .onReceive(NotificationCenter.default.publisher(for: .lfbCopySeed)) { _ in activeModel?.copySeedToPasteboard() }
         .onReceive(NotificationCenter.default.publisher(for: .lfbToggleLoop)) { _ in activeModel?.toggleLoop() }
+        .onReceive(NotificationCenter.default.publisher(for: .lfbToggleInspector)) { _ in showInspector.toggle() }
+        .onReceive(NotificationCenter.default.publisher(for: .lfbShowShortcuts)) { _ in showShortcuts = true }
+        .sheet(isPresented: $showShortcuts) { ShortcutsSheet() }
     }
 
     @ViewBuilder private var detail: some View {
