@@ -142,6 +142,8 @@ private struct VersionRow: View {
             .buttonStyle(.plain)
             Button(action: onPlay) { Image(systemName: "play.fill") }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("version-play-\(version.number)")
+                .accessibilityLabel("Listen to version \(version.number)")
         }
         .padding(.horizontal, LFBSpace.md).padding(.vertical, 6)
         .background(isCurrent ? Color.lfbAccentWash : .clear)

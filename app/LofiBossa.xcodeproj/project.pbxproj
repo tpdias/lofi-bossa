@@ -6,15 +6,26 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		A10000000000000000000013 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000012 /* Assets.xcassets */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		A20000000000000000000007 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A10000000000000000000009 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A10000000000000000000006;
+			remoteInfo = LofiBossa;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		A10000000000000000000001 /* LofiBossa.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LofiBossa.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A1000000000000000000000D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A10000000000000000000012 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		A20000000000000000000001 /* LofiBossaUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LofiBossaUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
-
-/* Begin PBXBuildFile section */
-		A10000000000000000000013 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000012 /* Assets.xcassets */; };
-/* End PBXBuildFile section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		A10000000000000000000002 /* LofiBossa */ = {
@@ -23,10 +34,22 @@
 			path = Sources/LofiBossa;
 			sourceTree = "<group>";
 		};
+		A20000000000000000000002 /* UITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = UITests;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		A10000000000000000000003 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A20000000000000000000005 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -40,6 +63,7 @@
 			isa = PBXGroup;
 			children = (
 				A10000000000000000000002 /* LofiBossa */,
+				A20000000000000000000002 /* UITests */,
 				A1000000000000000000000D /* Info.plist */,
 				A10000000000000000000012 /* Assets.xcassets */,
 				A10000000000000000000005 /* Products */,
@@ -50,6 +74,7 @@
 			isa = PBXGroup;
 			children = (
 				A10000000000000000000001 /* LofiBossa.app */,
+				A20000000000000000000001 /* LofiBossaUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -77,6 +102,27 @@
 			productReference = A10000000000000000000001 /* LofiBossa.app */;
 			productType = "com.apple.product-type.application";
 		};
+		A20000000000000000000003 /* LofiBossaUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A20000000000000000000009 /* Build configuration list for PBXNativeTarget "LofiBossaUITests" */;
+			buildPhases = (
+				A20000000000000000000004 /* Sources */,
+				A20000000000000000000005 /* Frameworks */,
+				A20000000000000000000006 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A20000000000000000000008 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				A20000000000000000000002 /* UITests */,
+			);
+			name = LofiBossaUITests;
+			productName = LofiBossaUITests;
+			productReference = A20000000000000000000001 /* LofiBossaUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -89,6 +135,10 @@
 				TargetAttributes = {
 					A10000000000000000000006 = {
 						CreatedOnToolsVersion = 16.0;
+					};
+					A20000000000000000000003 = {
+						CreatedOnToolsVersion = 16.0;
+						TestTargetID = A10000000000000000000006;
 					};
 				};
 			};
@@ -107,6 +157,7 @@
 			projectRoot = "";
 			targets = (
 				A10000000000000000000006 /* LofiBossa */,
+				A20000000000000000000003 /* LofiBossaUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -120,6 +171,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A20000000000000000000006 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -130,7 +188,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A20000000000000000000004 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		A20000000000000000000008 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A10000000000000000000006 /* LofiBossa */;
+			targetProxy = A20000000000000000000007 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		A1000000000000000000000E /* Debug */ = {
@@ -219,6 +292,34 @@
 			};
 			name = Release;
 		};
+		A20000000000000000000010 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.tpdias.LofiBossaUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = LofiBossa;
+			};
+			name = Debug;
+		};
+		A20000000000000000000011 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.tpdias.LofiBossaUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = LofiBossa;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -236,6 +337,15 @@
 			buildConfigurations = (
 				A10000000000000000000010 /* Debug */,
 				A10000000000000000000011 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A20000000000000000000009 /* Build configuration list for PBXNativeTarget "LofiBossaUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A20000000000000000000010 /* Debug */,
+				A20000000000000000000011 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

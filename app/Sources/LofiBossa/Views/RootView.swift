@@ -5,7 +5,9 @@ import SwiftUI
 /// process); one ProjectViewModel for whichever project is currently open.
 struct RootView: View {
     @Environment(ProjectStore.self) private var store
-    @State private var generator = LocalGeneratorClient()
+    /// `--fake-generator` swaps the model server for an instant fake, so UI tests need no Python.
+    @State private var generator: any GeneratorClient =
+        CommandLine.arguments.contains("--fake-generator") ? FakeGeneratorClient() : LocalGeneratorClient()
     @State private var selection: SidebarSelection = .allProjects
     @State private var activeModel: ProjectViewModel?
     @State private var showInspector = true

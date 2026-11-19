@@ -19,16 +19,25 @@ final class ProjectStore {
     private var pending: [Project.ID: Task<Void, Never>] = [:]
     private var unsaved: [Project.ID: Project] = [:]   // latest value behind each pending debounce
 
-    private let root: URL = {
-        // `--data-dir PATH` keeps a test run out of the real library (the dev flags create
-        // projects, and nothing should ever have to delete the real folder to get a clean start).
+    private let root: URL
+
+    /// `root` is where the project folders live. The default is the real library (or
+    /// `--data-dir PATH`, which keeps a test run out of it: the dev flags create projects, and
+    /// nothing should ever have to delete the real folder to get a clean start). Tests pass a
+    /// temporary folder.
+    init(root: URL? = nil) {
+        if let root {
+            self.root = root
+            return
+        }
         let args = CommandLine.arguments
         if let flag = args.firstIndex(of: "--data-dir"), args.count > flag + 1 {
-            return URL(fileURLWithPath: args[flag + 1], isDirectory: true).appendingPathComponent("Projects", isDirectory: true)
+            self.root = URL(fileURLWithPath: args[flag + 1], isDirectory: true).appendingPathComponent("Projects", isDirectory: true)
+        } else {
+            let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            self.root = base.appendingPathComponent("LoFiBossa/Projects", isDirectory: true)
         }
-        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        return base.appendingPathComponent("LoFiBossa/Projects", isDirectory: true)
-    }()
+    }
 
     /// Not deleted, newest-edited first by default (callers may re-sort for the library view).
     var active: [Project] { projects.filter { $0.deletedAt == nil } }

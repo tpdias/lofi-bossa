@@ -293,6 +293,22 @@ the ones in `docs/design/tokens.json`. The app icon, which does need a real Asse
 lives only in `app/Assets.xcassets/` (outside `Sources/LofiBossa/`, so SwiftPM's build
 ignores it and only the Xcode build picks it up).
 
+## Tests
+
+```bash
+cd app && swift test                                   # unit tests, ~15 s, no screen needed
+xcodebuild -project app/LofiBossa.xcodeproj -scheme LofiBossa test   # unit tests are SwiftPM-only; this runs the UI tests
+```
+
+- **Unit tests** (`app/Tests/LofiBossaTests`): note editing, project coding, the audio engine,
+  and the view model (generate, versions, undo, listening to a past version, section edits and
+  rewrites, piano-roll sessions) against `FakeGeneratorClient` and a temporary project folder.
+  Several listen to the real output level while playing, because "it plays but is silent" has
+  happened more than once.
+- **UI tests** (`app/UITests`, XCUITest): drive the real app launched with `--fake-generator`
+  (an instant, deterministic generator, no Python server) and a throwaway `--data-dir`. They take
+  over the mouse and keyboard for a minute and need Accessibility permission for Xcode.
+
 ## Known limitations
 
 Built faithfully to the design handoff (`docs/design/HANDOFF.md`) with a few knowing
