@@ -8,6 +8,7 @@ final class AudioEngine {
     private let engine = AVAudioEngine()
     private var samplers: [TrackID: AVAudioUnitSampler] = [:]
     private var chains: [TrackID: TrackChain] = [:]
+    private var loadedPrograms: [TrackID: UInt8] = [:]
     private let trackMix = AVAudioMixerNode()
     private let lowPass = AVAudioUnitEQ(numberOfBands: 1)
     private let reverb = AVAudioUnitReverb()
@@ -89,7 +90,12 @@ final class AudioEngine {
         DispatchQueue.main.asyncAfter(deadline: .now() + length) { sampler.stopNote(note, onChannel: 0) }
     }
 
+    /// Loads a track's instrument, unless it already has it. Reloading the sound bank on a
+    /// sampler whose engine is running (which every version switch used to do) left the new
+    /// sequencer's notes silent and playback dead until the app was restarted.
     func setInstrument(_ program: UInt8, for id: TrackID) {
+        guard loadedPrograms[id] != program else { return }
+        loadedPrograms[id] = program
         let bank = id == .drums ? kAUSampler_DefaultPercussionBankMSB : kAUSampler_DefaultMelodicBankMSB
         try? samplers[id]?.loadSoundBankInstrument(
             at: Self.soundBank, program: program, bankMSB: UInt8(bank), bankLSB: 0)
@@ -124,7 +130,16 @@ final class AudioEngine {
     // MARK: Song and transport
 
     func load(_ snapshot: SongSnapshot) {
-        sequencer?.stop()
+        if let old = sequencer {
+            old.stop()
+            for track in old.tracks { track.destinationAudioUnit = nil }
+        }
+        sequencer = nil   // release the old one before making the new one
+        // The engine must be stopped while the sequencer is swapped: replacing it on a running
+        // engine (every version switch, undo or edit while playing) left the new sequencer
+        // silent, with only the vinyl noise audible, until the app restarted.
+        let wasRunning = engine.isRunning
+        engine.stop()
         // Every song gets a brand-new sequencer, never an edited one. On macOS 27.2.1, changing
         // a sequencer that already has tracks is unreliable: removeTrack raised an NSRangeException
         // from inside AVAudioSequencer ("range {2, 1} extends beyond bounds [0 .. 1]", even when
@@ -146,6 +161,7 @@ final class AudioEngine {
         }
         seconds = snapshot.lengthSeconds
         sequencer.currentPositionInSeconds = 0
+        if wasRunning { try? engine.start() }
     }
 
     var isPlaying: Bool { sequencer?.isPlaying ?? false }
