@@ -24,6 +24,13 @@ final class AudioEngine {
     private static let beatsPerSecond = 2.0
     private(set) var seconds: Double = 0
 
+    /// The vinyl noise is part of the song's sound, so it only plays while the song does (or while
+    /// an export is rendering). `vinylLevel` is the user's setting; the gate decides if it's heard.
+    private var vinylLevel: Float = 0
+    private var vinylGate = false {
+        didSet { vinyl.level = vinylGate ? vinylLevel : 0 }
+    }
+
     /// One track's effects, in signal order: sampler -> eq -> distortion -> delay -> reverb ->
     /// pan. The pan stage is a mixer node because pan belongs to a node's connection into a
     /// mixer (AVAudioMixing), and plain effect units don't carry it.
@@ -124,7 +131,8 @@ final class AudioEngine {
         // warmth 0 -> 18 kHz (open), 1 -> 900 Hz (muffled), on a log scale
         lowPass.bands[0].frequency = Float(18000 * pow(900.0 / 18000.0, effects.warmth))
         reverb.wetDryMix = Float(effects.reverb * 60)
-        vinyl.level = Float(effects.vinyl)
+        vinylLevel = Float(effects.vinyl)
+        vinyl.level = vinylGate ? vinylLevel : 0
     }
 
     // MARK: Song and transport
@@ -177,10 +185,12 @@ final class AudioEngine {
         if position >= seconds { position = 0 }
         sequencer.prepareToPlay()
         try sequencer.start()
+        vinylGate = true
     }
 
     func stop() {
         sequencer?.stop()
+        vinylGate = false
     }
 
     // MARK: Export
@@ -190,10 +200,12 @@ final class AudioEngine {
     func export(to url: URL, format: ExportFormat, range: ClosedRange<Double>? = nil, tail: Double = 2.5) throws {
         guard let sequencer else { return }
         stop()
+        vinylGate = true   // the file should have the vinyl, even though nothing plays live
         engine.stop()
         let renderFormat = AVAudioFormat(standardFormatWithSampleRate: 44100, channels: 2)!
         try engine.enableManualRenderingMode(.offline, format: renderFormat, maximumFrameCount: 4096)
         defer {
+            vinylGate = false
             sequencer.stop()
             engine.stop()
             engine.disableManualRenderingMode()

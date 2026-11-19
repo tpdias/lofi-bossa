@@ -473,7 +473,7 @@ private struct RulerAndTracks: View {
             }
             .onEnded { _ in dragStart = nil }
             .exclusively(before: SpatialTapGesture().onEnded { tap in
-                model.seek(to: Double(tap.location.x / width) * duration)
+                model.tapRuler(at: Double(tap.location.x / width) * duration)
             })
     }
 
