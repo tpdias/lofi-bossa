@@ -68,4 +68,29 @@ final class ProjectCodingTests: XCTestCase {
         XCTAssertEqual(kinds[0].title, "Cut guitar 0:10–0:18")
         XCTAssertEqual(kinds[1].title, "Rewrote bass 0:05–0:10")
     }
+
+    func testSongWithAddedTracksRoundTripsAndKeepsOrder() throws {
+        var snapshot = SongSnapshot.empty(style: .bossa, length: 30, tracks: TrackID.core + [.vibes, .lead])
+        snapshot.tracks[5].notes = [Note(pitch: 72, start: 1, duration: 0.5, velocity: 80)]
+        XCTAssertEqual(snapshot.trackIDs, [.piano, .guitar, .bass, .drums, .lead, .vibes])
+        let decoded = try JSONDecoder().decode(SongSnapshot.self, from: JSONEncoder().encode(snapshot))
+        XCTAssertEqual(decoded.trackIDs, snapshot.trackIDs)
+        XCTAssertEqual(decoded.track(.vibes).notes.map(\.pitch), [72])   // (note ids aren't stored)
+        XCTAssertEqual(snapshot.track(.lead).instrument, "Flute")
+    }
+
+    func testAddAndRemoveVersionKindsRoundTripAndHaveTitles() throws {
+        for kind in [VersionKind.addTrack(.keys), .removeTrack(.keys)] {
+            XCTAssertEqual(try JSONDecoder().decode(VersionKind.self, from: JSONEncoder().encode(kind)), kind)
+        }
+        XCTAssertEqual(VersionKind.addTrack(.keys).title, "Added Keys & Pads")
+        XCTAssertEqual(VersionKind.removeTrack(.lead).title, "Removed Lead")
+    }
+
+    func testWireSongOnlyBuildsTheRequestedTracks() {
+        let wire = WireSong(seed: 1, seconds: 10, tracks: ["piano": [], "lead": [Note(pitch: 70, start: 0, duration: 1, velocity: 80)]])
+        let snapshot = wire.snapshot(style: .lofi, instruments: [:], tracks: [.piano, .lead])
+        XCTAssertEqual(snapshot.trackIDs, [.piano, .lead])
+        XCTAssertEqual(snapshot.track(.lead).notes.count, 1)
+    }
 }

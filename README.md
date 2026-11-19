@@ -3,7 +3,10 @@
 A macOS app that writes background music for vlogs. It generates a four-track song
 (piano, guitar, bass, drums) with a symbolic music model running locally, keeps every
 take as a version you can go back to, and lets you mix each track, swap its instrument,
-rewrite just one part, or open a piano roll and edit the notes by hand.
+rewrite just one part, or open a piano roll and edit the notes by hand. Three optional tracks
+(Keys & Pads, Lead, Vibes) can be added from the Track menu or the "Add Track" row; the model
+writes them zero-shot (they are not part of the fine-tuning data), each add or remove is a
+version, and the four core tracks always stay.
 
 ![The library: a project grid with a first-launch welcome screen, style cards and a length slider](docs/screenshots/first_launch.png)
 
@@ -296,7 +299,7 @@ ignores it and only the Xcode build picks it up).
 ## Keyboard shortcuts
 
 Help ▸ Keyboard Shortcuts (⌘/) lists them all. The menus carry them: Edit (⌘Z / ⇧⌘Z step through
-versions and name what they undo), Song, Transport (⌘[ ⌘] nudge the playhead), Track (⌘1–⌘4 pick a
+versions and name what they undo), Song, Transport (⌘[ ⌘] nudge the playhead), Track (⌘1–⌘7 pick a
 track; ⌥⌘M mute, ⌥⌘S solo, ⌥⌘P piano roll, ⌘R rewrite), View (⌥⌘I inspector). Section and
 piano-roll keys work when those have focus.
 

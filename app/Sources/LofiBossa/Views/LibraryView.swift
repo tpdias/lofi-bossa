@@ -186,7 +186,7 @@ private struct ProjectCard: View {
 
     private var thumbnail: some View {
         HStack(spacing: 3) {
-            ForEach(TrackID.allCases) { id in
+            ForEach(project.current?.snapshot.trackIDs ?? TrackID.core) { id in
                 GeometryReader { geo in
                     NoteLaneView(notes: project.current?.snapshot.track(id).notes ?? [],
                                 duration: max(project.lengthSeconds, 1), color: id.color)
@@ -232,7 +232,7 @@ struct FirstLaunchView: View {
     var body: some View {
         VStack(spacing: LFBSpace.xl) {
             HStack(spacing: 3) {
-                ForEach(TrackID.allCases) { id in
+                ForEach(TrackID.core) { id in
                     RoundedRectangle(cornerRadius: 2).fill(id.color).frame(width: 36, height: 10)
                 }
             }
@@ -280,7 +280,7 @@ private struct StyleCard: View {
             VStack(spacing: 6) {
                 Text(style.title).font(.lfbHeadline)
                 HStack(spacing: 3) {
-                    ForEach(TrackID.allCases) { id in
+                    ForEach(TrackID.core) { id in
                         RoundedRectangle(cornerRadius: 1.5).fill(id.color).frame(width: 16, height: 6)
                     }
                 }

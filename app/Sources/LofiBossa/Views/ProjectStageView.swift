@@ -250,7 +250,7 @@ private struct EmptyProjectView: View {
     @Bindable var model: ProjectViewModel
     var body: some View {
         VStack(spacing: 0) {
-            ForEach(TrackID.allCases) { id in
+            ForEach(TrackID.core) { id in
                 HStack(spacing: 0) {
                     HStack(spacing: 8) {
                         TrackGlyph(id: id)
@@ -325,15 +325,19 @@ private struct RulerAndTracks: View {
                 Divider()
                 if model.isPianoRollOpen {
                     VStack(spacing: 0) {
-                        ForEach(TrackID.allCases) { id in compactRow(id) }
+                        ForEach(snapshot.trackIDs) { id in compactRow(id) }
                     }
                     Divider()
                     if let track = model.editingTrack {
                         PianoRollView(model: model, track: track)
                     }
                 } else {
-                    VStack(spacing: 0) {
-                        ForEach(TrackID.allCases) { id in fullRow(id) }
+                    // Up to four tracks share the height; with more, the rows keep their minimum
+                    // height and the stage scrolls.
+                    if snapshot.tracks.count > 4 {
+                        ScrollView(.vertical) { trackRows }
+                    } else {
+                        trackRows
                     }
                 }
             }
@@ -341,7 +345,7 @@ private struct RulerAndTracks: View {
                 // While the roll is open the playhead there belongs to the roll's own (zoomed)
                 // time axis, so the stage's overlay covers only the ruler and the compact rows.
                 .frame(height: model.isPianoRollOpen
-                       ? LFBSize.rulerHeight + 1 + 4 * LFBSize.trackRowCompactHeight : nil,
+                       ? LFBSize.rulerHeight + 1 + CGFloat(snapshot.tracks.count) * LFBSize.trackRowCompactHeight : nil,
                        alignment: .top)
         }
         // Section shortcuts. Handled here, not as Edit-menu key equivalents, because Cut/Copy/Paste
@@ -352,6 +356,28 @@ private struct RulerAndTracks: View {
         .onKeyPress(phases: .down, action: handleKey)
         .onChange(of: model.sectionSelection) { _, selection in
             if selection != nil { stageFocused = true }
+        }
+    }
+
+    private var trackRows: some View {
+        VStack(spacing: 0) {
+            ForEach(snapshot.trackIDs) { id in fullRow(id) }
+            if model.canChangeTracks && !model.addableTracks.isEmpty {
+                Menu {
+                    ForEach(model.addableTracks) { id in
+                        Button(id.title) { model.addTrack(id) }
+                    }
+                } label: {
+                    Label("Add Track", systemImage: "plus")
+                        .font(.lfbBodyMedium)
+                        .padding(.horizontal, LFBSpace.md)
+                        .frame(maxWidth: .infinity, minHeight: 32, alignment: .leading)
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .help("Add a keys, lead or vibes track. The model writes it to fit the song.")
+                .accessibilityIdentifier("add-track")
+            }
         }
     }
 

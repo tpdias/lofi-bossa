@@ -45,9 +45,10 @@ protocol GeneratorClient: AnyObject, Observable {
     /// request for a nonexistent checkpoint reach the server as an error.
     var finetunedStyles: Set<MusicStyle> { get }
 
-    func generate(style: MusicStyle, model: NoteModel, length: Double, seed: UInt32?) -> AsyncThrowingStream<GenerationEvent, Error>
+    func generate(style: MusicStyle, model: NoteModel, length: Double, seed: UInt32?,
+                  tracks: [TrackID]) -> AsyncThrowingStream<GenerationEvent, Error>
 
-    /// Rewrites one track so it fits the other three. Seed is derived from the song seed plus
+    /// Rewrites one track so it fits the others. Seed is derived from the song seed plus
     /// the track by the caller. With a `range` only that stretch (seconds) is rewritten; the
     /// track's notes outside it come back unchanged.
     func rewrite(track: TrackID, model: NoteModel, in song: SongSnapshot, seed: UInt32,
@@ -115,13 +116,14 @@ final class LocalGeneratorClient: GeneratorClient {
         process.restart()
     }
 
-    func generate(style: MusicStyle, model: NoteModel, length: Double, seed: UInt32?) -> AsyncThrowingStream<GenerationEvent, Error> {
+    func generate(style: MusicStyle, model: NoteModel, length: Double, seed: UInt32?,
+                  tracks: [TrackID]) -> AsyncThrowingStream<GenerationEvent, Error> {
         AsyncThrowingStream { continuation in
             let task = Task {
                 do {
-                    let wire = try await api.generate(style: style, model: model, seconds: length, seed: seed)
+                    let wire = try await api.generate(style: style, model: model, seconds: length, seed: seed, tracks: tracks)
                     let instruments = Dictionary(uniqueKeysWithValues: style.defaultInstruments.map { ($0.key, $0.value) })
-                    continuation.yield(.finished(wire.snapshot(style: style, instruments: instruments)))
+                    continuation.yield(.finished(wire.snapshot(style: style, instruments: instruments, tracks: tracks)))
                     continuation.finish()
                 } catch {
                     continuation.finish(throwing: error)

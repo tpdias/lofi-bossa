@@ -51,7 +51,8 @@ final class ProjectViewModelTests: XCTestCase {
         await generate(seed: 1)
         XCTAssertEqual(versions.count, 1)
         XCTAssertEqual(versions[0].number, 1)
-        for id in TrackID.allCases { XCTAssertFalse(notes(id).isEmpty, "\(id) is empty") }
+        XCTAssertEqual(model.project.currentSnapshot?.trackIDs, TrackID.core)
+        for id in TrackID.core { XCTAssertFalse(notes(id).isEmpty, "\(id) is empty") }
         XCTAssertEqual(model.phase, .idle)
     }
 
@@ -375,5 +376,56 @@ final class ProjectViewModelTests: XCTestCase {
         model.pause()
         model.closeEditor()
         XCTAssertGreaterThan(level, 0.01)
+    }
+
+    // MARK: adding and removing tracks
+
+    func testAddingATrackMakesTwoVersionsAndTheModelWritesIt() async {
+        await generate(seed: 1)
+        model.addTrack(.lead)
+        await waitUntilIdle()
+        XCTAssertEqual(versions.map(\.kind.title), [versions[0].kind.title, "Added Lead", "Rewrote lead"])
+        XCTAssertEqual(model.project.currentSnapshot?.trackIDs, TrackID.core + [.lead])
+        XCTAssertFalse(notes(.lead).isEmpty)
+        XCTAssertEqual(generator.rewriteCalls.last?.track, .lead)
+        XCTAssertFalse(model.addableTracks.contains(.lead))
+    }
+
+    func testRemovingATrackIsAVersionAndUndoBringsItBack() async {
+        await generate(seed: 1)
+        model.addTrack(.vibes)
+        await waitUntilIdle()
+        let before = versions.count
+        model.removeTrack(.vibes)
+        XCTAssertEqual(versions.count, before + 1)
+        XCTAssertEqual(model.project.currentSnapshot?.trackIDs, TrackID.core)
+        model.undo()
+        XCTAssertTrue(model.project.currentSnapshot?.hasTrack(.vibes) ?? false)
+        XCTAssertFalse(notes(.vibes).isEmpty)
+    }
+
+    func testCoreTracksCannotBeRemoved() async {
+        await generate(seed: 1)
+        model.removeTrack(.piano)
+        XCTAssertEqual(versions.count, 1)
+        XCTAssertTrue(model.project.currentSnapshot?.hasTrack(.piano) ?? false)
+    }
+
+    func testGeneratingAgainKeepsTheAddedTracks() async {
+        await generate(seed: 1)
+        model.addTrack(.keys)
+        await waitUntilIdle()
+        await generate(seed: 2)
+        XCTAssertEqual(model.project.currentSnapshot?.trackIDs, TrackID.core + [.keys])
+        XCTAssertFalse(notes(.keys).isEmpty)
+    }
+
+    func testAddedTracksPlayThroughTheAudioEngine() async {
+        await generate(seed: 1)
+        model.addTrack(.lead)
+        await waitUntilIdle()
+        model.play()
+        XCTAssertTrue(model.isPlaying)
+        model.pause()
     }
 }

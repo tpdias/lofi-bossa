@@ -71,10 +71,17 @@ extension Color {
     static let lfbGuitar = Color(light: hex("#D69A14"), dark: hex("#F5C75C"))
     static let lfbBass = Color(light: hex("#D277AE"), dark: hex("#F2A7D2"))
     static let lfbDrums = Color(light: hex("#12866B"), dark: hex("#3FBF9C"))
+    static let lfbKeys = Color(light: hex("#7A4FC2"), dark: hex("#B79BEF"))
+    static let lfbLead = Color(light: hex("#D4552B"), dark: hex("#F59A78"))
+    static let lfbVibes = Color(light: hex("#1F8CA8"), dark: hex("#6CCBE3"))
     static let lfbPianoInk = Color(light: hex("#2A4C97"), dark: hex("#7C9EF0"))
     static let lfbGuitarInk = Color(light: hex("#8A5F00"), dark: hex("#F5C75C"))
     static let lfbBassInk = Color(light: hex("#A3447D"), dark: hex("#F2A7D2"))
     static let lfbDrumsInk = Color(light: hex("#0E6E58"), dark: hex("#3FBF9C"))
+
+    static let lfbKeysInk = Color(light: hex("#6A3FB3"), dark: hex("#B79BEF"))
+    static let lfbLeadInk = Color(light: hex("#B0401A"), dark: hex("#F59A78"))
+    static let lfbVibesInk = Color(light: hex("#15708A"), dark: hex("#6CCBE3"))
 
     static let lfbReady = Color(light: hex("#0E6E58"), dark: hex("#3FBF9C"))
     static let lfbCaution = Color(light: hex("#8A5F00"), dark: hex("#F5C75C"))
