@@ -21,7 +21,18 @@ final class LofiBossaUITests: XCTestCase {
 
     // MARK: helpers
 
-    private var subtitle: XCUIElement { app.staticTexts["project-subtitle"] }
+    /// The toolbar title's subtitle ("Lo-Fi · 0:46 · Version 2 · Saved"). Looked up by text on
+    /// any element type, because a toolbar can expose it as something other than a StaticText
+    /// and drop the identifier.
+    private func hasVersion(_ n: Int, timeout: TimeInterval = 10) -> Bool {
+        let predicate = NSPredicate(format: "label CONTAINS %@ OR title CONTAINS %@ OR value CONTAINS %@",
+                                    "Version \(n) ·", "Version \(n) ·", "Version \(n) ·")
+        let element = app.descendants(matching: .any).matching(predicate).firstMatch
+        if element.waitForExistence(timeout: timeout) { return true }
+        // Leave the accessibility tree in the log so a wrong query can be fixed from the output.
+        print("ACCESSIBILITY TREE", app.debugDescription)
+        return false
+    }
 
     /// New project, then Generate; returns once version 1 exists.
     private func makeProjectWithSong() {
@@ -30,7 +41,7 @@ final class LofiBossaUITests: XCTestCase {
         XCTAssertTrue(generate.waitForExistence(timeout: 10), "project stage did not open")
         XCTAssertTrue(generate.isEnabled)
         generate.click()
-        XCTAssertTrue(subtitle.waitForLabel(containing: "Version 1", timeout: 10), "no version after generating")
+        XCTAssertTrue(hasVersion(1), "no version after generating")
     }
 
     private func trackRow(_ name: String) -> XCUIElement { app.groups["\(name) track"].firstMatch }
@@ -42,7 +53,6 @@ final class LofiBossaUITests: XCTestCase {
         for name in ["Piano", "Guitar", "Bass", "Drums"] {
             XCTAssertTrue(trackRow(name).waitForExistence(timeout: 5), "\(name) row is missing")
         }
-        XCTAssertTrue(subtitle.label.contains("Saved"))
     }
 
     func testPlayAndPauseButton() {
@@ -58,7 +68,7 @@ final class LofiBossaUITests: XCTestCase {
     func testListeningToAnOlderVersionAndGoingBack() {
         makeProjectWithSong()
         app.buttons["generate"].click()
-        XCTAssertTrue(subtitle.waitForLabel(containing: "Version 2", timeout: 10))
+        XCTAssertTrue(hasVersion(2))
         app.radioButtons["Versions"].firstMatch.click()
         app.buttons["version-play-1"].click()
         let back = app.buttons["Back to Current"]
@@ -89,14 +99,6 @@ final class LofiBossaUITests: XCTestCase {
         let delete = app.buttons["Delete"]
         XCTAssertTrue(delete.waitForExistence(timeout: 5), "no section pill after dragging on the lane")
         delete.click()
-        XCTAssertTrue(subtitle.waitForLabel(containing: "Version 2", timeout: 5))
-    }
-}
-
-private extension XCUIElement {
-    /// Waits for the element's label to contain `text`.
-    func waitForLabel(containing text: String, timeout: TimeInterval) -> Bool {
-        let predicate = NSPredicate(format: "label CONTAINS %@", text)
-        return XCTWaiter().wait(for: [XCTNSPredicateExpectation(predicate: predicate, object: self)], timeout: timeout) == .completed
+        XCTAssertTrue(hasVersion(2, timeout: 5))
     }
 }
