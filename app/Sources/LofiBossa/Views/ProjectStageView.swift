@@ -32,16 +32,19 @@ struct ProjectStageView: View {
         })
         .background(Color.lfbWindow)
         .sheet(isPresented: $showExportSheet) { ExportSheetView(model: model) }
+        .focusedSceneValue(\.projectModel, model)   // lets the menu bar act on this project
         .toolbar {
             ToolbarItem(placement: .principal) { ProjectTitle(model: model) }
             ToolbarItemGroup(placement: .primaryAction) {
+                // ⌘Z / ⇧⌘Z live in the Edit menu (AppCommands), which can also name what it undoes.
                 Button(action: model.undo) { Image(systemName: "arrow.uturn.backward") }
-                    .disabled(!model.canUndo).keyboardShortcut("z").help("Undo")
+                    .disabled(!model.canUndo).help(model.undoTitle.map { "Undo \($0) (⌘Z)" } ?? "Undo (⌘Z)")
                 Button(action: model.redo) { Image(systemName: "arrow.uturn.forward") }
-                    .disabled(!model.canRedo).keyboardShortcut("z", modifiers: [.command, .shift]).help("Redo")
+                    .disabled(!model.canRedo).help(model.redoTitle.map { "Redo \($0) (⇧⌘Z)" } ?? "Redo (⇧⌘Z)")
                 Button { showExportSheet = true } label: { Label("Export", systemImage: "square.and.arrow.up") }
                     .disabled(snapshot == nil)
                 Button { showInspector.toggle() } label: { Image(systemName: "sidebar.trailing") }
+                    .help("Show or hide the inspector (⌥⌘I)")
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .lfbExport)) { _ in
@@ -506,6 +509,7 @@ private struct TransportBar: View {
             HStack(spacing: LFBSpace.md) {
                 Button { model.seek(to: 0) } label: { Image(systemName: "backward.end.fill") }
                     .buttonStyle(.plain).disabled(model.displayedSnapshot == nil)
+                    .help("Go to start (⌥⌘←)")
                 Button(action: model.togglePlay) {
                     Image(systemName: model.isPlaying ? "pause.circle.fill" : "play.circle.fill")
                         .font(.system(size: LFBSize.playButton))
@@ -514,11 +518,12 @@ private struct TransportBar: View {
                 .buttonStyle(.plain).disabled(model.displayedSnapshot == nil)
                 .keyboardShortcut(.space, modifiers: [])
                 .accessibilityIdentifier("play").accessibilityLabel(model.isPlaying ? "Pause" : "Play")
+                .help(model.isPlaying ? "Pause (Space)" : "Play (Space)")
                 Button { model.toggleLoop() } label: { Image(systemName: "repeat") }
                     .buttonStyle(.plain)
                     .foregroundStyle(model.isLoopEnabled ? Color.lfbAccent : Color.lfbTextSecondary)
                     .disabled(model.loopRange == nil)
-                    .keyboardShortcut("l", modifiers: .command)
+                    .help("Loop the selection (⌘L)")
                 Text("\(formatTimecode(model.position)) / \(formatTimecode(model.duration))")
                     .font(.lfbTimecode).frame(width: 110)
             }

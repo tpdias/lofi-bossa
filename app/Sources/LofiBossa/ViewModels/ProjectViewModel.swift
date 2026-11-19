@@ -507,6 +507,27 @@ final class ProjectViewModel {
     }
 
     func toggleLoop() { isLoopEnabled.toggle() }
+
+    // MARK: Menu commands (Edit / Transport / Track menus)
+
+    /// "New take · seed 5", the version Undo would step back from; nil when there is nothing to undo.
+    var undoTitle: String? { canUndo ? currentIndex.map { project.versions[$0].kind.title } : nil }
+    /// The version Redo would step forward to.
+    var redoTitle: String? { canRedo ? currentIndex.map { project.versions[$0 + 1].kind.title } : nil }
+
+    func nudgePlayhead(by seconds: Double) { seek(to: min(max(position + seconds, 0), duration)) }
+
+    func selectTrack(_ id: TrackID) { selectedTrack = id }
+    func toggleMuteOfSelectedTrack() {
+        guard let id = selectedTrack, let track = displayedSnapshot?.track(id) else { return }
+        setMuted(!track.isMuted, for: id)
+    }
+    func toggleSoloOfSelectedTrack() {
+        guard let id = selectedTrack, let track = displayedSnapshot?.track(id) else { return }
+        setSoloed(!track.isSoloed, for: id)
+    }
+    func rewriteSelectedTrack() { if let id = selectedTrack { rewrite(id) } }
+    func openEditorForSelectedTrack() { if let id = selectedTrack { openEditor(for: id) } }
     func setLoopRange(_ range: ClosedRange<Double>?) {
         loopRange = range
         isLoopEnabled = range != nil

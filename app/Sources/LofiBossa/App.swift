@@ -36,23 +36,7 @@ struct LoFiBossaApp: App {
                 }
         }
         .defaultSize(width: 1180, height: 760)
-        .commands {
-            CommandGroup(replacing: .newItem) {
-                Button("New Project") { NotificationCenter.default.post(name: .lfbNewProject, object: nil) }
-                    .keyboardShortcut("n")
-            }
-            CommandMenu("Song") {
-                Button("Generate New Take") { NotificationCenter.default.post(name: .lfbGenerate, object: nil) }
-                    .keyboardShortcut(.return, modifiers: .command)
-                Button("Copy Seed") { NotificationCenter.default.post(name: .lfbCopySeed, object: nil) }
-                    .keyboardShortcut("c", modifiers: [.command, .shift])
-                Button("Loop Selection") { NotificationCenter.default.post(name: .lfbToggleLoop, object: nil) }
-                    .keyboardShortcut("l", modifiers: .command)
-                Divider()
-                Button("Export…") { NotificationCenter.default.post(name: .lfbExport, object: nil) }
-                    .keyboardShortcut("e", modifiers: .command)
-            }
-        }
+        .commands { AppCommands() }
     }
 }
 
@@ -62,6 +46,8 @@ extension Notification.Name {
     static let lfbCopySeed = Notification.Name("lfbCopySeed")
     static let lfbToggleLoop = Notification.Name("lfbToggleLoop")
     static let lfbExport = Notification.Name("lfbExport")
+    static let lfbToggleInspector = Notification.Name("lfbToggleInspector")
+    static let lfbShowShortcuts = Notification.Name("lfbShowShortcuts")
 }
 
 /// Run from `swift run` there is no app bundle, so ask for a normal Dock app and focus it.
