@@ -57,9 +57,17 @@ struct PianoRollView: View {
 
     private var notes: [Note] { model.displayedSnapshot?.track(track).notes ?? [] }
     private var duration: Double { max(model.duration, 1) }
-    private var otherTracks: [Note] {
+    /// The other instruments, each kept apart so it can be drawn in its own colour.
+    private var otherTracks: [(id: TrackID, notes: [Note])] {
         guard showOtherParts, let snapshot = model.displayedSnapshot else { return [] }
-        return snapshot.tracks.filter { $0.id != track }.flatMap(\.notes)
+        return snapshot.tracks.filter { $0.id != track }.map { ($0.id, $0.notes) }
+    }
+
+    /// Zoom as a 0...1 slider position on a log scale (zoom 1 = whole song).
+    private var zoomSliderBinding: Binding<Double> {
+        Binding(
+            get: { maxZoom > 1.001 ? log(Double(zoom)) / log(Double(maxZoom)) : 0 },
+            set: { setZoom(CGFloat(exp($0 * log(Double(maxZoom))))) })
     }
 
     // MARK: Geometry
@@ -160,12 +168,15 @@ struct PianoRollView: View {
             .pickerStyle(.menu).fixedSize()
 
             Toggle("Other parts", isOn: $showOtherParts).toggleStyle(.button).controlSize(.small)
+                .help("Show the other instruments' notes, each in its own colour, faded")
 
             HStack(spacing: 2) {
                 Button { zoomBy(1 / 1.5) } label: { Image(systemName: "minus.magnifyingglass") }
                     .help("Zoom out (⌘−)").disabled(zoom <= 1.001)
                 Button { zoomBy(1.5) } label: { Image(systemName: "plus.magnifyingglass") }
                     .help("Zoom in (⌘+)").disabled(zoom >= maxZoom - 0.001)
+                Slider(value: zoomSliderBinding, in: 0...1).frame(width: 90).controlSize(.small)
+                    .help("Zoom the timeline")
                 Button("Fit") { setZoom(1) }.help("Show the whole song (⌘0)").disabled(zoom <= 1.001)
             }
             .buttonStyle(.borderless)
@@ -353,7 +364,9 @@ struct PianoRollView: View {
             ctx.fill(Path(CGRect(x: x, y: 0, width: 1, height: size.height)), with: .color(Color.lfbTextTertiary.opacity(0.12)))
             t += step
         }
-        drawNotes(otherTracks, in: &ctx, size: size, color: .secondary.opacity(0.25), selected: [])
+        for other in otherTracks {
+            drawNotes(other.notes, in: &ctx, size: size, color: other.id.color.opacity(0.35), selected: [])
+        }
         drawNotes(notes, in: &ctx, size: size, color: track.color, selected: model.selectedNoteIDs)
         drawLoopAndPlayhead(&ctx, size: size)
     }

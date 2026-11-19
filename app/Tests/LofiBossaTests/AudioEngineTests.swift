@@ -41,4 +41,29 @@ final class AudioEngineTests: XCTestCase {
         audio.stop()
         XCTAssertGreaterThan(peak, 0.01, "the song played but nothing came out")
     }
+
+    func testPlayingAfterReloadingASongIsAudible() throws {
+        let audio = AudioEngine()
+        var song = SongSnapshot.empty(style: .bossa, length: 20)
+        for i in 0..<song.tracks.count {
+            song.tracks[i].notes = (0..<8).map { Note(pitch: 48 + $0, start: Double($0) * 0.5, duration: 0.4, velocity: 90) }
+        }
+        var peak: Float = 0
+        audio.outputNode.installTap(onBus: 0, bufferSize: 2048, format: nil) { buffer, _ in
+            guard let data = buffer.floatChannelData?[0] else { return }
+            for i in 0..<Int(buffer.frameLength) { peak = max(peak, abs(data[i])) }
+        }
+        audio.load(song)
+        for t in song.tracks { audio.setInstrument(t.id.program(for: t.instrument), for: t.id); audio.setVolume(0.7, for: t.id); audio.apply(t.effects, for: t.id) }
+        try audio.play()
+        Thread.sleep(forTimeInterval: 0.8)
+        audio.load(song)          // switching version while playing
+        for t in song.tracks { audio.setInstrument(t.id.program(for: t.instrument), for: t.id); audio.setVolume(0.7, for: t.id); audio.apply(t.effects, for: t.id) }
+        try audio.play()
+        Thread.sleep(forTimeInterval: 0.3)
+        peak = 0
+        Thread.sleep(forTimeInterval: 1.5)
+        audio.stop()
+        XCTAssertGreaterThan(peak, 0.01, "silent after reloading a song")
+    }
 }
