@@ -307,7 +307,7 @@ cd app && swift test                                   # unit tests, ~15 s, no s
 xcodebuild -project app/LofiBossa.xcodeproj -scheme LofiBossa test   # unit tests are SwiftPM-only; this runs the UI tests
 ```
 
-- **Unit tests** (`app/Tests/LofiBossaTests`): note editing, project coding, the audio engine,
+- **Unit tests** (`app/LofiBossaTests`): note editing, project coding, the audio engine,
   and the view model (generate, versions, undo, listening to a past version, section edits and
   rewrites, piano-roll sessions) against `FakeGeneratorClient` and a temporary project folder.
   Several listen to the real output level while playing, because "it plays but is silent" has
