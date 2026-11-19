@@ -99,6 +99,7 @@ private struct ProjectTitle: View {
             }
             Text(subtitle).font(.lfbCaption).foregroundStyle(Color.lfbTextSecondary)
                 .lineLimit(1).minimumScaleFactor(0.85)
+                .accessibilityIdentifier("project-subtitle")
         }
         // The toolbar draws a capsule around this; without padding and a natural width the
         // subtitle ran under its rounded ends ("o-Fi · 0:46 · ... Saved" cut at both sides).
@@ -175,6 +176,7 @@ private struct RecipeBar: View {
             .buttonStyle(.borderedProminent)
             .keyboardShortcut(.return, modifiers: .command)
             .disabled(model.isGeneratorBusy || isWaitingForGenerator)
+            .accessibilityIdentifier("generate")
         }
         .padding(.horizontal, LFBSpace.lg)
         .frame(height: LFBSize.recipeBarHeight)
@@ -511,6 +513,7 @@ private struct TransportBar: View {
                 }
                 .buttonStyle(.plain).disabled(model.displayedSnapshot == nil)
                 .keyboardShortcut(.space, modifiers: [])
+                .accessibilityIdentifier("play").accessibilityLabel(model.isPlaying ? "Pause" : "Play")
                 Button { model.toggleLoop() } label: { Image(systemName: "repeat") }
                     .buttonStyle(.plain)
                     .foregroundStyle(model.isLoopEnabled ? Color.lfbAccent : Color.lfbTextSecondary)

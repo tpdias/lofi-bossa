@@ -177,6 +177,7 @@ struct PianoRollView: View {
                     .help("Zoom in (⌘+)").disabled(zoom >= maxZoom - 0.001)
                 Slider(value: zoomSliderBinding, in: 0...1).frame(width: 90).controlSize(.small)
                     .help("Zoom the timeline")
+                    .accessibilityIdentifier("roll-zoom").accessibilityLabel("Zoom")
                 Button("Fit") { setZoom(1) }.help("Show the whole song (⌘0)").disabled(zoom <= 1.001)
             }
             .buttonStyle(.borderless)
@@ -197,6 +198,7 @@ struct PianoRollView: View {
             }
 
             Button("Done") { model.closeEditor() }.buttonStyle(.borderedProminent).controlSize(.small)
+                .accessibilityIdentifier("roll-done")
         }
         .padding(.horizontal, LFBSpace.md).padding(.vertical, LFBSpace.sm)
     }

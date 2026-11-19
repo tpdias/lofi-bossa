@@ -1,3 +1,4 @@
+import AVFoundation
 import AppKit
 import Observation
 import UniformTypeIdentifiers
@@ -24,6 +25,8 @@ final class ProjectViewModel {
     private(set) var project: Project
     let generator: any GeneratorClient
     private let audio = AudioEngine()
+    /// The mixed output, for tests that listen to what the app plays.
+    var audioOutput: AVAudioNode { audio.outputNode }
     private let store: ProjectStore
 
     // Generation
