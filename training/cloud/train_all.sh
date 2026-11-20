@@ -8,8 +8,8 @@ set -euo pipefail
 mkdir -p logs
 for style in bossa lofi; do
   .venv/bin/python -u training/finetune.py --style "$style" \
-    --epochs "${EPOCHS:-3}" --batch-size "${BATCH:-16}" \
+    --epochs "${EPOCHS:-1}" --batch-size "${BATCH:-8}" \
     --transpose --boost-vibes 3 --boost-lead 1 \
-    --eval-every 100 --save-last 2>&1 | tee "logs/$style.log"
+    --save-last 2>&1 | tee "logs/$style.log"
 done
 bash training/cloud/pack.sh

@@ -36,7 +36,12 @@ bash training/cloud/train_all.sh
 Runs `bossa` then `lofi` (sequences are built once per style and cached in
 `processed/sequences/`), validating every 100 steps and keeping the checkpoint with the lowest
 validation loss in `checkpoints/<style>/` (final weights also in `checkpoints/<style>-last/`).
-`EPOCHS=1` and `BATCH=8` shorten the run or lower memory use. Out of memory: `BATCH=8`.
+Defaults are tuned against overfitting (about 2,200 files per style overfit fast): 1 epoch,
+learning rate 5e-6, weight decay 0.05, 2 copies per file, and an automatic stop after 5
+validation runs without a new best (`--patience`). Batch size is 8; out of memory: `BATCH=4`.
+Each validation line also prints the loss per track (piano, keys, lead, vibes...), which is the
+number to watch for the extra tracks. More brakes if it still overfits: `--freeze-layers 6`,
+`--dropout 0.2` (CUDA only; the Mac's MPS backend can't run attention dropout), `--lr 2e-6`.
 It finishes by running `pack.sh`, which writes `checkpoints.zip`.
 
 What the extra flags do: `--transpose` shifts every training copy by a random -5..+6 semitones;
@@ -49,6 +54,17 @@ Download `checkpoints.zip` and unzip it in the repo root on your Mac (this repla
 `checkpoints/bossa` and adds `checkpoints/lofi`). Each checkpoint contains `tracks.json`, which
 tells the server it knows all seven tracks; restart the server and `/health` shows
 `finetuned_tracks`. Compare with the Model menu in the app: Pretrained vs Fine-tuned.
+
+Optional but recommended: blend the fine-tuned weights with the base model and keep the mix
+with the lowest validation loss. This often beats both ends when fine-tuning overfits:
+
+```bash
+cd training && ../.venv/bin/python blend.py --style bossa \
+  --sequences ../processed/sequences/<the .npz that finetune.py built>
+```
+
+It writes `checkpoints/bossa-blend` when a mix wins (rename it to `checkpoints/bossa`), and
+says plainly when the base model won, which means fine-tuning didn't help for that style.
 
 Check `checkpoints/<style>/training_log.json`: `best_val_loss` should be clearly below
 `baseline_val_loss`. Stop the machine when done.
