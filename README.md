@@ -247,7 +247,7 @@ Preprocessing keeps all seven tracks (keys, lead and vibes as their own instrume
 are kept still depends only on the four core tracks), and training uses rare-track boosts
 (`--boost-vibes`, `--boost-lead`) and `--transpose`. Each checkpoint records the tracks it knows
 in `tracks.json`; the server uses the pretrained model for tracks a checkpoint wasn't trained
-on (an older four-track one). Step-by-step cloud instructions: [training/cloud/README.md](training/cloud/README.md).
+on (an older four-track one). Defaults guard against overfitting (low learning rate, weight decay, early stopping, per-track validation loss; `--freeze-layers`/`--dropout` if needed), and `training/blend.py` mixes the result with the base model. Step-by-step cloud instructions: [training/cloud/README.md](training/cloud/README.md).
 
 Fine-tuning is meant for a CUDA GPU. Copy the repository and the `processed/` folder to
 the GPU machine, install the requirements, and run one job per style:

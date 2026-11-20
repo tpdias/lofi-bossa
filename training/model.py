@@ -12,8 +12,12 @@ from transformers import AutoModelForCausalLM
 BASE_MODEL = "stanford-crfm/music-small-800k"
 
 
-def load_model(source=BASE_MODEL):
+def load_model(source=BASE_MODEL, dropout=None):
+    """`dropout` overrides the model's embedding, residual and attention dropout (0.1 in the
+    pretrained config); only matters while training."""
     kwargs = {}
+    if dropout is not None:
+        kwargs.update(resid_pdrop=dropout, embd_pdrop=dropout, attn_pdrop=dropout)
     if int(transformers.__version__.split(".")[0]) < 5:
         kwargs["attn_implementation"] = "eager"
     return AutoModelForCausalLM.from_pretrained(source, **kwargs)
