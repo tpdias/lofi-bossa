@@ -61,21 +61,34 @@ def has_finetuned(style):
     return (CHECKPOINTS / style / "config.json").is_file()
 
 
-def model_source(style, choice="auto"):
-    """auto = the style's fine-tuned checkpoint when there is one, otherwise the pretrained model."""
+def trained_tracks(style):
+    """Tracks the style's checkpoint was trained on (finetune.py writes tracks.json). A checkpoint
+    without that file predates the extra tracks, so it knows the four core ones only."""
+    try:
+        return tuple(json.loads((CHECKPOINTS / style / "tracks.json").read_text()))
+    except (OSError, ValueError):
+        return tracks.TRACKS
+
+
+def model_source(style, choice="auto", wanted=()):
+    """auto = the style's fine-tuned checkpoint when there is one, otherwise the pretrained model.
+    A checkpoint that wasn't trained on a track being written is skipped for the pretrained model,
+    which at least has seen that instrument; choosing "finetuned" explicitly always uses it."""
     if choice == "pretrained" or (choice == "auto" and not has_finetuned(style)):
+        return BASE_MODEL
+    if choice == "auto" and not set(wanted) <= set(trained_tracks(style)):
         return BASE_MODEL
     return str(CHECKPOINTS / style)
 
 
-def get_model(style, choice="auto"):
+def get_model(style, choice="auto", wanted=()):
     if style not in STYLES:
         raise HTTPException(422, f"style must be one of {STYLES}")
     if choice not in MODEL_CHOICES:
         raise HTTPException(422, f"model must be one of {MODEL_CHOICES}")
     if choice == "finetuned" and not has_finetuned(style):
         raise HTTPException(422, f"there is no fine-tuned model for {style} (checkpoints/{style}/ is missing)")
-    source = model_source(style, choice)
+    source = model_source(style, choice, wanted)
     if source not in _models:
         _models[source] = load_model(source).to(device).eval()
     return _models[source]
@@ -130,7 +143,8 @@ class GenerateRequest(BaseModel):
 def health():
     return {"device": device, "tracks": tracks.ALL_TRACKS,
             "styles": {s: model_source(s) for s in STYLES},
-            "finetuned": [s for s in STYLES if has_finetuned(s)]}
+            "finetuned": [s for s in STYLES if has_finetuned(s)],
+            "finetuned_tracks": {s: list(trained_tracks(s)) for s in STYLES if has_finetuned(s)}}
 
 
 @app.post("/generate")
@@ -139,7 +153,7 @@ def generate(req: GenerateRequest):
     unknown = [t for t in req.tracks if t not in tracks.ALL_TRACKS]
     if unknown or not wanted:
         raise HTTPException(422, f"tracks must be from {tracks.ALL_TRACKS}")
-    model = get_model(req.style, req.model)
+    model = get_model(req.style, req.model, req.tracks)
     seed = req.seed if req.seed is not None else random.randrange(2**31)
     with _lock:
         events = sampler.generate(model, 0, req.seconds, top_p=req.top_p, seed=seed,
@@ -179,7 +193,7 @@ async def regenerate_track(request: Request, track: str = Query(...), style: str
             body = buf.getvalue()
         except Exception as e:
             raise HTTPException(400, f"could not read song JSON: {e}")
-    model = get_model(style, model)
+    model = get_model(style, model, (track,))
     seed = seed if seed is not None else random.randrange(2**31)
 
     with tempfile.NamedTemporaryFile(suffix=".mid") as f:

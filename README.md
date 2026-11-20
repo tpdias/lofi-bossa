@@ -5,7 +5,7 @@ A macOS app that writes background music for vlogs. It generates a four-track so
 take as a version you can go back to, and lets you mix each track, swap its instrument,
 rewrite just one part, or open a piano roll and edit the notes by hand. Three optional tracks
 (Keys & Pads, Lead, Vibes) can be added from the Track menu or the "Add Track" row; the model
-writes them zero-shot (they are not part of the fine-tuning data), each add or remove is a
+writes them zero-shot until a checkpoint trained on them is installed (see Fine-tuning), each add or remove is a
 version, and the four core tracks always stay.
 
 ![The library: a project grid with a first-launch welcome screen, style cards and a length slider](docs/screenshots/first_launch.png)
@@ -242,6 +242,12 @@ The result is `processed/` (clean four-track MIDI, an index and `report.md`). St
 are in `training/data/styles.py`.
 
 ## Fine-tuning
+
+Preprocessing keeps all seven tracks (keys, lead and vibes as their own instruments; which files
+are kept still depends only on the four core tracks), and training uses rare-track boosts
+(`--boost-vibes`, `--boost-lead`) and `--transpose`. Each checkpoint records the tracks it knows
+in `tracks.json`; the server uses the pretrained model for tracks a checkpoint wasn't trained
+on (an older four-track one). Step-by-step cloud instructions: [training/cloud/README.md](training/cloud/README.md).
 
 Fine-tuning is meant for a CUDA GPU. Copy the repository and the `processed/` folder to
 the GPU machine, install the requirements, and run one job per style:

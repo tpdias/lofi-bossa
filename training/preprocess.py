@@ -1,12 +1,15 @@
-"""Turn every manifest file into a clean 4-track MIDI (piano, guitar, bass, drums).
+"""Turn every manifest file into a clean MIDI with up to seven tracks: piano, guitar, bass, drums
+plus keys & pads, lead and vibes.
 
     python training/preprocess.py --manifest processed/manifest.jsonl --root datasets --out processed
 
 Writes processed/midi/<style>/<id>.mid, processed/index.jsonl (one row per kept file)
 and processed/report.md (per-style totals).
 
-Instruments outside the four families are dropped; the share of dropped notes is recorded
-so heavily-reduced files can be excluded later.
+Instruments outside the seven families are dropped; the share of dropped notes is recorded
+so heavily-reduced files can be excluded later. Keeping a file still depends only on the four
+core tracks (so the file set is the same as before the extra tracks were added); keys, lead and
+vibes just come along when the file has them.
 """
 
 import argparse
@@ -18,7 +21,7 @@ from pathlib import Path
 
 import pretty_midi
 
-from tracks import OUT_PROGRAM, TRACKS, track_of
+from tracks import ALL_TRACKS, OUT_PROGRAM, TRACKS, all_track_of
 
 MIN_NOTES = 8
 
@@ -54,11 +57,12 @@ def load(source, path):
 
 
 def collapse(pm, tempo):
-    """Merge instruments by family. Returns (4-track PrettyMIDI, notes per track, dropped share)."""
-    notes = {t: [] for t in TRACKS}
+    """Merge instruments by family. Returns (PrettyMIDI, notes per track, dropped share).
+    Extra tracks (keys, lead, vibes) are written only when the file has any."""
+    notes = {t: [] for t in ALL_TRACKS}
     dropped = 0
     for inst in pm.instruments:
-        fam = track_of(inst.program, inst.is_drum)
+        fam = all_track_of(inst.program, inst.is_drum)
         if fam is None:
             dropped += len(inst.notes)
         else:
@@ -66,11 +70,15 @@ def collapse(pm, tempo):
     total = dropped + sum(len(v) for v in notes.values())
 
     out = pretty_midi.PrettyMIDI(initial_tempo=tempo or 120.0)
-    for t in TRACKS:
+    for t in ALL_TRACKS:
+        if t not in TRACKS and len(notes[t]) < MIN_NOTES:
+            dropped += len(notes[t])      # a stray handful of notes isn't a part
+            notes[t] = []
+            continue
         inst = pretty_midi.Instrument(program=OUT_PROGRAM[t], is_drum=(t == "drums"), name=t)
         inst.notes = sorted(notes[t], key=lambda n: (n.start, n.pitch))
         out.instruments.append(inst)
-    counts = {t: len(notes[t]) for t in TRACKS}
+    counts = {t: len(notes[t]) for t in ALL_TRACKS}
     return out, counts, (dropped / total if total else 0.0)
 
 
@@ -83,11 +91,12 @@ def process(job):
     except Exception as e:  # corrupt MIDI is common in scraped corpora
         return {"id": row["id"], "error": f"{type(e).__name__}: {e}"[:120]}
 
-    present = [t for t in TRACKS if counts[t] >= MIN_NOTES]
+    present = [t for t in ALL_TRACKS if counts[t] >= MIN_NOTES]
+    core_present = [t for t in present if t in TRACKS]
     duration = out.get_end_time()
     needed = min_tracks if row["multitrack"] else 1
-    if len(present) < needed or duration < min_seconds:
-        return {"id": row["id"], "skipped": "too few tracks" if len(present) < needed else "too short"}
+    if len(core_present) < needed or duration < min_seconds:
+        return {"id": row["id"], "skipped": "too few tracks" if len(core_present) < needed else "too short"}
 
     dest = out_dir / "midi" / row["style"] / f"{row['id']}.mid"
     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -118,10 +127,10 @@ def write_report(kept, problems, path):
         for (tier, source), g in sorted(groups.items()):
             lines.append(f"| {tier} | {source} | {len(g)} | {sum(r['duration'] for r in g) / 3600:.1f} |")
         lines += ["", "| track | files containing it |", "|---|---|"]
-        for t in TRACKS:
+        for t in ALL_TRACKS:
             lines.append(f"| {t} | {sum(t in r['tracks'] for r in rows)} |")
-        full = sum(len(r["tracks"]) == 4 for r in rows)
-        lines += ["", f"Files with all four tracks: {full}", ""]
+        full = sum(all(t in r["tracks"] for t in TRACKS) for r in rows)
+        lines += ["", f"Files with all four core tracks: {full}", ""]
     reasons = collections.Counter(p.get("skipped") or "unreadable" for p in problems)
     lines += ["## Not kept", ""] + [f"- {k}: {n}" for k, n in sorted(reasons.items())]
     path.write_text("\n".join(lines) + "\n")
