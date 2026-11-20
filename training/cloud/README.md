@@ -1,0 +1,57 @@
+# Training on a cloud GPU
+
+Fine-tunes the model on all seven tracks (piano, guitar, bass, drums, keys & pads, lead, vibes)
+for both styles. A single 24 GB GPU (RTX 4090 / A5000 / L4) is plenty; expect a few hours.
+Fine-tuning on the Mac works for smoke tests only.
+
+## 1. Prepare the data locally
+
+GigaMIDI is access-on-request (CC BY-NC), so the data is built on your Mac and uploaded to a
+private machine; don't publish it.
+
+```bash
+.venv/bin/python training/preprocess.py        # rewrites processed/ with the extra tracks
+cat processed/report.md                         # check keys / lead / vibes counts per style
+tar czf processed.tar.gz processed/index.jsonl processed/midi
+```
+
+## 2. Rent a machine
+
+RunPod (or any provider): a PyTorch template with CUDA, one 24 GB GPU, 50 GB disk. Colab Pro
+with an A100/L4 also works. Then, from your Mac:
+
+```bash
+git clone https://github.com/tpdias/lofi-bossa && cd lofi-bossa   # on the machine
+# upload processed.tar.gz into the repo folder (runpodctl send, scp, or the web UI)
+tar xzf processed.tar.gz
+bash training/cloud/setup.sh
+```
+
+## 3. Train
+
+```bash
+bash training/cloud/train_all.sh
+```
+
+Runs `bossa` then `lofi` (sequences are built once per style and cached in
+`processed/sequences/`), validating every 100 steps and keeping the checkpoint with the lowest
+validation loss in `checkpoints/<style>/` (final weights also in `checkpoints/<style>-last/`).
+`EPOCHS=1` and `BATCH=8` shorten the run or lower memory use. Out of memory: `BATCH=8`.
+It finishes by running `pack.sh`, which writes `checkpoints.zip`.
+
+What the extra flags do: `--transpose` shifts every training copy by a random -5..+6 semitones;
+`--boost-vibes 3` / `--boost-lead 1` add copies where that track is the one written, because
+only ~12% of files have vibes.
+
+## 4. Bring the result home
+
+Download `checkpoints.zip` and unzip it in the repo root on your Mac (this replaces
+`checkpoints/bossa` and adds `checkpoints/lofi`). Each checkpoint contains `tracks.json`, which
+tells the server it knows all seven tracks; restart the server and `/health` shows
+`finetuned_tracks`. Compare with the Model menu in the app: Pretrained vs Fine-tuned.
+
+Check `checkpoints/<style>/training_log.json`: `best_val_loss` should be clearly below
+`baseline_val_loss`. Stop the machine when done.
+
+Note: the old `checkpoints/bossa` (trained on four tracks) keeps working; the server uses the
+pretrained model for Keys, Lead and Vibes until it is replaced.

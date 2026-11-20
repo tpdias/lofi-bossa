@@ -21,6 +21,7 @@ import numpy as np
 import torch
 import sequences
 from model import BASE_MODEL, load_model
+from tracks import ALL_TRACKS
 
 
 def batches(data, batch_size, device, shuffle, rng):
@@ -62,6 +63,11 @@ def main():
     ap.add_argument("--copies", type=int, default=4,
                     help="times each file is used: 1 plain + the rest with some tracks held fixed")
     ap.add_argument("--core-boost", type=int, default=3, help="extra weight for core-tier files")
+    ap.add_argument("--boost-vibes", type=int, default=3,
+                    help="extra copies of files with vibes where vibes is the track written (rare in the data)")
+    ap.add_argument("--boost-lead", type=int, default=1, help="same for lead")
+    ap.add_argument("--transpose", action="store_true",
+                    help="shift each training copy by a random -5..+6 semitones (drums stay put)")
     ap.add_argument("--epochs", type=float, default=3)
     ap.add_argument("--batch-size", type=int, default=8)
     ap.add_argument("--lr", type=float, default=2e-5)
@@ -90,7 +96,7 @@ def main():
     rng = np.random.default_rng(args.seed)
 
     # Building sequences takes a while on the full dataset, so the result is cached.
-    key = f"{args.style}-{args.tiers.replace(',', '+')}-c{args.copies}-b{args.core_boost}-s{args.seed}"
+    key = f"{args.style}-{args.tiers.replace(',', '+')}-c{args.copies}-b{args.core_boost}-s{args.seed}-v{args.boost_vibes}l{args.boost_lead}{'t' if args.transpose else ''}"
     cache = args.processed / "sequences" / f"{key}{f'-n{args.limit_files}' if args.limit_files else ''}.npz"
     if cache.exists() and not args.rebuild:
         saved = np.load(cache)
@@ -99,7 +105,8 @@ def main():
     else:
         train, val = sequences.build(
             args.processed / "index.jsonl", args.processed, args.style, set(args.tiers.split(",")),
-            args.copies, args.core_boost, limit=args.limit_files, seed=args.seed)
+            args.copies, args.core_boost, limit=args.limit_files, seed=args.seed,
+            boosts={"vibes": args.boost_vibes, "lead": args.boost_lead}, transpose=args.transpose)
         cache.parent.mkdir(parents=True, exist_ok=True)
         np.savez_compressed(cache, train=train, val=val)
     if len(train) == 0 or len(val) == 0:
@@ -133,6 +140,8 @@ def main():
         if improved:
             best = loss
             model.save_pretrained(out)
+            # the server reads this to know which tracks the checkpoint was trained on
+            (out / "tracks.json").write_text(json.dumps(list(ALL_TRACKS)))
         log["best_val_loss"] = best
         out.mkdir(parents=True, exist_ok=True)
         (out / "training_log.json").write_text(json.dumps(log, indent=2))
