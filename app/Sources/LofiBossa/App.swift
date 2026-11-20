@@ -221,8 +221,9 @@ enum DevTools {
     @MainActor static func renderEffectsPopover(to path: String) {
         struct Preview: View {
             @State var effects = TrackEffects(warmth: 0.35, grit: 0.6, echo: 0, reverb: 0.2, pan: -0.4)
+            @State var busyness: Double? = nil
             var body: some View {
-                TrackEffectsPopover(track: .guitar, effects: $effects, onReset: {})
+                TrackEffectsPopover(track: .guitar, effects: $effects, busyness: $busyness, onReset: {})
                     .background(Color.lfbRaised)
                     .environment(\.colorScheme, .dark)
             }

@@ -93,4 +93,24 @@ final class ProjectCodingTests: XCTestCase {
         XCTAssertEqual(snapshot.trackIDs, [.piano, .lead])
         XCTAssertEqual(snapshot.track(.lead).notes.count, 1)
     }
+
+    func testBusynessIsOptionalSoOldProjectsLoad() throws {
+        var project = Project(name: "Old")
+        project.versions = [Version(number: 1, createdAt: .now, kind: .newTake(seed: 1), changedTracks: [],
+                                    snapshot: .empty(style: .lofi, length: 30))]
+        project.currentVersionID = project.versions[0].id
+        let data = try JSONEncoder().encode(project)
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertNil(json["busyness"], "an unset value isn't written")
+        json.removeValue(forKey: "busyness")
+        let decoded = try JSONDecoder().decode(Project.self, from: JSONSerialization.data(withJSONObject: json))
+        XCTAssertEqual(decoded.songBusyness, Project.defaultBusyness)
+        XCTAssertNil(decoded.currentSnapshot?.track(.piano).busyness)
+
+        project.busyness = 0.3
+        project.versions[0].snapshot.tracks[1].busyness = 0.8
+        let again = try JSONDecoder().decode(Project.self, from: JSONEncoder().encode(project))
+        XCTAssertEqual(again.busyness, 0.3)
+        XCTAssertEqual(again.currentSnapshot?.track(.guitar).busyness, 0.8)
+    }
 }

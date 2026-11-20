@@ -5,6 +5,9 @@ import SwiftUI
 struct TrackEffectsPopover: View {
     let track: TrackID
     @Binding var effects: TrackEffects
+    /// This track's own busyness; nil follows the song's.
+    @Binding var busyness: Double?
+    var songBusyness: Double = Project.defaultBusyness
     var onReset: () -> Void
 
     var body: some View {
@@ -32,6 +35,27 @@ struct TrackEffectsPopover: View {
                     Slider(value: $effects.pan, in: -1...1).tint(track.color)
                     Text("R").font(.lfbCaption).foregroundStyle(Color.lfbTextTertiary)
                 }
+            }
+
+            Divider()
+            VStack(alignment: .leading, spacing: LFBSpace.xs) {
+                HStack {
+                    Text("Busyness").font(.lfbBodyMedium)
+                    Spacer()
+                    Toggle("Same as song", isOn: Binding(
+                        get: { busyness == nil },
+                        set: { busyness = $0 ? nil : songBusyness }))
+                        .toggleStyle(.checkbox).font(.lfbCaption)
+                }
+                HStack(spacing: LFBSpace.sm) {
+                    Text("Sparse").font(.lfbCaption).foregroundStyle(Color.lfbTextTertiary)
+                    Slider(value: Binding(get: { busyness ?? songBusyness }, set: { busyness = $0 }), in: 0...1)
+                        .tint(track.color)
+                    Text("Busy").font(.lfbCaption).foregroundStyle(Color.lfbTextTertiary)
+                }
+                Text("How many of the model's notes this track keeps on the next rewrite or take.")
+                    .font(.lfbCaption).foregroundStyle(Color.lfbTextSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(LFBSpace.md)

@@ -167,6 +167,18 @@ MIDI file. `"model"` is `auto` (default: the style's `checkpoints/<style>/` if i
 the pretrained model), `pretrained` or `finetuned`. `/health` lists the styles that have a
 fine-tuned checkpoint.
 
+**Busyness.** The model tends to write endless runs of short repeated notes and to stack four or
+more notes on most onsets, so the server cleans every result per track before returning it
+(`training/tidy.py`): a chord-size cap (piano, keys, guitar 4, vibes 3, bass and lead 1), at most
+60% of onsets as full chords, thinned repeats, a minimum gap and a notes-per-second cap, and a
+rest carved into parts that never stop. `busyness` sets how hard: 0 sparse, 0.5 default, 1 the
+model's notes untouched (`/generate` takes one value or `{track: value}`, `/regenerate_track` a
+`busyness` query). Only the model's new notes are cleaned; notes the user wrote in the app are
+never limited. In the app it is the Busyness slider next to Length, with a per-track override in
+each track's effects popover; it applies to the next take or rewrite.
+`.venv/bin/python training/tidy.py --report song.json --busyness 0.5` shows what it would do to a
+song (notes per second, chord share, longest phrase, most notes sounding).
+
 ## Training data
 
 There is no ready-made dataset for either style, and no public collection labels them:
@@ -306,8 +318,9 @@ piano-roll keys work when those have focus.
 ## Tests
 
 ```bash
-cd app && swift test                                   # unit tests, ~15 s, no screen needed
-xcodebuild -project app/LofiBossa.xcodeproj -scheme LofiBossa test   # unit tests are SwiftPM-only; this runs the UI tests
+cd app && swift test                                   # unit tests, ~20 s, no screen needed
+xcodebuild -project app/LofiBossa.xcodeproj -scheme LofiBossa test   # unit + UI tests
+.venv/bin/python -m unittest discover training/tests  # note clean-up (tidy.py)
 ```
 
 - **Unit tests** (`app/LofiBossaTests`): note editing, project coding, the audio engine,

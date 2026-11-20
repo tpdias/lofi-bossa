@@ -179,6 +179,9 @@ struct Track: Identifiable, Codable, Hashable {
     var isMuted = false
     var isSoloed = false
     var effects = TrackEffects()
+    /// How much of the model's output to keep for this track on the next generate or rewrite
+    /// (see `Project.busyness`); nil follows the song's setting.
+    var busyness: Double? = nil
 }
 
 // Decoding is written out by hand (in an extension, so the memberwise init survives) because
@@ -187,7 +190,7 @@ struct Track: Identifiable, Codable, Hashable {
 // later needs a decodeIfPresent line here too.
 extension Track {
     private enum CodingKeys: String, CodingKey {
-        case id, instrument, notes, volume, isMuted, isSoloed, effects
+        case id, instrument, notes, volume, isMuted, isSoloed, effects, busyness
     }
 
     init(from decoder: Decoder) throws {
@@ -199,6 +202,7 @@ extension Track {
         isMuted = try c.decodeIfPresent(Bool.self, forKey: .isMuted) ?? false
         isSoloed = try c.decodeIfPresent(Bool.self, forKey: .isSoloed) ?? false
         effects = try c.decodeIfPresent(TrackEffects.self, forKey: .effects) ?? TrackEffects()
+        busyness = try c.decodeIfPresent(Double.self, forKey: .busyness)
     }
 }
 
@@ -289,6 +293,13 @@ struct Project: Identifiable, Codable, Hashable {
     var versions: [Version] = []
     var currentVersionID: Version.ID? = nil
     var deletedAt: Date? = nil              // in Recently Deleted until purged
+    /// How busy the model's notes may be: 0 sparse, 0.5 default, 1 untouched. The server thins
+    /// the model's output to this (fewer stacked chords, rests in endless runs) on every
+    /// generate and rewrite; the user's own edits are never limited. Optional so projects saved
+    /// before it existed still decode.
+    var busyness: Double? = nil
+    var songBusyness: Double { busyness ?? Self.defaultBusyness }
+    static let defaultBusyness = 0.5
 
     var current: Version? { versions.first { $0.id == currentVersionID } }
     var currentSnapshot: SongSnapshot? { current?.snapshot }

@@ -158,6 +158,14 @@ private struct RecipeBar: View {
                 Text(formatTimecode(model.project.lengthSeconds)).monospacedDigit().frame(width: 36, alignment: .leading)
             }
 
+            HStack(spacing: LFBSpace.sm) {
+                Text("Busyness").foregroundStyle(Color.lfbTextSecondary).fixedSize()
+                Slider(value: Binding(get: { model.project.songBusyness }, set: { model.setBusyness($0) }), in: 0...1)
+                    .frame(width: isCompact ? 70 : 100)
+                    .accessibilityIdentifier("busyness")
+            }
+            .help("How many notes the model may play: sparse on the left, everything it writes on the right. Applies to the next take or rewrite; your own edits are never limited.")
+
             SeedField(model: model)
 
             if !isCompact {
@@ -409,6 +417,7 @@ private struct RulerAndTracks: View {
             isRewriting: model.rewritingTrack == id,
             rewritingRange: model.rewritingTrack == id ? model.rewritingRange : nil,
             isGeneratorBusy: model.isGeneratorBusy,
+            songBusyness: model.project.songBusyness,
             onSeek: { model.clearSectionSelection(); model.seek(to: $0) },   // a click anywhere else deselects
             onSelect: { model.openEditor(for: id) },
             onRewrite: { model.rewrite(id) },
@@ -455,6 +464,7 @@ private struct RulerAndTracks: View {
                 if newValue.volume != model.displayedSnapshot?.track(id).volume { model.setVolume(newValue.volume, for: id) }
                 if newValue.instrument != model.displayedSnapshot?.track(id).instrument { model.setInstrument(newValue.instrument, for: id) }
                 if newValue.effects != model.displayedSnapshot?.track(id).effects { model.setTrackEffects(newValue.effects, for: id) }
+                if newValue.busyness != model.displayedSnapshot?.track(id).busyness { model.setTrackBusyness(newValue.busyness, for: id) }
             }
         )
     }

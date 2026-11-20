@@ -437,4 +437,58 @@ final class ProjectViewModelTests: XCTestCase {
         XCTAssertNil(model.sectionSelection)
         XCTAssertEqual(model.position, 10, accuracy: 0.5)
     }
+
+    // MARK: busyness
+
+    func testGenerateSendsTheSongBusynessForEveryTrack() async {
+        model.setBusyness(0.2)
+        await generate(seed: 1)
+        XCTAssertEqual(generator.lastGenerateBusyness, Dictionary(uniqueKeysWithValues: TrackID.core.map { ($0, 0.2) }))
+    }
+
+    func testATracksOwnBusynessWinsOnRewrite() async {
+        await generate(seed: 1)
+        model.setTrackBusyness(0.9, for: .bass)
+        model.rewrite(.bass)
+        await waitUntilIdle()
+        XCTAssertEqual(generator.rewriteCalls.last?.busyness, 0.9)
+        model.rewrite(.piano)
+        await waitUntilIdle()
+        XCTAssertEqual(generator.rewriteCalls.last?.busyness, Project.defaultBusyness)
+        model.setTrackBusyness(nil, for: .bass)
+        XCTAssertEqual(model.busyness(for: .bass), Project.defaultBusyness)
+    }
+
+    func testTrackBusynessIsKeptOnTheNextTake() async {
+        await generate(seed: 1)
+        model.setTrackBusyness(0.1, for: .guitar)
+        await generate(seed: 2)
+        XCTAssertEqual(model.project.currentSnapshot?.track(.guitar).busyness, 0.1)
+        XCTAssertEqual(generator.lastGenerateBusyness[.guitar], 0.1)
+    }
+
+    func testSparseTakesHaveFewerNotes() async {
+        model.setBusyness(1)
+        await generate(seed: 1)
+        let busy = notes(.piano).count
+        model.setBusyness(0)
+        await generate(seed: 1)
+        XCTAssertLessThan(notes(.piano).count, busy)
+    }
+
+    /// The limits are for the model's notes only: a big chord the user draws stays as drawn,
+    /// even after another track is rewritten.
+    func testTheUsersOwnChordIsNeverLimited() async {
+        await generate(seed: 1)
+        model.setBusyness(0)
+        model.openEditor(for: .piano)
+        let chord = [48, 52, 55, 60, 64, 67].map { Note(pitch: $0, start: 4, duration: 1, velocity: 90) }
+        model.updateEditingNotes(notes(.piano) + chord, for: .piano)
+        model.closeEditor()
+        let before = notes(.piano)
+        model.rewrite(.guitar)
+        await waitUntilIdle()
+        XCTAssertEqual(notes(.piano), before)
+        XCTAssertEqual(notes(.piano).filter { $0.start == 4 && $0.duration == 1 }.count, 6)
+    }
 }
