@@ -144,53 +144,82 @@ private struct RecipeBar: View {
     @Bindable var model: ProjectViewModel
     let isCompact: Bool
 
+    /// One row when the stage is wide enough; otherwise two, so the controls never push the
+    /// side panels narrower (which cut their text off).
     var body: some View {
-        HStack(spacing: LFBSpace.md) {
-            Picker("Style", selection: Binding(get: { model.project.style }, set: { model.setStyle($0) })) {
-                ForEach(MusicStyle.allCases) { Text($0.title).tag($0) }
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: LFBSpace.md) {
+                styleControl
+                lengthControl
+                busynessControl
+                SeedField(model: model)
+                if !isCompact { ModelPopup(model: model) }
+                Spacer(minLength: 0)
+                generateButton
             }
-            .pickerStyle(.segmented).labelsHidden().fixedSize()
+            .padding(.horizontal, LFBSpace.lg)
+            .frame(height: LFBSize.recipeBarHeight)
 
-            HStack(spacing: LFBSpace.sm) {
-                Text("Length").foregroundStyle(Color.lfbTextSecondary).fixedSize()
-                Slider(value: Binding(get: { model.project.lengthSeconds }, set: { model.setLength($0) }), in: 15...180, step: 15)
-                    .frame(width: 140)
-                Text(formatTimecode(model.project.lengthSeconds)).monospacedDigit().frame(width: 36, alignment: .leading)
-            }
-
-            HStack(spacing: LFBSpace.sm) {
-                Text("Busyness").foregroundStyle(Color.lfbTextSecondary).fixedSize()
-                Slider(value: Binding(get: { model.project.songBusyness }, set: { model.setBusyness($0) }), in: 0...1)
-                    .frame(width: isCompact ? 70 : 100)
-                    .accessibilityIdentifier("busyness")
-            }
-            .help("How many notes the model may play: sparse on the left, everything it writes on the right. Applies to the next take or rewrite; your own edits are never limited.")
-
-            SeedField(model: model)
-
-            if !isCompact {
-                ModelPopup(model: model)
-            }
-
-            Spacer()
-
-            Button {
-                model.generate()
-            } label: {
-                HStack(spacing: 6) {
-                    if model.isGenerating { ProgressView().controlSize(.small) } else { Image(systemName: "sparkles") }
-                    Text(model.project.hasGenerated ? (model.isGenerating ? "Generating…" : "Generate New Take")
-                         : (model.isGenerating ? "Generating…" : "Generate"))
+            VStack(spacing: LFBSpace.sm) {
+                HStack(spacing: LFBSpace.md) {
+                    styleControl
+                    lengthControl
+                    busynessControl
+                    Spacer(minLength: 0)
                 }
-                .frame(minWidth: 130)
+                HStack(spacing: LFBSpace.md) {
+                    SeedField(model: model)
+                    ModelPopup(model: model)
+                    Spacer(minLength: 0)
+                    generateButton
+                }
             }
-            .buttonStyle(.borderedProminent)
-            .keyboardShortcut(.return, modifiers: .command)
-            .disabled(model.isGeneratorBusy || isWaitingForGenerator)
-            .accessibilityIdentifier("generate")
+            .padding(.horizontal, LFBSpace.lg)
+            .padding(.vertical, LFBSpace.sm)
         }
-        .padding(.horizontal, LFBSpace.lg)
-        .frame(height: LFBSize.recipeBarHeight)
+    }
+
+    private var styleControl: some View {
+        Picker("Style", selection: Binding(get: { model.project.style }, set: { model.setStyle($0) })) {
+            ForEach(MusicStyle.allCases) { Text($0.title).tag($0) }
+        }
+        .pickerStyle(.segmented).labelsHidden().fixedSize()
+    }
+
+    private var lengthControl: some View {
+        HStack(spacing: LFBSpace.sm) {
+            Text("Length").foregroundStyle(Color.lfbTextSecondary).fixedSize()
+            Slider(value: Binding(get: { model.project.lengthSeconds }, set: { model.setLength($0) }), in: 15...180, step: 15)
+                .frame(minWidth: 50, maxWidth: 120)
+            Text(formatTimecode(model.project.lengthSeconds)).monospacedDigit().frame(width: 36, alignment: .leading)
+        }
+    }
+
+    private var busynessControl: some View {
+        HStack(spacing: LFBSpace.sm) {
+            Text("Busyness").foregroundStyle(Color.lfbTextSecondary).fixedSize()
+            Slider(value: Binding(get: { model.project.songBusyness }, set: { model.setBusyness($0) }), in: 0...1)
+                .frame(minWidth: 50, maxWidth: 100)
+                .accessibilityIdentifier("busyness")
+        }
+        .help("How many notes the model may play: sparse on the left, everything it writes on the right. Applies to the next take or rewrite; your own edits are never limited.")
+    }
+
+    private var generateButton: some View {
+        Button {
+            model.generate()
+        } label: {
+            HStack(spacing: 6) {
+                if model.isGenerating { ProgressView().controlSize(.small) } else { Image(systemName: "sparkles") }
+                Text(model.project.hasGenerated ? (model.isGenerating ? "Generating…" : "Generate New Take")
+                     : (model.isGenerating ? "Generating…" : "Generate"))
+            }
+            .frame(minWidth: 130)
+        }
+        .buttonStyle(.borderedProminent)
+        .keyboardShortcut(.return, modifiers: .command)
+        .disabled(model.isGeneratorBusy || isWaitingForGenerator)
+        .accessibilityIdentifier("generate")
     }
 
     private var isWaitingForGenerator: Bool {

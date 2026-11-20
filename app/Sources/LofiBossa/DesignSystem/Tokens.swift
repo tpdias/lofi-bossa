@@ -121,7 +121,7 @@ enum LFBSize {
     static let playButton: CGFloat = 36
     static let effectCardHeight: CGFloat = 64
     static let libraryCardThumbHeight: CGFloat = 112
-    static let minWindow = CGSize(width: 900, height: 560)
+    static let minWindow = CGSize(width: 960, height: 560)
 }
 
 // MARK: - Type
