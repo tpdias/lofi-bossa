@@ -19,6 +19,7 @@ struct TrackRowView: View {
     var rewritingRange: ClosedRange<Double>? = nil   // set when only part of the track is rewritten
     var isGeneratorBusy = false
     var compact = false                       // true while the piano roll is open
+    var songBusyness: Double = Project.defaultBusyness
     var onSeek: (Double) -> Void = { _ in }
     var onSelect: () -> Void = {}
     var onRewrite: () -> Void = {}
@@ -84,7 +85,8 @@ struct TrackRowView: View {
                     .help("Effects for this track")
                     .accessibilityLabel("\(track.id.title) effects")
                     .popover(isPresented: $showEffects, arrowEdge: .bottom) {
-                        TrackEffectsPopover(track: track.id, effects: $track.effects, onReset: onResetEffects)
+                        TrackEffectsPopover(track: track.id, effects: $track.effects, busyness: $track.busyness,
+                                            songBusyness: songBusyness, onReset: onResetEffects)
                     }
                     if isRewriting {
                         Button(action: onCancelRewrite) { Image(systemName: "stop.fill") }

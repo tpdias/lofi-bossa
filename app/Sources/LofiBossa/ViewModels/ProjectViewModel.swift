@@ -115,6 +115,13 @@ final class ProjectViewModel {
 
     // MARK: Generation
 
+    private var tracksToGenerate: [TrackID] { project.currentSnapshot?.trackIDs ?? TrackID.core }
+
+    /// The busyness the model's notes for a track are cleaned to: the track's own, or the song's.
+    func busyness(for id: TrackID) -> Double {
+        project.currentSnapshot?.track(id).busyness ?? project.songBusyness
+    }
+
     func generate() {
         guard !isGeneratorBusy else { return }
         let seed = project.pinnedSeed ?? UInt32.random(in: 0...UInt32.max)
@@ -123,7 +130,8 @@ final class ProjectViewModel {
             do {
                 for try await event in generator.generate(
                     style: project.style, model: activeModel, length: project.lengthSeconds,
-                    seed: project.pinnedSeed, tracks: project.currentSnapshot?.trackIDs ?? TrackID.core
+                    seed: project.pinnedSeed, tracks: tracksToGenerate,
+                    busyness: Dictionary(uniqueKeysWithValues: tracksToGenerate.map { ($0, busyness(for: $0)) })
                 ) {
                     guard case .finished(var snapshot) = event else { continue }
                     snapshot = carryOverMixIfSameStyle(onto: snapshot)
@@ -162,7 +170,8 @@ final class ProjectViewModel {
         let seed = rewriteSeed(songSeed: snapshot.seed, track: track, attempt: attempt)
         generateTask = Task {
             do {
-                let notes = try await generator.rewrite(track: track, model: activeModel, in: snapshot, seed: seed, range: range)
+                let notes = try await generator.rewrite(track: track, model: activeModel, in: snapshot, seed: seed, range: range,
+                                                         busyness: busyness(for: track))
                 var newSnapshot = snapshot
                 if let i = newSnapshot.tracks.firstIndex(where: { $0.id == track }) {
                     newSnapshot.tracks[i].notes = notes
@@ -205,6 +214,7 @@ final class ProjectViewModel {
             result.tracks[i].isMuted = previous.isMuted
             result.tracks[i].isSoloed = previous.isSoloed
             result.tracks[i].effects = previous.effects
+            result.tracks[i].busyness = previous.busyness
         }
         return result
     }
@@ -409,6 +419,8 @@ final class ProjectViewModel {
     func setVolume(_ v: Double, for id: TrackID) { mutateCurrentTrack(id) { $0.volume = v } }
     func setInstrument(_ name: String, for id: TrackID) { mutateCurrentTrack(id) { $0.instrument = name } }
     func setTrackEffects(_ effects: TrackEffects, for id: TrackID) { mutateCurrentTrack(id) { $0.effects = effects } }
+    /// nil = follow the song's busyness. Takes effect on the next generate or rewrite.
+    func setTrackBusyness(_ value: Double?, for id: TrackID) { mutateCurrentTrack(id) { $0.busyness = value } }
 
     /// Back to the style's starting effects for this track (neutral if the style gives it none).
     func resetTrackEffects(for id: TrackID) {
@@ -448,6 +460,7 @@ final class ProjectViewModel {
     func setStyle(_ style: MusicStyle) { project.style = style; persist() }
     func setModel(_ model: NoteModel) { project.model = model; persist() }
     func setLength(_ seconds: Double) { project.lengthSeconds = seconds; persist() }
+    func setBusyness(_ value: Double) { project.busyness = min(max(value, 0), 1); persist() }
 
     func pinSeed(_ seed: UInt32) { project.pinnedSeed = seed; persist() }
     func clearPinnedSeed() { project.pinnedSeed = nil; persist() }

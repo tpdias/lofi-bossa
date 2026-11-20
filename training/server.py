@@ -3,9 +3,13 @@
     .venv/bin/python training/server.py            # http://127.0.0.1:8765
 
     GET  /health
-    POST /generate           JSON {style, seconds, model?, seed?, top_p?, format?}
-    POST /regenerate_track   ?track=bass&style=lofi&model=&seed=&top_p=, body = a song
+    POST /generate           JSON {style, seconds, model?, seed?, top_p?, format?, tracks?, busyness?}
+    POST /regenerate_track   ?track=bass&style=lofi&model=&seed=&top_p=&busyness=, body = a song
                              [&start=&end=] (seconds) rewrites only that stretch
+
+busyness (0 sparse ... 0.5 default ... 1 untouched) thins out the model's notes per track (see
+tidy.py). /generate takes one value or {track: value}. Only newly generated notes are cleaned;
+everything sent in a song body comes back as it was.
 
 "model" is auto (default), pretrained or finetuned. /health lists which styles have a
 fine-tuned checkpoint.
@@ -36,6 +40,7 @@ from fastapi import FastAPI, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
 
 import sampler
+import tidy
 import tracks
 from model import BASE_MODEL, load_model
 
@@ -118,6 +123,7 @@ class GenerateRequest(BaseModel):
     format: str = Field("midi", pattern="^(midi|json)$")
     # which tracks to write; the four core ones unless the project added others
     tracks: list[str] = Field(default_factory=lambda: list(tracks.TRACKS))
+    busyness: float | dict[str, float] = 0.5
 
 
 @app.get("/health")
@@ -146,14 +152,17 @@ def generate(req: GenerateRequest):
                 by_track[t] = sampler.accompany(model, fixed, req.seconds, tracks.instruments_for([t]),
                                                 top_p=req.top_p, seed=seed)
         events = ops.sort([tok for t in wanted for tok in by_track[t]])
-    return respond(tracks.events_to_midi(events), seed, req.format)
+    song = song_json(tracks.events_to_midi(events), seed)
+    song["tracks"] = tidy.tidy_song(song["tracks"], req.busyness, seed)
+    return song if req.format == "json" else midi_response(json_to_midi(song), seed)
 
 
 @app.post("/regenerate_track")
 async def regenerate_track(request: Request, track: str = Query(...), style: str = "lofi",
                            model: str = "auto",
                            seed: int | None = None, top_p: float = Query(0.98, gt=0, le=1),
-                           start: float | None = Query(None, ge=0), end: float | None = Query(None, gt=0)):
+                           start: float | None = Query(None, ge=0), end: float | None = Query(None, gt=0),
+                           busyness: float = Query(0.5, ge=0, le=1)):
     if track not in tracks.ALL_TRACKS:
         raise HTTPException(422, f"track must be one of {tracks.ALL_TRACKS}")
     if (start is None) != (end is None):
@@ -206,6 +215,12 @@ async def regenerate_track(request: Request, track: str = Query(...), style: str
 
     # Swap only the regenerated track; every other track's notes are returned untouched.
     new_notes = tracks.events_to_midi(new_events).instruments[tracks.ALL_TRACKS.index(track)].notes
+    # Clean up only what the model just wrote (never the notes that were sent).
+    fresh = tidy.tidy_track(track, [{"start": n.start, "duration": n.end - n.start, "pitch": n.pitch,
+                                     "velocity": n.velocity} for n in new_notes],
+                            busyness, random.Random(f"{seed}-{track}"))
+    new_notes = [pretty_midi.Note(int(n["velocity"]), int(n["pitch"]), n["start"], n["start"] + n["duration"])
+                 for n in fresh]
     if ranged:
         # Keep this track's notes outside the range (one ringing into it stops where it starts),
         # and add the new ones, which all start inside it.

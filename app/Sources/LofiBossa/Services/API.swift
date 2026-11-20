@@ -61,11 +61,12 @@ struct API {
     }
 
     func generate(style: MusicStyle, model: NoteModel, seconds: Double, seed: UInt32?,
-                  tracks: [TrackID] = TrackID.core) async throws -> WireSong {
+                  tracks: [TrackID] = TrackID.core, busyness: [TrackID: Double] = [:]) async throws -> WireSong {
         var request = URLRequest(url: base.appending(path: "generate"))
         var body: [String: Any] = [
             "style": style.rawValue, "model": model.apiValue, "seconds": seconds, "format": "json",
             "tracks": tracks.map(\.rawValue),
+            "busyness": Dictionary(uniqueKeysWithValues: busyness.map { ($0.key.rawValue, $0.value) }),
         ]
         if let seed { body["seed"] = Int(seed) }
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
@@ -73,12 +74,13 @@ struct API {
     }
 
     func regenerate(_ track: TrackID, in song: WireSong, style: MusicStyle, model: NoteModel, seed: UInt32,
-                    range: ClosedRange<Double>? = nil) async throws -> WireSong {
+                    range: ClosedRange<Double>? = nil, busyness: Double = Project.defaultBusyness) async throws -> WireSong {
         var items = [
             URLQueryItem(name: "track", value: track.rawValue),
             URLQueryItem(name: "style", value: style.rawValue),
             URLQueryItem(name: "model", value: model.apiValue),
             URLQueryItem(name: "seed", value: String(seed)),
+            URLQueryItem(name: "busyness", value: String(min(max(busyness, 0), 1))),
         ]
         if let range {   // rewrite only this stretch; the server keeps everything outside it
             items.append(URLQueryItem(name: "start", value: String(range.lowerBound)))

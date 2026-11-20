@@ -15,15 +15,17 @@ final class FakeGeneratorClient: GeneratorClient {
     var failure: Error?
     var delay: Duration = .zero
     private(set) var generateCalls = 0
-    private(set) var rewriteCalls: [(track: TrackID, range: ClosedRange<Double>?)] = []
+    private(set) var rewriteCalls: [(track: TrackID, range: ClosedRange<Double>?, busyness: Double)] = []
+    private(set) var lastGenerateBusyness: [TrackID: Double] = [:]
 
     struct Failure: LocalizedError { var errorDescription: String? { "The fake generator was told to fail." } }
 
     func restart() async throws {}
 
     func generate(style: MusicStyle, model: NoteModel, length: Double, seed: UInt32?,
-                  tracks: [TrackID]) -> AsyncThrowingStream<GenerationEvent, Error> {
+                  tracks: [TrackID], busyness: [TrackID: Double]) -> AsyncThrowingStream<GenerationEvent, Error> {
         generateCalls += 1
+        lastGenerateBusyness = busyness
         let seed = seed ?? UInt32.random(in: 0...UInt32.max)
         let failure = failure, delay = delay
         return AsyncThrowingStream { continuation in
@@ -31,7 +33,7 @@ final class FakeGeneratorClient: GeneratorClient {
                 do {
                     if delay > .zero { try await Task.sleep(for: delay) }
                     if let failure { throw failure }
-                    continuation.yield(.finished(Self.song(style: style, length: length, seed: seed, tracks: tracks)))
+                    continuation.yield(.finished(Self.song(style: style, length: length, seed: seed, tracks: tracks, busyness: busyness)))
                     continuation.finish()
                 } catch {
                     continuation.finish(throwing: error)
@@ -42,11 +44,11 @@ final class FakeGeneratorClient: GeneratorClient {
     }
 
     func rewrite(track: TrackID, model: NoteModel, in song: SongSnapshot, seed: UInt32,
-                 range: ClosedRange<Double>?) async throws -> [Note] {
-        rewriteCalls.append((track, range))
+                 range: ClosedRange<Double>?, busyness: Double) async throws -> [Note] {
+        rewriteCalls.append((track, range, busyness))
         if delay > .zero { try await Task.sleep(for: delay) }
         if let failure { throw failure }
-        let fresh = Self.notes(for: track, length: song.lengthSeconds, seed: seed ^ 0x9E37)
+        let fresh = Self.thinned(Self.notes(for: track, length: song.lengthSeconds, seed: seed ^ 0x9E37), busyness)
         guard let range else { return fresh }
         // Like the real server: only the range is new, everything outside it is untouched.
         let outside = song.track(track).notes.filter { $0.start < range.lowerBound || $0.start >= range.upperBound }
@@ -56,11 +58,19 @@ final class FakeGeneratorClient: GeneratorClient {
 
     /// Eight notes per two seconds per track, pitched by track and seed, so different seeds
     /// give different (and checkably different) songs.
-    static func song(style: MusicStyle, length: Double, seed: UInt32, tracks: [TrackID] = TrackID.core) -> SongSnapshot {
+    /// Like the server's clean-up, roughly: busyness 1 keeps every note, 0 keeps half.
+    static func thinned(_ notes: [Note], _ busyness: Double) -> [Note] {
+        let keep = 0.5 + min(max(busyness, 0), 1) / 2
+        return notes.enumerated().filter { Double($0.offset % 10) < keep * 10 }.map(\.element)
+    }
+
+    static func song(style: MusicStyle, length: Double, seed: UInt32, tracks: [TrackID] = TrackID.core,
+                     busyness: [TrackID: Double] = [:]) -> SongSnapshot {
         var song = SongSnapshot.empty(style: style, length: length, tracks: tracks)
         song.seed = seed
         for i in song.tracks.indices {
-            song.tracks[i].notes = notes(for: song.tracks[i].id, length: length, seed: seed)
+            let id = song.tracks[i].id
+            song.tracks[i].notes = thinned(notes(for: id, length: length, seed: seed), busyness[id] ?? 1)
         }
         return song
     }
