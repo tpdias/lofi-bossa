@@ -113,7 +113,7 @@ struct LibraryGridView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     Text(isTrash ? "Recently Deleted" : "All Projects").font(.lfbTitle)
                     if !isTrash {
-                        Text("\(store.active.count) projects · saved automatically on this Mac")
+                        Text("\(store.active.count) projects · saved automatically on this \(LFBSize.isTouch ? "device" : "Mac")")
                             .font(.lfbCaption).foregroundStyle(Color.lfbTextSecondary)
                     }
                 }
