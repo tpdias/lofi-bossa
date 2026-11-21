@@ -1,212 +1,323 @@
-# Lo-Fi & Bossa: design handoff
+# Lo-Fi & Bossa: iPad, iPhone and iPhone Duo handoff
 
-A native macOS 14+ app (SwiftUI) that writes a short four-track song with a local model, then lets a non-musician mix it, rewrite single parts, edit notes, and export. This document is the contract between the design and the build. It covers what is decided, what is proposed, and what is still open.
+Lo-Fi & Bossa now ships on Mac, iPad, iPhone and the foldable iPhone Duo. **Every device has the same features**: generate, choose style, length, seed and model, mix, mute and solo, swap instruments, rewrite one part, edit notes, three effects, loop a range, versions with listen-and-restore, export WAV, M4A or MIDI, projects with autosave. Only the layout and the input change.
 
-The visual design lives on the Design canvas this package was exported from (23 artboards plus the icon). The `design/` folder holds the artboard sources. Everything that can be a number is in `tokens.json` and in the Asset Catalog.
+This document covers what is different on each device. `HANDOFF-mac.md` stays the reference for behaviour that is the same everywhere: states, copy, the version rules, the track-row states, and audio. Where this document is silent, the Mac behaviour applies.
 
-## 1. What is in this package
+The designs are on the same Design canvas as the Mac screens, in four new rows: iPhone light, iPhone dark and landscape, iPad, and iPhone Duo.
+
+## 1. What is in this folder
 
 | Path | What it is |
 |---|---|
-| `HANDOFF.md` | This document |
-| `tokens.json` | Colors (light and dark), spacing, radii, sizes, type, motion |
-| `icon/icon.svg` | Icon master (vector) |
-| `icon/AppIcon-1024.png`, `icon/png/` | PNG renders, 16 to 1024 |
-| `icon/AppIcon.appiconset/` | Drop-in Xcode icon set (all macOS sizes) |
-| `icon/AppIcon.icns` | Ready-made `.icns` |
-| `LoFiBossa/Assets.xcassets/` | 26 color sets with light and dark values, plus `AppIcon` |
-| `LoFiBossa/DesignSystem/Tokens.swift` | Color, spacing, radius, size and font constants |
-| `LoFiBossa/Models/Models.swift` | Project, version, track, note, mix data model |
-| `LoFiBossa/Services/GeneratorClient.swift` | Protocol for the local generator, status and phase enums |
-| `LoFiBossa/Services/ProjectStore.swift` | Debounced autosave store |
-| `LoFiBossa/Views/TrackRowView.swift` | The track row in all states |
-| `LoFiBossa/Views/NoteLaneView.swift` | Miniature piano-roll overview (Canvas) |
-| `LoFiBossa/Views/EffectCard.swift` | Warmth / Reverb / Vinyl control |
-| `LoFiBossa/App/LoFiBossaApp.swift` | App shell, menu commands, split view with inspector |
-| `design/` | Artboard sources (`.dc.html`) and `lfb.css` (the shared styles), for measurements |
+| `HANDOFF.md` | This document (iPad, iPhone, iPhone Duo and what they share) |
+| `HANDOFF-mac.md` | The original Mac handoff: per-screen behaviour, states, design system, SwiftUI notes |
+| `tokens.json` | Design tokens, now with touch and phone sizes |
+| `icon/` | macOS icon (as before), plus iOS any / dark / tinted, and `layers/` for Icon Composer |
+| `artboards/` | All artboard sources from the canvas (`Phone.dc.html`, `Duo.dc.html` and the iPad wrappers are new) and the shared `lfb.css` |
+| `starter/LoFiBossa/` | Multiplatform SwiftUI starter: asset catalog, tokens, models, session, layout switch, Mac/iPad, iPhone and Duo views |
 
-**Status of the Swift files.** They were written without a compiler available, so treat them as a starting point that has not been built. Expect to fix small API details. The shell (`ProjectView`, library, inspector contents, piano roll, transport) is intentionally left as stubs that point at the artboard to build from. The pieces that carry real design decisions (track row, note lane, effect card, tokens, models, autosave) are written out.
+The Swift files have not been compiled; no Xcode was available while they were written. Treat them as a structured starting point and expect small API fixes. The artboards render only inside the Design canvas. Read them for exact values; `lfb.css` holds every measurement.
 
-**About `design/`.** The `.dc.html` files render only inside the Design canvas runtime, so they are references to read, not pages to open locally. Use the canvas for visuals. Use the files for exact values: `lfb.css` holds every measurement as a CSS rule. To get PNGs of the screens, export from the canvas (Share, then Export).
+## 2. How the app adapts
 
-## 2. Structure decisions
+### 2.1 One target, four layouts
 
-**Single window with a library sidebar, not a document-based app.** The user thinks in "my tracks", not files. A single window gives autosave without save dialogs, one shared generator queue, and a library with search, rename, duplicate and Recently Deleted. The trade-off is that projects are not loose files in Finder. Sharing is through Export and "Copy Seed". If file-level sharing is wanted later, add a project-package export (a folder with `project.json`) without changing the structure.
+Layout is chosen from the size class and the fold, never from the device model. That way iPad Split View, Stage Manager and the Duo all follow one rule (`starter/LoFiBossa/Platform/LayoutMode.swift`).
 
-**Three zones.** Sidebar (projects), stage (recipe bar, ruler, four tracks, transport), inspector (Sound tab and Versions tab). The piano roll is not a fourth zone: it opens as a split pane at the bottom of the stage.
+| Layout | When | Looks like |
+|---|---|---|
+| **regular** | Mac; iPad full screen or wide | The Mac layout: sidebar, stage with track rows, inspector. Touch-sized on iPad. |
+| **compact** | iPhone; iPhone Duo closed; narrow iPad Split View or Slide Over | Stacked track cards, floating transport, sheets |
+| **twoPage** | iPhone Duo open, fold vertical (flat or half folded like a book) | Song on the left page, panel on the right page |
+| **tabletop** | iPhone Duo half folded with the fold horizontal | Watch on top (lanes), touch below (transport, effects, solo) |
 
-**Time is in seconds.** The ruler ticks and the lane gridlines come from one list of tick positions, and every note is placed through one `x(for: seconds)` mapping. A bar/beat grid later means changing that mapping and the tick list, not the layout.
+### 2.2 One panel, three presentations
 
-## 3. Screens and states
+Sound, Versions and Notes (the piano roll) are one panel model (`Panel` in `ProjectSession.swift`), shown differently per layout:
 
-Artboard names are the titles on the canvas. All measurements are in points; light and dark use the same layout.
+| | Sound | Versions | Notes (piano roll) |
+|---|---|---|---|
+| Mac, iPad | Inspector tab | Inspector tab | Bottom split pane |
+| iPhone, Duo closed | Sheet from the transport | Sheet from the transport | Pushed full-screen editor (rotates to landscape) |
+| Duo open | Right page tab | Right page tab | Right page tab |
 
-### 3.1 Project library (light and dark) and First launch
+### 2.3 State survives layout changes
 
-- Sidebar 216 wide: All Projects (with count), Recently Deleted, "Recent" list (six latest), New Project button pinned to the bottom.
-- Toolbar: title and "N projects · saved automatically on this Mac", sort menu (Last edited, Name, Created), search field (210 wide), New Project (primary, `⌘N`).
-- Content: `LazyVGrid`, four columns at 1280 wide (use adaptive columns, minimum about 220). Each card is a 12 pt radius surface: a 112 pt thumbnail of the four note lanes in the track colors, then name (rounded headline) and "Style · length · last edited".
-- Context menu on a card: Open `↩`, Rename, Duplicate `⌘D`, Export… `⌘E`, Copy Seed, Delete `⌘⌫`. Double-click or Return opens. Rename is inline on the card title.
-- Delete moves to Recently Deleted (30 days), then really deletes. No confirmation dialog for the move; confirm only for "Delete Permanently".
-- **First launch (no projects):** the sidebar says "Projects you make will be listed here." The content is a welcome: four-bar mark in the track colors, "Make your first track", one sentence, two style cards (Lo-Fi selected, Bossa Nova), a length slider, one primary Generate button, and the generator status. Generating from here creates the first project and moves to the project view. The generator status is shown here so that an offline generator is visible before the first click.
+All state for an open project lives in one `ProjectSession` above the layout switch: playhead, loop, selection, the version being listened to, and any generation in progress. Unfolding a Duo, rotating an iPhone or resizing an iPad window therefore never stops playback or cancels a generation. Apple treats Duo fold changes as size-class and trait changes in the same process, not as a new scene, so this works without special handling.
 
-### 3.2 Project view: loaded song
+When the layout changes, the open panel carries across:
 
-- **Toolbar:** sidebar toggle, project name (rounded 14 semibold) with subtitle "Style · length · Version N · Saved", Undo, Redo, Export (`⌘E`), inspector toggle. Rename by clicking the name.
-- **Recipe bar** (49 high): Style (segmented), Length (slider 15–180 s, value shown as m:ss), Seed field, Model popup, Generate button. Generate reads "Generate" in an empty project and "Generate new take" afterwards. `⌘↩`.
-- **Seed field:** a dice toggle, the number, a copy button. Dice on means a fresh random seed on every Generate, and the field shows the last seed used (or "Random" in an empty project). Typing or pasting a number turns the dice off and pins that seed. Copy copies the current song's seed. The same seed with the same style, length and model reproduces the same song.
-- **Model popup:** Pretrained / Fine-tuned. Fine-tuned is listed only for styles that have it, and a disabled row says "Not available for Bossa Nova yet" otherwise. This is a testing control, so it is the first thing hidden when the window is narrow (see 3.8).
-- **Ruler** (24 high) in seconds, label every 15 s at this length. Choose the label step from the length so labels never overlap.
-- **Four track rows**, always in the order piano, guitar, bass, drums (section 4 is the row spec). Rows share the available height equally, with a 92 pt minimum.
-- **Playhead:** a 2 pt line with a small triangle in the ruler. Click a lane or the ruler to seek.
-- **Loop range:** drag in the ruler to select. The range shows as an accent wash with a label ("Loop · 22 s"), and a chip in the transport shows "0:30 – 0:52" with a clear button. The loop button in the transport toggles looping of that range. The same range is offered in the Export sheet.
-- **Transport** (56 high): left, generator status; center, back-to-start, play/pause (36 pt circle), loop, time "0:36 / 1:30" (rounded 20, monospaced digits); right, range chip and master volume. Space plays and pauses.
-- **Inspector, Sound tab:** three Effect cards (Warmth, Reverb, Vinyl), a "Lo-Fi defaults, adjusted" line with Reset, and a footnote. Each style applies its own default instruments and effect amounts when generated; Reset returns the effects to the current style's defaults.
+- **Unfold (compact → twoPage):** an open Sound or Versions sheet closes, and that panel becomes the right page's tab. A pushed piano roll becomes the Notes tab.
+- **Fold (twoPage → compact):** the Notes tab becomes the pushed editor. Sound and Versions go back to the transport buttons; no sheet opens by itself.
 
-### 3.3 Piano-roll editing
+### 2.4 Feature map
 
-- **Split pane, not a separate mode.** Double-click a lane, or select a track and press Return, to open the editor for that track. The four rows collapse to 44 pt strips (name, M/S, notes only; instrument, rewrite and volume are hidden), and the editor takes the freed height. The sidebar and inspector hide while editing to give the roll its width.
-- **Editor header:** track tile and name, Select / Draw tool, Snap popup (0.25 s default), "Show other parts" toggle, selection count, Loudness slider for the selection, Delete, Done.
-- **Roll:** 56 pt piano-key column, 12 pt rows, 20 pt ruler, notes in the track color. The visible window in the design is 24 s; scroll horizontally and zoom with pinch. The loop range is carried over from the main view.
-- **Context:** the other three tracks stay audible (playback is unchanged) and, with "Show other parts" on, are drawn as faint ghost notes in their own colors behind the editable notes. The strips above show all four tracks as usual and keep their M/S buttons.
-- **Gestures:** click selects; shift-click adds; drag on empty space draws a marquee; drag a note moves it (pitch and time, snapped); drag a note's right edge resizes; double-click empty space, or Draw tool plus click, adds a note; Delete removes selected notes. The Loudness lane below the roll shows one stem per note; drag a stem to change that note's velocity.
-- **Proposed shortcuts** (not in the design, easy to change): V Select, P Draw, ⌘A select all, arrows nudge by the snap value, ⌥-arrows transpose by a semitone.
-- Each editing session adds one version ("Edited piano notes") when the user presses Done or leaves the track, not one per drag.
+Where each feature lives on each device.
 
-### 3.4 Generation in progress and Regenerating one track
+| Feature | Mac / iPad | iPhone (and Duo closed) | Duo open |
+|---|---|---|---|
+| Style, length, seed | Recipe bar | Recipe strip chips (menus, popovers) | Recipe strip, left page |
+| Model (Pretrained / Fine-tuned) | Recipe bar popup (hidden when narrow) | More menu › Generation options | More menu › Generation options |
+| Generate / New take | Recipe bar, ⌘↩ | Strip button | Strip button |
+| Mute, solo, rewrite | Track row | Track card | Track card |
+| Instrument, volume | Track row | Track sheet (tap the name) or long press | Track sheet or long press |
+| Effects | Inspector › Sound | Sound sheet | Right page › Sound |
+| Versions | Inspector › Versions | Versions sheet | Right page › Versions |
+| Piano roll | Bottom split pane | Pushed editor | Right page › Notes |
+| Loop range | Drag in the ruler | Drag in the scrubber; long-press a lane | Drag in the scrubber |
+| Export | Toolbar, ⌘E, sheet | More menu › Export…, sheet, then Share / Save to Files | Same as iPhone |
+| Undo | Toolbar, ⌘Z | Nav bar button, shake-to-undo off | Nav bar button |
+| Generator status | Transport pill | Banner only when not ready | Banner only when not ready |
+| Projects | Sidebar + library grid | Library grid (2 columns) | Library list + preview |
 
-- **Whole song:** the Generate button becomes "Generating…" with a spinner and is disabled. A banner appears under the recipe bar: spinner, "Writing a new take", "Lo-Fi · 1:30 · seed 90412 — 21 s so far, usually under a minute. Cancelling keeps your current take.", Cancel, and an indeterminate progress bar. Behind it a write head (accent line with a soft trail) moves across the lanes while notes appear behind it. The elapsed time is real; do not invent a percentage. If the generator cannot stream notes, show the lanes empty with the sweep used for single-track rewrites.
-- Undo, Export and the per-track rewrite buttons are disabled while generating; playback of the previous take can continue until the new one lands, then switches. The new take is added as a new version when it finishes, and never replaces anything.
-- **One track:** only that row changes. Its notes fade to 20%, a track-colored band sweeps across the lane, and a pill says "Rewriting the bass to fit the other three…" with Stop. The row's rewrite button becomes a Stop button. The other three rows stay fully usable and audible. A rewrite takes 3–5 s, so no banner is shown.
-- **Reduce Motion:** replace the sweep and the write-head pulse with a static tint.
+## 3. Devices and sizes
 
-### 3.5 Generator offline, starting, error
+All values are in points. Layouts flex; these are the sizes the artboards are drawn at.
 
-- **Status pill** in the transport (always visible): green dot "Generator ready", spinner "Generator starting…", warning "Generator offline".
-- **Starting** (usually a few seconds after launch): banner "Starting the generator. This takes a few seconds after launch. Everything except writing new music is ready." The Generate button reads "Waiting for generator…" and is disabled. It enables on its own when the status becomes ready.
-- **Offline:** banner "The generator is offline. You can still play, mix, edit and export. Writing new music needs it running." with **Restart generator** (primary) and **Show log**. Restart sets the status to starting; if the process fails twice, the banner adds the last line of the log and a Copy Log button.
-- **Error during generation:** banner "That take didn't finish. The generator stopped responding after 42 s. Your song is unchanged." with **Try again** (primary) and **Details**. The previous take is untouched and remains the current version. For a single-track rewrite, the same message appears as a pill on that row instead of a banner.
-- All three banners are dismissible only by resolving the state; the offline banner returns until the generator is back.
+| Device | Artboard size | Size class (w / h) | Notes |
+|---|---|---|---|
+| iPhone 6.3" | 402 × 874, landscape 874 × 402 | compact / regular | Portrait for the app; landscape offered in the piano roll |
+| iPad 11" | 1194 × 834, portrait 834 × 1194 | regular / regular | Scales to 13" without changes |
+| iPhone Duo, closed (outer) | 466 × 678 * | compact / regular | iPhone layout, short variant |
+| iPhone Duo, open (inner) | 890 × 626 * landscape, 626 × 890 * portrait | regular / regular | Two pages; tabletop when half folded |
 
-### 3.6 Empty project
+\* The Duo point sizes are third-party arithmetic from the published pixel sizes at 3x (1878 × 2670 inner, 1398 × 2034 outer). Apple's pages give the size classes but not point sizes. Confirm them in Xcode's Device Hub and read sizes at runtime rather than hard-coding them.
 
-A new project shows "Untitled Track 3 · Lo-Fi · not generated yet". Four empty rows with their names and hatched lanes, a centered card: "Nothing written yet", one sentence, a Generate button. Undo, Export and rewrite buttons are disabled, and the seed field shows "Random". Autosave still creates the project on disk so it appears in the library.
+No status bar, Dynamic Island or home indicator is drawn in the artboards; that space is left empty, and the system draws them. The insets used are 62 pt top and 34 pt bottom on iPhone portrait, 59 pt sides and 21 pt bottom on iPhone landscape, 24 pt top on iPad, and 44 / 16 pt on the Duo's outer display. On the Duo, Apple says safe areas can be asymmetric, with vertical bars giving leading or trailing insets, so treat each edge on its own.
 
-### 3.7 A track with no notes
+## 4. iPad
 
-The lane is hatched with a pill "No notes in this part" and a **Write the guitar** action that rewrites just that track against the others (same path as the rewrite button). It is not an error: a song can legitimately have, for example, no guitar, and it stays that way until the user asks.
+The iPad uses the Mac layout. The artboards are `Main.dc.html` and `Library.dc.html` with `platform="ipad"`, so any change to the Mac design flows to iPad automatically. Differences:
 
-### 3.8 Wide and minimum window
+- **Touch sizes** (`.touch` in `lfb.css`, `LFBSize` in Swift):
 
-- Minimum 900 × 560. Below 1100 wide the sidebar and inspector collapse (toolbar buttons bring them back as overlays), and the Model popup leaves the recipe bar and moves into a "Generation options" menu next to the Seed field. At 560 high each row is about 92 pt: all three lines of the header still fit.
-- Wide windows give the lanes the extra width. The header stays 232 wide and the inspector 272 wide, and the sidebar stays 216. Do not add columns or panels at very wide sizes; the lanes simply get longer and the time scale stays proportional.
-- See the "Minimum window" artboard.
+  | Element | Mac | iPad |
+  |---|---|---|
+  | Controls | 28 | 36 |
+  | M / S keys | 24 × 22 | 36 × 32 |
+  | Track header width | 232 | 264 |
+  | Transport height | 56 | 76 |
+  | Play button | 36 | 52 |
+  | Inspector width | 272 | 320 |
+  | Sidebar width | 216 | 300 |
+  | Slider thumbs | 16 | 24 |
+  | Effect cards | 64 | 76 |
 
-### 3.9 Version history
+  Keyboard hints (⌘↩) are hidden on iPad. With a hardware keyboard, the same shortcuts are listed when the user holds ⌘ (they come from `.commands`).
+- **No window chrome:** no traffic lights, and a 24 pt top inset for the status bar.
+- **Sidebar starts hidden while a project is open** to give the lanes width; the toolbar button shows it as an overlay. The library keeps it visible. The library grid is 3 columns in landscape.
+- **Portrait (834 wide):** the inspector and Model popup collapse exactly as on a narrow Mac window. The inspector toggle shows the inspector as an overlay from the trailing edge. The "iPad · Portrait · versions" artboard shows the stage with the version-listening banner.
+- **Piano roll with Apple Pencil:** Pencil draws notes directly; a finger selects, moves and scrolls, so no tool switch is needed. The editor header shows "Pencil draws · finger moves" until the user has used Pencil once. Squeeze on Apple Pencil Pro toggles Select / Draw. Pointer behaviour (trackpad) is the same as on Mac, including hover.
+- **Context menus** on library cards open on long press, with the same items as the Mac.
+- **Export finished:** the banner offers **Share…** and **Save to Files** instead of Show in Finder.
+- **Split View / Slide Over:** below regular width the app switches to the iPhone layout (`compact`). Nothing special is needed.
+- **Multiple windows:** allowed. Two windows on the same project share one `ProjectSession`, and only one plays at a time (the most recent).
 
-- **Every Generate, every track rewrite, every note-editing session and every restore creates a version.** Versions are listed newest first in the inspector's Versions tab, grouped by day.
-- A row shows four small bars (one per track, lit in that track's color where it changed), a title ("Rewrote bass", "New take · seed 48213", "Edited piano notes"), "Version 7 · 14:21", a star if kept, a badge ("Current" or "Listening"), and a play button.
-- **Compare by listening:** the play button on a version plays it from the current playhead position, so switching between versions keeps the same spot in the song. A banner appears: "Listening to version 4. Rewrote guitar, 14:02…" with **Back to current** and **Restore this version**. The lanes show that version's notes while it plays. Nothing changes until Restore.
-- **Restore** makes a new version on top ("Restored version 4") rather than rewinding, so no history is lost and restore is itself undoable.
-- **Star (keep)** protects a version from pruning. Prune unstarred versions older than 30 days or beyond the latest 200 (proposed limit; storage per version is small because the model writes notes, not audio).
-- Undo and Redo in the toolbar step the current version pointer for the last rewrite, as in the prototype; the full list is the long-term safety net.
+## 5. iPhone
 
-### 3.10 Export
+The artboards are `Phone.dc.html` (one component, a `view` prop for each state) and its wrappers.
 
-- A sheet (440 wide) from the toolbar button or `⌘E`: **Format** (WAV, M4A, MIDI, segmented), **Range** (Whole song, Loop range), a one-line note per format. M4A is the default.
-- **In progress:** the sheet shows a determinate progress bar ("Rendering audio… 0:52 of 1:30") and Cancel. Export renders offline, faster than real time, so keep the sheet modal; no background export queue is needed.
-- **Finished:** a banner "Exported. Sunday Market B-roll.m4a · 1:30 · 2.1 MB" with **Show in Finder** (primary) and Done. MIDI exports notes only, with a note saying effects and instruments are not included.
-- Audio exports include the mix and effects exactly as heard.
+### 5.1 Library and first launch
 
-## 4. Track row spec
+- **Library:** large title "Projects", a sort/filter menu at the leading edge, a **+** button (new project) at the trailing edge, a search field, and a 2-column grid of cards, each with a 4-lane thumbnail, name and "style · length · last edited". Long press opens the context menu: Rename, Duplicate, Export…, Copy Seed, Delete. Swipe actions are not used in a grid.
+- **First launch:** the welcome is stacked: mark, title, one sentence, the two style cards full width, the length slider, a full-width Generate button and the generator status. Generating creates the first project and pushes the project screen.
 
-Header 232 wide, three lines, 8 pt vertical and 12 pt horizontal padding, 4 pt between lines.
+### 5.2 Project screen
 
-1. Track tile (26 × 26, 7 radius, track color at 20% with the track ink glyph), name (rounded headline), M and S keys (24 × 22, 5 radius).
-2. Instrument popup (small, fills the width), then the rewrite button (or Stop when rewriting).
-3. Speaker glyph, volume slider tinted in the track color, value (0–100).
+From top to bottom:
 
-Lane: surface background, notes drawn at 4 pt height, one Canvas. Click seeks. The playhead and loop range are drawn once over all rows, not per row.
+1. **Navigation bar:** "‹ Projects" back button; title (rounded 16 semibold) with "Lo-Fi · 1:30 · Saved"; Undo; More (Export…, Rename, Duplicate, Copy Seed, Generation options › Model, Delete).
+2. **Recipe strip:** capsule chips (36 pt high):
+   - **Style:** a menu.
+   - **Length:** a popover with a slider and the value.
+   - **Seed:** a popover with the dice toggle, a numeric field and Copy. The chip is tinted when the dice is on.
+   - **New take:** the primary button; it reads "Generate" in an empty project.
 
-| State | Rule |
+   While a song is generating, the generating banner replaces the strip.
+3. **Ruler:** 0:00, 0:30, 1:00 labels, aligned with the lanes.
+4. **Four track cards** fill the remaining height (see 5.3).
+5. **Floating transport** (radius 26, raised, above the home indicator):
+   - **Top row:** a scrubber with the playhead knob and the loop range, then elapsed time · "Loop 0:30 – 0:52" · total.
+   - **Bottom row:** **Sound** (opens the sheet) · back to start · play (56 pt) · loop · **Versions** (opens the sheet).
+
+Below about 760 pt of height (the Duo's outer display), the short variant applies (`.m-short`): smaller card padding, a 48 pt play button, transport labels hidden, and the time row folded away.
+
+### 5.3 Track card
+
+- **Header (40 pt):** track tile, name with the instrument underneath, then Rewrite, M and S. Each is drawn at 40 × 36 with the hit area padded to 44.
+- **Lane:** the note overview, with the loop range, playhead and write head drawn in every lane.
+- **Gestures:**
+  - Tap the name for the track sheet.
+  - Long press the card for a context menu: Instrument, Edit notes, Rewrite.
+  - Tap a lane to seek; long press and drag in a lane to set the loop range.
+- **States:** the same as the Mac track row: normal, selected (2.5 pt outline in the track color), muted, soloed, silenced by another solo, rewriting (sweep, pill with Stop, the rewrite key becomes Stop), and empty (hatched lane with "Write the guitar").
+
+### 5.4 Sheets
+
+All sheets use the system sheet with a grabber. Background interaction stays enabled up to the medium detent, so the user can keep playing and scrubbing while adjusting sound.
+
+- **Track** (medium/large): instrument list with a checkmark, volume slider, Mute and Solo, "Edit notes ›", "Rewrite this part · about 5 s".
+- **Sound** (medium): the three effect cards (76 pt, the whole card is the slider) and Reset.
+- **Versions** (medium/large): the listening banner (Back to current, Restore) and the version list. Each row has its change bars, badges, and a 40 pt listen button that becomes Stop while listening. Swipe a row to Keep (star) it.
+- **Export** (medium):
+  - Format (WAV / M4A / MIDI) and Range (Whole song / Loop) as segmented controls, a note, then Export.
+  - While exporting, a determinate progress bar with Cancel.
+  - When finished, an "Exported" confirmation with **Share…** (the system share sheet, for example straight into a video editor) and **Save to Files**.
+
+### 5.5 Piano roll
+
+The piano roll is pushed full screen from "Edit notes".
+
+- **Portrait:**
+  - **Top bar:** Done, title "Piano · Electric Piano · 0:24 – 0:36", Select / Draw.
+  - **Option chips:** Snap and "Show other parts", plus Undo.
+  - **Roll:** 18 pt rows, 40 pt key column, a 12 s visible window, and ghost notes of the other parts.
+  - **Loudness lane** below the roll.
+  - **Action bar:** "4 selected · Loudness" slider, Duplicate, Delete, Play.
+- **Landscape** (the system rotates when the user turns the phone): one top bar holds every control, and the roll shows 24 s at 12 pt rows. The app only rotates in this editor; the rest of the app stays portrait on iPhone.
+- **Touch gestures:**
+  - Tap a note to select it; tap empty space to deselect.
+  - Drag a selected note to move it (snapped). Drag the round handle on its right edge to resize.
+  - One-finger drag on empty space scrolls; pinch zooms time; two-finger vertical drag scrolls pitch.
+  - Long press then drag on empty space draws a marquee.
+  - With the Draw tool, tap to add a note at the snap length.
+  - Drag a stem in the loudness lane to change that note's loudness.
+- The other three parts keep playing. A version is added when the user taps Done (one per editing session), the same as on Mac.
+
+### 5.6 States
+
+The same as the Mac, adapted:
+
+| State | iPhone |
 |---|---|
-| Normal | Full color. |
-| Selected | Editor open on this track: header tint 14% and lane tint 6% in the track color. |
-| Muted | M filled with the text color, notes grey at 45%, name and tile at 55%. |
-| Soloed | S filled with the accent. |
-| Silenced by another solo | Whole row at about 55%, notes 30%; controls stay live so the user can fix it. |
-| Rewriting | Notes 20%, sweep band, pill with Stop; rewrite button becomes Stop. |
-| Empty | Hatched lane, pill with "Write the …". |
+| Generating | Banner replaces the strip: spinner, "Writing a new take", "21 s so far, usually under a minute. Your current take is kept.", Cancel, indeterminate bar. Write head and partial notes in the lanes. Rewrite keys disabled. |
+| Rewriting one track | Only that card changes (sweep, pill, Stop). |
+| Empty track | Hatched lane, "No notes", **Write the guitar**. |
+| Empty project | Strip shows "Random" seed (tinted) and **Generate**; lanes empty; Undo disabled. |
+| Generator starting | Banner "Loading the music model… A few seconds after launch."; Generate reads "Waiting…". |
+| Generator not running | Warning banner "The generator isn't running. Play, mix, edit and export still work." with **Restart** and **Details**. |
+| Error | Error banner "That take didn't finish. Your song is unchanged." with **Try again** and **Details**. |
+| Export in progress, finished | Inside the Export sheet (see 5.4). |
 
-Color is never the only cue: each track also has its own icon, its name, and a fixed position in the list.
+## 6. iPhone Duo
 
-## 5. Design system summary
+### 6.1 Closed
 
-Full values in `tokens.json`; the canvas has the visual sheet.
+The outer display is a compact-width iPhone, so the iPhone layout is used unchanged, in its short variant at 466 × 678. See "Duo closed · Project" and "Duo closed · Sound · dark".
 
-- **Accent:** Dendê vermilion `#C4441A` (light) and `#FF8D61` (dark). It marks the primary action, the playhead area wash, the solo key and toggled buttons. Used sparingly.
-- **Track colors:** Piano indigo, Guitar honey, Bass orchid, Drums sea green. They differ in lightness as well as hue, so they stay distinguishable for the common color-blind types. Use the `…Ink` variants for text and glyphs to keep 4.5:1 contrast.
-- **Neutrals:** warm paper and espresso. Light window `#F5F2EC`, dark window `#1D1A17`. Hairlines are warm alpha colors, not grey.
-- **Type:** SF Pro for text, SF Pro Rounded for titles, project names, effect names and timecodes (`.fontDesign(.rounded)`). Sizes 26 / 17 / 14 / 13 / 11.
-- **Spacing:** 4, 8, 12, 16, 24. **Radii:** 5 keys, 7 buttons, 8 segmented, 10 banners, 12 cards and sheets, capsule for pills and chips.
-- **Controls:** native `Picker`, `Slider`, segmented control, `Menu`, `Toggle`. The only styled controls are the M/S keys, the Effect cards, the seed field and the pills.
-- **Icons:** SF Symbols (list on the "Design system" artboard). The canvas draws stand-in glyphs; use the named symbols in the build. Drums needs a custom symbol (no suitable system symbol exists).
-- **Motion:** sweep 1.8 s, write-head pulse 1.2 s, spinner 0.8 s, all disabled or made static under Reduce Motion.
+### 6.2 Open: two pages
 
-## 6. SwiftUI implementation notes
+The inner display is regular/regular. The app splits it into two equal pages with a 24 pt gap centred on the fold. The red guides on the canvas mark the fold.
 
-**Standard controls and containers**
+| Mode | Left page | Right page |
+|---|---|---|
+| Library | Large title, search, list of projects (thumbnail, name, meta) | Preview of the selected project: large 4-lane thumbnail, name, "style · length · seed · versions · edited", **Open**, preview play, Duplicate, Export |
+| Project | Nav bar, recipe strip, four track cards, single-row transport (play, time, scrubber with loop range, loop) | Segmented **Sound / Versions / Notes**, then that panel |
+| Generating | Banner with Cancel, write head in the lanes | Sound stays usable: "Keep playing with the sound while the new take is written." |
+| Piano roll | The piano card is selected (outlined); the other parts stay visible and audible | Notes: Select / Draw, Snap, roll with 17 pt rows, loudness lane, "4 selected · Loudness", Delete, Done |
+| Versions | Lanes show the version being listened to | Listening banner and version list |
 
-- `NavigationSplitView` (sidebar) and `.inspector(isPresented:)` (right panel, macOS 14).
-- `.toolbar` with `ToolbarItem` groups; `.searchable` for library search; `LazyVGrid` with `.contextMenu` and inline rename (`@FocusState` + `TextField`).
-- `Picker` (`.segmented` and `.menu` styles), `Slider`, `Menu`, `Toggle(.button)` for Snap and "Show other parts".
-- `.sheet` for Export with `ProgressView(value:)`; `.fileExporter` or an `NSSavePanel` wrapper for the final write; `NSWorkspace.activateFileViewerSelecting` for Show in Finder.
-- `UndoManager` through the environment for Undo/Redo; menu commands via `.commands` (see `LoFiBossaApp.swift`).
-- `.fontDesign(.rounded)`, `monospacedDigit()`, SF Symbols, `ContentUnavailableView` for empty states.
+**Rules for the fold:**
 
-**Custom drawing and interaction**
+- Nothing interactive spans the fold. Lanes, the transport scrubber and the piano roll each stay on one page, because a drag across the fold is unreliable when the device is half folded.
+- The same split is used flat and half folded like a book, so nothing jumps when the hinge moves. This follows Apple's advice not to design a bespoke layout for every way the device is held.
+- When Apple's `ArrangementView` and `ReservedRegion` APIs (iOS 27.1) are adopted, they replace the fixed split and keep the gap where the system says the fold is.
 
-- **Note lanes and library thumbnails:** one `Canvas` each (`NoteLaneView`). Cheap enough for 4 lanes of a few hundred notes.
-- **Ruler, playhead, loop range:** a single overlay across the rows with a `DragGesture` for range selection and `SpatialTapGesture` for seek. Drive the playhead from the audio engine's clock with `TimelineView(.animation)`, not from a `@State` timer.
-- **Piano roll:** `Canvas` plus gestures for select, move, resize and marquee. Hit-test against the model, not views. If scrolling and zooming 24 s windows with a few hundred notes ever stutters, move this one surface to an `NSViewRepresentable` backed by a layer-based `NSView`. This is the only piece where that is likely to be needed.
-- **Effect cards:** custom drag surface with an accessibility adjustable action (`EffectCard.swift`).
-- **M/S keys, seed field, pills, status pill:** small `ButtonStyle`s and views.
-- **Sweep and write head:** `TimelineView(.animation)` with `GeometryReader`; both must honor `accessibilityReduceMotion`.
+### 6.3 Half folded, fold horizontal: tabletop
 
-**Audio**
+When the Duo is rotated and half folded so that it stands on a table:
 
-- The model writes notes; the app plays them with sampled instruments (`AVAudioUnitSampler` per track, or a sampler bank) through an `AVAudioEngine` graph: four tracks, per-track volume and mute/solo, then master Warmth (low-pass `AVAudioUnitEQ` or a custom filter), Reverb (`AVAudioUnitReverb`) and Vinyl (a noise and crackle source mixed in). Export renders the same graph offline with `enableManualRenderingMode`. MIDI export writes the notes only (`MusicSequence` or a small SMF writer).
-- Looping and range export both take `ClosedRange<Double>` in seconds.
+- **Top half (watch):** title, and four full-width lanes with a name tag, loop range and playhead.
+- **Bottom half (touch):** a large transport (back, 64 pt play, loop, time), three tall effect cards side by side, and a Solo button per track.
 
-**State**
+This is the "mix while it plays" posture. Generation, versions and the piano roll stay available by flattening the device, which returns to the two-page layout with state unchanged.
 
-- One `@Observable` view model per open project holding: current snapshot, generation phase, generator status, playhead, loop range, selected track, selected notes, listening-version id. Mutations go through methods that also create versions and call `ProjectStore.update`.
-- Rewrites and generations run as cancellable `Task`s; Cancel and Stop cancel the task and the request to the process. A rewrite must send the other three tracks so the model can fit the part to them.
+### 6.4 Fold and hinge APIs
 
-**Accessibility**
+Apple's developer forum names these, for the iOS 27.1 SDK. Verify the shipping signatures before use; they are written as TODOs in `LayoutMode.swift` and `DuoViews.swift`.
 
-- Every icon-only button has a label. M and S announce on/off. Effect cards are adjustable. The track row is a `contain` group named "Piano track". Status changes (generator ready/offline, generation finished or failed) post an accessibility announcement.
-- Piano-roll notes need a keyboard path: select with arrows, nudge with modifier arrows, delete with Delete. Budget time for this; it is the largest accessibility item.
+- **`onHingeChange` (SwiftUI) / `UIHingeInteraction` (UIKit):** hinge status and angle. Prefer the status (closed, partially open, open) over an angle threshold.
+- **`ReservedRegion`:** the fold and camera areas to keep custom controls out of.
+- **`ArrangementView`:** split layouts across the fold.
+- **`toolbarVerticalEdge`:** vertical toolbars. Not used by this design, which keeps its toolbars horizontal.
+- **Testing:** use Device Hub in Xcode 27.1 to test the Duo's positions (closed, open, half folded, tabletop).
 
-## 7. Suggested build order
+## 7. The generator on iPhone and iPad (architecture note)
 
-1. Tokens and Asset Catalog (done in this package), app icon.
-2. Models and `ProjectStore` with autosave; library with create, rename, duplicate, delete, search.
-3. Project view with static data: recipe bar, four `TrackRowView`s, ruler, transport, inspector Sound tab.
-4. Audio engine playback, mute/solo/volume, seek, loop, effects.
-5. `GeneratorClient` against the local process; status pill and banners; generate with cancel; per-track rewrite.
-6. Versions (create, list, listen, restore, keep).
-7. Piano-roll editor.
-8. Export (WAV, M4A, MIDI) with range.
-9. First launch and polish: Reduce Motion, VoiceOver pass, keyboard shortcuts.
+On the Mac, the model runs in a separate local background process. iOS and iPadOS do not allow an app to keep its own long-running helper process, so on these devices the model has to run **inside the app**, for example with Core ML or MLX. The UI states stay the same, but they mean different things:
 
-## 8. Assumptions and open questions
+| State | Mac | iPhone / iPad |
+|---|---|---|
+| Starting | Process launching | Loading the model into memory after launch |
+| Offline ("isn't running") | Process not running | Model not loaded: failed to load, not enough memory, or not downloaded yet |
+| Restart | Relaunch the process | Reload the model; if it is not on the device, offer **Download model ([MODEL SIZE])** |
 
-- **Streaming notes.** The write-head animation assumes the model can stream notes while it writes. If it only returns a finished song, use the sweep and the elapsed-time banner. Please confirm with the generator work.
-- **Seed meaning for rewrites.** A rewrite seed is derived from the song seed plus the track, so "same seed, same song" still holds for generations only. Rewrites are reproduced from the saved version, not from the seed.
-- **Version for note edits.** The design adds a version per editing session ("Edited piano notes"). If versions should be generations only, drop this kind and let note edits live on the current version.
-- **Version limits** (30 days, 200 versions) are proposals.
-- **Instrument names** per track are placeholders; replace with the real sampler bank.
-- **Project names** and sample numbers in the artboards are illustrative content. "Dendê" and the style captions are copy suggestions and can change.
-- **Icon:** delivered as a classic `AppIcon.appiconset` and `.icns`. For macOS 26 and later you can also build a layered icon in Icon Composer using the SVG: the sun disc, the four notes and the ground are separate shapes in `icon.svg`. The 16 and 32 px renders are plain downsamples; check them in the Dock and simplify (thicker outlines, fewer vinyl rings) if the notes blur.
-- **Not designed:** Preferences, onboarding for the sampler download (if any), a bar/beat grid, Recently Deleted screen (it is the library filtered to deleted items), and localization.
+- **Backgrounding:** iOS suspends apps it moves to the background. A 15–60 s generation would be lost if the user switches apps. Options to evaluate: `BGContinuedProcessingTask` (iOS 26 and later, for user-started work that should finish; verify that it fits a GPU or Neural Engine workload), or keep the take on suspension and offer "Try again" on return. The design assumes the second option as the fallback: the banner turns into the error banner, and the current take is never lost.
+- **Speed, memory and heat:** timings on iPhone may differ from the Mac's 15–60 s. Replace "usually under a minute" with measured estimates per device class, and handle thermal pressure as an error state with the same copy.
+- **Alternative:** iPhone and iPad could use a nearby Mac's generator instead. That is a product decision (see 11).
+
+## 8. Audio and files on iOS
+
+- **Audio session:** use the `.playback` category so music plays with the silent switch on. Enable the background audio mode so playback continues when the user leaves the app. Pause on interruptions (calls) and on headphone unplug.
+- **Export:** write to a temporary file, then present `ShareLink` or the share sheet (Share…) or `fileExporter` (Save to Files). The audio rendering path (`AVAudioEngine` manual rendering) is the same as on Mac.
+- **Projects:** stored in the app's Application Support folder, exactly as on Mac (`ProjectStore`).
+
+## 9. Icon
+
+- `icon/AppIcon-iOS.png`: full-bleed, opaque 1024 × 1024. The system applies the rounded mask, so the artwork is scaled up from the Mac grid.
+- `icon/AppIcon-iOS-dark.png`: the sun and notes on a transparent background, for the dark Home Screen.
+- `icon/AppIcon-iOS-tinted.png`: grey sun with white notes on transparent, so the notes stay legible when the system tints the icon.
+- `starter/LoFiBossa/Assets.xcassets/AppIcon.appiconset`: one set holding both the Mac sizes and the iOS universal 1024 variants.
+- `icon/layers/`: background, sun and notes as separate SVGs, to rebuild the icon in Icon Composer for the current layered and glass icon styles on every platform.
+
+Check the dark and tinted variants on a device. The tinted variant follows the common convention of grayscale artwork on transparent; confirm with Xcode's preview.
+
+## 10. Accessibility on touch
+
+- Every touch target has at least a 44 pt hit area. M, S and Rewrite are drawn smaller, at 40 × 36, and padded.
+- Track cards expose VoiceOver custom actions (Mute, Solo, Rewrite, Edit notes, Change instrument), so the card can be one element with actions rather than five stops.
+- **Dynamic Type:**
+  - Chips, cards and sheets grow with the text size.
+  - At accessibility sizes, the instrument line under the track name moves into the track sheet, and the transport keeps only its icons.
+  - The piano roll keeps its size and offers zoom instead.
+- The effect cards are adjustable (swipe up or down), and the sweeps and write head respect Reduce Motion, the same as on Mac.
+
+## 11. Assumptions and open questions
+
+1. **Where the generator runs** on iPhone and iPad: in the app (assumed here), or on a nearby Mac. This affects download size, speed and the offline state's recovery button.
+2. **Sync across devices:** with the same features everywhere, users will expect a project made on the iPhone to open on the Mac. Projects are local per device in this design. iCloud sync (CloudKit, or iCloud Drive with a project package) is recommended, and would need a small "synced / syncing / conflict" design. This is not designed yet.
+3. **Duo point sizes and fold position:** unconfirmed (see 3). The design depends only on the fold being at the centre of the inner display.
+4. **Duo multiple windows:** Apple allows multiple windows on the inner display. The design supports it through the regular layout but does not show it.
+5. **iPhone orientation:** portrait only, except in the piano roll. Confirm this is acceptable.
+6. **Model size and download flow** on iOS: the placeholder is [MODEL SIZE]. A download progress state is needed if the model is not bundled.
+
+## 12. Swift starter: what is new
+
+| File | Purpose |
+|---|---|
+| `Platform/LayoutMode.swift` | `LayoutMode`, `FoldInfo` environment value, `LayoutModeReader` (size class + fold) |
+| `Models/ProjectSession.swift` | Shared, observable state above the layout switch; `Panel` and `CompactSheet` |
+| `Views/Shared/PanelView.swift` | Sound, Versions, Notes panel used by every layout; piano-roll gesture spec per input |
+| `Views/Phone/TrackCard.swift` | Compact track card with all states and the 44 pt touch key style |
+| `Views/Phone/PhoneProjectView.swift` | iPhone project screen, recipe strip, floating transport, sheets with detents |
+| `Views/Duo/DuoViews.swift` | Two-page project view and tabletop view |
+| `App/LoFiBossaApp.swift` | Multiplatform app, shared commands, `AdaptiveRootView` |
+| `DesignSystem/Tokens.swift` | Adds touch sizes (`LFBSize.isTouch`) and phone/Duo sizes |
+
+**Suggested order after the Mac build order:**
+
+1. Adopt `ProjectSession` and `LayoutModeReader` and run the Mac layout on iPad.
+2. Build the iPhone project screen and the sheets.
+3. Build the iPhone piano roll with touch gestures.
+4. Add Pencil support on iPad.
+5. Add the Duo two-page and tabletop layouts, then adopt the iOS 27.1 fold APIs.
+6. Do the in-app generator work (section 7) in parallel from the start; it is the largest risk.
+
+## Sources for the iPhone Duo facts
+
+- [Prepare your app for iPhone Duo (Apple Tech Talk)](https://developer.apple.com/videos/play/tech-talks/111461/): size classes, adaptive navigation, safe areas, reserved regions, Device Hub.
+- [Apple Developer Forums thread 847644](https://developer.apple.com/forums/thread/847644): API names (`onHingeChange`, `ReservedRegion`, `ArrangementView`), continuity on fold and unfold.
+- [Apple Newsroom, October 2026](https://www.apple.com/newsroom/2026/10/developers-bring-incredible-new-app-experiences-to-iphone-duo/): fold-aware standard components, half-folded examples.
+- [MacRumors: iPhone Duo](https://www.macrumors.com/roundup/iphone-duo/): display sizes and resolutions, open and closed dimensions.
+- [ziplyne.agency](https://ziplyne.agency/blog/iphone-duo-for-developers-screen-sizes-layout-rules-and-the-new-apis), [DEV Community](https://dev.to/arshtechpro/iphone-duo-for-ios-developers-what-actually-changes-in-your-swift-code-5gc5): third-party point-size estimates; not Apple sources.

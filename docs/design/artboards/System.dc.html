@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lo-Fi &amp; Bossa — design system</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./lfb.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Nunito:wght@500;600;700&display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div class="sheetpg" style="width: 1400px; min-height: 1640px">
+<sc-for list="{{themes}}" as="th" hint-placeholder-count="2">
+<div class="lfb panel {{th.cls}}">
+  <h2 class="rd">Design system · {{th.name}}</h2>
+
+  <h3>Color</h3>
+  <div class="sw">
+    <sc-for list="{{th.colors}}" as="c" hint-placeholder-count="16">
+    <div class="swi"><i style="background: var({{c.v}})"></i><b>{{c.n}}</b><span class="num">{{c.hex}}</span></div>
+    </sc-for>
+  </div>
+  <p class="cap">Track colors are told apart by lightness as well as hue, and every track also carries its own icon, name and fixed row position, so color is never the only cue.</p>
+
+  <h3>Typography · SF Pro for text, SF Pro Rounded for titles and numerals</h3>
+  <div style="display: flex; flex-direction: column; gap: 8px">
+    <div class="flexrow" style="justify-content: space-between"><span class="rd" style="font-size: 26px; font-weight: 700">Make your first track</span><span class="cap">Large title · Rounded 26 / bold</span></div>
+    <div class="flexrow" style="justify-content: space-between"><span class="rd" style="font-size: 17px; font-weight: 600">Nothing written yet</span><span class="cap">Title · Rounded 17 / semibold</span></div>
+    <div class="flexrow" style="justify-content: space-between"><span class="rd" style="font-size: 14px; font-weight: 600">Sunday Market B-roll</span><span class="cap">Headline · Rounded 14 / semibold</span></div>
+    <div class="flexrow" style="justify-content: space-between"><span>Rewriting the bass to fit the other three…</span><span class="cap">Body · SF Pro 13 / regular</span></div>
+    <div class="flexrow" style="justify-content: space-between"><span class="lb">Lo-Fi · 1:30 · Version 7 · Saved</span><span class="cap">Caption · SF Pro 11 / medium</span></div>
+    <div class="flexrow" style="justify-content: space-between"><span class="time rd num" style="margin: 0">0:36 <small>/ 1:30</small></span><span class="cap">Timecode · Rounded 20 / semibold, monospaced digits</span></div>
+  </div>
+
+  <h3>Spacing · 4-point steps</h3>
+  <div class="flexrow" style="align-items: flex-end">
+    <sc-for list="{{spaces}}" as="s" hint-placeholder-count="5"><div style="display: flex; flex-direction: column; gap: 4px; align-items: flex-start"><div class="box" style="width: {{s}}px"></div><span class="cap num">{{s}}</span></div></sc-for>
+    <span class="cap" style="margin-left: 8px">4 inside controls · 8 between controls · 12 panel padding · 16 bar padding · 24 between groups</span>
+  </div>
+
+  <h3>Corner radii</h3>
+  <div class="flexrow">
+    <sc-for list="{{radii}}" as="r" hint-placeholder-count="5"><div style="display: flex; flex-direction: column; gap: 4px"><div class="rad" style="border-radius: {{r.px}}px"></div><span class="cap">{{r.label}}</span></div></sc-for>
+  </div>
+
+  <h3>Buttons and pickers</h3>
+  <div class="flexrow">
+    <button class="btn pri"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="{{ic.sparkle}}"></path></svg>Generate <kbd>⌘↩</kbd></button>
+    <button class="btn">Export</button>
+    <button class="btn off">Disabled</button>
+    <button class="btn sm pop"><span>Electric Piano</span><svg class="i sm" viewBox="0 0 16 16" aria-hidden="true"><path d="{{ic.updown}}"></path></svg></button>
+    <div class="seg" role="group" aria-label="Style"><button class="on">Lo-Fi</button><button>Bossa Nova</button></div>
+  </div>
+
+  <h3>Track toggles, sliders, seed field</h3>
+  <div class="flexrow">
+    <span class="flexrow" style="gap: 4px"><button class="ms" aria-label="Mute, off">M</button><button class="ms m" aria-label="Mute, on">M</button><button class="ms" aria-label="Solo, off">S</button><button class="ms s" aria-label="Solo, on">S</button></span>
+    <div class="sl" style="flex: none; width: 120px"><i style="width: 60%"></i><b style="left: 60%"></b></div>
+    <div class="seed"><button class="on" aria-label="New random seed each time, on"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="{{ic.dice}}"></path></svg></button><span class="n num ph">Random</span><button aria-label="Copy seed"><svg class="i sm" viewBox="0 0 16 16" aria-hidden="true"><path d="{{ic.copy}}"></path></svg></button></div>
+    <div class="seed"><button aria-label="New random seed each time, off"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="{{ic.dice}}"></path></svg></button><span class="n num">48213</span><button aria-label="Copy seed"><svg class="i sm" viewBox="0 0 16 16" aria-hidden="true"><path d="{{ic.copy}}"></path></svg></button></div>
+  </div>
+  <p class="cap">Seed field: dice on means a fresh seed on every Generate. Typing or pasting a number turns the dice off and pins that seed. The copy button copies the current song’s seed.</p>
+
+  <h3>Effect slider · the whole card is the drag target</h3>
+  <div class="macro" style="width: 272px">
+    <div class="fill" style="width: 62%"></div>
+    <div class="in"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="{{ic.sun}}"></path></svg><div><b class="rd">Warmth</b><small>Softens the highs</small></div><span class="v rd num">62</span></div>
+  </div>
+
+  <h3>Status and progress</h3>
+  <div class="flexrow">
+    <span class="status"><i class="dot"></i><span>Generator ready</span></span>
+    <span class="status"><span class="spin" style="width: 12px; height: 12px"></span><span>Generator starting…</span></span>
+    <span class="status err"><svg class="i sm" viewBox="0 0 16 16" aria-hidden="true"><path d="{{ic.warn}}"></path></svg><span>Generator offline</span></span>
+    <span class="badge">Current</span><span class="badge acc">Listening</span>
+    <span class="chip num">0:30 – 0:52</span>
+  </div>
+  <div class="flexrow"><div class="prog" style="width: 200px"><i></i></div><span class="cap">Unknown length: generating</span><div class="prog" style="width: 200px"><b style="width: 58%"></b></div><span class="cap">Known length: export</span></div>
+
+  <h3>Icons · drawn here as stand-ins, shipped as SF Symbols</h3>
+  <div class="icg">
+    <sc-for list="{{icons}}" as="k" hint-placeholder-count="28">
+    <div class="ici"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="{{k.d}}"></path></svg><span>{{k.sf}}</span></div>
+    </sc-for>
+  </div>
+</div>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1400,"height":1640}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var ic = {
+      sparkle: 'M8 2.5l1.3 3.7 3.7 1.3-3.7 1.3L8 12.5 6.7 8.8 3 7.5l3.7-1.3z',
+      updown: 'M5.5 6.5 8 4l2.5 2.5M5.5 9.5 8 12l2.5-2.5',
+      dice: 'M3.5 2.5h9a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1zM5.5 5.5h.01M10.5 5.5h.01M8 8h.01M5.5 10.5h.01M10.5 10.5h.01',
+      copy: 'M5.5 5.5v-2a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-2M3.5 5.5h6a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-6a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1z',
+      sun: 'M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM8 1.5V3M8 13v1.5M1.5 8H3M13 8h1.5M3.4 3.4l1.1 1.1M11.5 11.5l1.1 1.1M3.4 12.6l1.1-1.1M11.5 4.5l1.1-1.1',
+      warn: 'M8 2.5l6 10.5H2zM8 6.5v3M8 11.2h.01'
+    };
+    var icons = [
+      ['M2.5 3.5h11v9h-11zM6.2 12.5v-4M9.8 12.5v-4M5 3.5v5h2.4v-5M8.6 3.5v5H11v-5', 'pianokeys'],
+      ['M6 13.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM8.5 7.5l5-5M12 2l2 2M6 10h.01', 'guitars'],
+      ['M2 8c1.5-5 3.5-5 6 0s4.5 5 6 0', 'waveform.path (bass)'],
+      ['M3 6.5c0-1.4 2.2-2.5 5-2.5s5 1.1 5 2.5v4c0 1.4-2.2 2.5-5 2.5s-5-1.1-5-2.5zM3 6.5c0 1.4 2.2 2.5 5 2.5s5-1.1 5-2.5M4 1.5l3 3M12 1.5l-3 3', 'custom symbol (drums)'],
+      [ic.sparkle, 'sparkles'],
+      ['M13 8a5 5 0 0 1-9 3M3 8a5 5 0 0 1 9-3M12 2.5V5H9.5M4 13.5V11h2.5', 'arrow.triangle.2.circlepath'],
+      ['M5 3.2v9.6L12.8 8z', 'play.fill'],
+      ['M5 3.5v9M11 3.5v9', 'pause.fill'],
+      ['M4.5 4.5h7v7h-7z', 'stop.fill'],
+      ['M4 3.5v9M12.5 3.5v9L6 8z', 'backward.end'],
+      ['M3 7V6a2 2 0 0 1 2-2h7.5M10.5 2l2 2-2 2M13 9v1a2 2 0 0 1-2 2H3.5M5.5 14l-2-2 2-2', 'repeat'],
+      ['M4 6.5h5.5a3 3 0 0 1 0 6H6M6.5 4 4 6.5 6.5 9', 'arrow.uturn.backward'],
+      ['M8 10V2.5M5.5 5 8 2.5 10.5 5M3.5 8.5v4a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1v-4', 'square.and.arrow.up'],
+      ['M2.5 4a1.5 1.5 0 0 1 1.5-1.5h8A1.5 1.5 0 0 1 13.5 4v8a1.5 1.5 0 0 1-1.5 1.5H4A1.5 1.5 0 0 1 2.5 12zM6 2.5v11', 'sidebar.left'],
+      ['M2.5 4a1.5 1.5 0 0 1 1.5-1.5h8A1.5 1.5 0 0 1 13.5 4v8a1.5 1.5 0 0 1-1.5 1.5H4A1.5 1.5 0 0 1 2.5 12zM10 2.5v11', 'sidebar.right'],
+      [ic.dice, 'dice'],
+      [ic.copy, 'doc.on.doc'],
+      ['M2.5 6.5v3h2l3 2.5v-8l-3 2.5zM10 6a3 3 0 0 1 0 4M11.8 4.2a5.5 5.5 0 0 1 0 7.6', 'speaker.wave.2'],
+      [ic.sun, 'sun.max (warmth)'],
+      ['M8 9.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zM4.5 11.5a5 5 0 0 1 0-7M11.5 4.5a5 5 0 0 1 0 7M2.5 13.5a8 8 0 0 1 0-11M13.5 2.5a8 8 0 0 1 0 11', 'dot.radiowaves.left.and.right'],
+      ['M8 14a6 6 0 1 0 0-12 6 6 0 0 0 0 12zM8 9.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zM4.5 8A3.5 3.5 0 0 1 8 4.5', 'opticaldisc (vinyl)'],
+      ['M3 9.5V8a5 5 0 0 1 10 0v1.5M3 9.5h2v4H4a1 1 0 0 1-1-1zM13 9.5h-2v4h1a1 1 0 0 0 1-1z', 'headphones'],
+      ['M8 2.5l1.7 3.5 3.8.5-2.8 2.7.7 3.8L8 11.2 4.6 13l.7-3.8L2.5 6.5l3.8-.5z', 'star.fill'],
+      ['M4 2.5l8 6-3.5.7 2 3.8-1.5.8-2-3.8L4.5 12.5z', 'cursorarrow'],
+      ['M10.5 3l2.5 2.5-7 7-3 .5.5-3z', 'pencil'],
+      ['M3 4.5h10M6 4.5v-2h4v2M4.5 4.5l.5 9h6l.5-9', 'trash'],
+      ['M7 11.5a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9zM10.5 10.5l3 3', 'magnifyingglass'],
+      [ic.warn, 'exclamationmark.triangle']
+    ].map(function (k) { return { d: k[0], sf: k[1] }; });
+    var tokens = [
+      ['Window', '--bg', '#F5F2EC', '#1D1A17'], ['Sidebar', '--side', '#EBE7DF', '#24211D'], ['Surface', '--surface', '#FCFBF8', '#282420'], ['Well', '--sunk', '#EEEAE3', '#171411'],
+      ['Text', '--text', '#26211C', '#F3EEE7'], ['Text secondary', '--text2', '#5A5249', '#BDB3A7'], ['Text tertiary', '--text3', '#6E655B', '#9C9287'], ['Accent · Dendê', '--accent', '#C4441A', '#FF8D61'],
+      ['Piano · Indigo', '--piano', '#2F55A8', '#7C9EF0'], ['Guitar · Honey', '--guitar', '#D69A14', '#F5C75C'], ['Bass · Orchid', '--bass', '#D277AE', '#F2A7D2'], ['Drums · Sea green', '--drums', '#12866B', '#3FBF9C'],
+      ['Ready', '--ok', '#0E6E58', '#3FBF9C'], ['Caution', '--warn', '#8A5F00', '#F5C75C'], ['Error', '--err', '#B3261E', '#FF8A80'], ['Accent wash', '--accent-soft', '14% accent', '18% accent']
+    ];
+    function colors(i) { return tokens.map(function (t) { return { n: t[0], v: t[1], hex: t[i] }; }); }
+    return {
+      ic: ic, icons: icons, spaces: [4, 8, 12, 16, 24],
+      radii: [{ px: 5, label: '5 · M / S' }, { px: 7, label: '7 · buttons' }, { px: 10, label: '10 · banners' }, { px: 12, label: '12 · cards' }, { px: 18, label: 'Capsule' }],
+      themes: [{ name: 'Light', cls: '', colors: colors(2) }, { name: 'Dark', cls: 'dark', colors: colors(3) }]
+    };
+  }
+}
+</script>
+</body>
+</html>
