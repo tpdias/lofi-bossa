@@ -1,5 +1,7 @@
 import SwiftUI
+#if os(macOS)
 import AppKit
+#endif
 
 /// Note editor for one track, opened as a split pane under the (now compact) track rows.
 ///
@@ -321,12 +323,15 @@ struct PianoRollView: View {
             scrollIndicators.allowsHitTesting(false)
             // Wheel / trackpad scrolling and pinch: SwiftUI (macOS 14) has no hook for them, so a
             // small AppKit view answers only those events and lets everything else through.
+            // (Touch gestures for the iPhone and iPad piano roll come with those layouts.)
+            #if os(macOS)
             ScrollCatcher(
                 onScroll: { dx, dy, precise in
                     let k: CGFloat = precise ? 1 : 8
                     scrollBy(dx: -dx * k, dy: -dy * k)
                 },
                 onMagnify: { setZoom(zoom * (1 + $0)) })
+            #endif
         }
         .clipped()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -407,8 +412,13 @@ struct PianoRollView: View {
 
     // MARK: Gestures (points are in the scrolled surface's coordinates)
 
+    #if os(macOS)
     private var shiftHeld: Bool { NSEvent.modifierFlags.contains(.shift) }
     private var optionHeld: Bool { NSEvent.modifierFlags.contains(.option) }
+    #else
+    private var shiftHeld: Bool { false }   // hardware-keyboard modifiers: iPad layout work
+    private var optionHeld: Bool { false }
+    #endif
 
     private func audition(_ pitch: Int, _ velocity: Int = 90) {
         model.previewNote(pitch: pitch, velocity: velocity, track: track)
@@ -721,6 +731,7 @@ struct PianoRollView: View {
     }
 }
 
+#if os(macOS)
 /// Invisible AppKit view over the roll that handles only scroll-wheel and pinch events.
 private struct ScrollCatcher: NSViewRepresentable {
     var onScroll: (CGFloat, CGFloat, Bool) -> Void
@@ -752,6 +763,7 @@ private struct ScrollCatcher: NSViewRepresentable {
         override func magnify(with event: NSEvent) { onMagnify(event.magnification) }
     }
 }
+#endif
 
 private extension Comparable {
     func clamped(to range: ClosedRange<Self>) -> Self { min(max(self, range.lowerBound), range.upperBound) }

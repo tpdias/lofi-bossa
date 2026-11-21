@@ -1,6 +1,8 @@
 import SwiftUI
-#if canImport(AppKit)
+#if os(macOS)
 import AppKit
+#else
+import UIKit
 #endif
 
 // MARK: - Dynamic color
@@ -16,12 +18,21 @@ extension Color {
     /// A color that resolves differently in light and dark appearance, like an Asset Catalog
     /// colorset with two variants.
     init(light: (Double, Double, Double, Double), dark: (Double, Double, Double, Double)) {
+        #if os(macOS)
         func rgba(_ v: (Double, Double, Double, Double)) -> NSColor {
             NSColor(srgbRed: v.0, green: v.1, blue: v.2, alpha: v.3)
         }
         self = Color(NSColor(name: nil) { appearance in
             appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? rgba(dark) : rgba(light)
         })
+        #else
+        func rgba(_ v: (Double, Double, Double, Double)) -> UIColor {
+            UIColor(red: v.0, green: v.1, blue: v.2, alpha: v.3)
+        }
+        self = Color(UIColor { traits in
+            traits.userInterfaceStyle == .dark ? rgba(dark) : rgba(light)
+        })
+        #endif
     }
 
     /// Convenience for a token with no separate light/dark value.
@@ -122,6 +133,74 @@ enum LFBSize {
     static let effectCardHeight: CGFloat = 64
     static let libraryCardThumbHeight: CGFloat = 112
     static let minWindow = CGSize(width: 960, height: 560)
+}
+
+/// Touch sizes (tokens.json `sizeTouch`, `sizePhone`, `devices`). Additions only: `LFBSize`
+/// above stays the Mac's pointer sizes, so nothing on the Mac changes. iPad uses the Mac layout
+/// with `LFBTouchSize` values (HANDOFF §4); iPhone and the iPhone Duo use `LFBPhoneSize` (§5, §6).
+extension LFBSize {
+    #if os(macOS)
+    static let isTouch = false
+    #else
+    static let isTouch = true
+    #endif
+}
+
+/// iPad: the Mac layout, touch-sized (tokens.json `sizeTouch`).
+enum LFBTouchSize {
+    static let controlHeight: CGFloat = 36
+    static let controlHeightSmall: CGFloat = 32
+    static let keyMS = CGSize(width: 36, height: 32)          // M / S keys (Mac: 24 × 22)
+    static let trackHeaderWidth: CGFloat = 264
+    static let trackRowMinHeight: CGFloat = 112
+    static let transportHeight: CGFloat = 76
+    static let playButton: CGFloat = 52
+    static let inspectorWidth: CGFloat = 320
+    static let sidebarWidth: CGFloat = 300
+    static let sliderThumb: CGFloat = 24
+    static let effectCardHeight: CGFloat = 76
+    static let topInset: CGFloat = 24                         // status bar, no window chrome
+}
+
+/// iPhone and iPhone Duo (tokens.json `sizePhone`).
+enum LFBPhoneSize {
+    static let navBar: CGFloat = 44
+    static let chipHeight: CGFloat = 36
+    static let cardRadius: CGFloat = 18
+    static let cardHeader: CGFloat = 40
+    static let keyMS = CGSize(width: 40, height: 36)          // drawn size; hit area padded to 44
+    static let minHitTarget: CGFloat = 44
+    static let laneRadius: CGFloat = 10
+    static let transportRadius: CGFloat = 26
+    static let playButton: CGFloat = 56
+    static let playButtonShort: CGFloat = 48
+    static let sheetRadius: CGFloat = 34
+    static let listRow: CGFloat = 50
+    static let bigButton: CGFloat = 52
+    static let pianoRowHeight: CGFloat = 18
+    static let pianoRowHeightLandscape: CGFloat = 12
+    static let pianoKeyColumn: CGFloat = 40
+    /// Below this height (the Duo's outer display) the short variant applies (`.m-short`).
+    static let shortVariantBelowHeight: CGFloat = 760
+    /// Kept clear around the fold on the Duo's inner display; nothing interactive spans it.
+    static let foldGap: CGFloat = 24
+
+    /// Safe-area insets the artboards were drawn with. The system supplies the real ones; use
+    /// these only to match the artboards, never to lay out around hardware.
+    enum ArtboardInsets {
+        static let iphonePortrait = (top: CGFloat(62), bottom: CGFloat(34))
+        static let iphoneLandscape = (sides: CGFloat(59), bottom: CGFloat(21))
+        static let duoOuter = (top: CGFloat(44), bottom: CGFloat(16))
+    }
+}
+
+/// Artboard sizes in points (tokens.json `devices`). Layouts flex; read sizes at runtime. The
+/// Duo sizes are unconfirmed third-party arithmetic (HANDOFF §3).
+enum LFBDevice {
+    static let iphone = CGSize(width: 402, height: 874)
+    static let ipad11 = CGSize(width: 1194, height: 834)
+    static let duoOuter = CGSize(width: 466, height: 678)
+    static let duoInner = CGSize(width: 890, height: 626)
 }
 
 // MARK: - Type

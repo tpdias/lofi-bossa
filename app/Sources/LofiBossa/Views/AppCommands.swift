@@ -100,6 +100,7 @@ struct AppCommands: Commands {
         }
     }
 
+    #if os(macOS)
     private var inTextField: Bool { NSApp.keyWindow?.firstResponder is NSText }
 
     private func undo() {
@@ -108,6 +109,11 @@ struct AppCommands: Commands {
     private func redo() {
         if inTextField { NSApp.sendAction(Selector(("redo:")), to: nil, from: nil) } else { model?.redo() }
     }
+    #else
+    private var inTextField: Bool { false }
+    private func undo() { model?.undo() }
+    private func redo() { model?.redo() }
+    #endif
 }
 
 /// What the Keyboard Shortcuts sheet lists. Menu items are above; the rest are keys the window

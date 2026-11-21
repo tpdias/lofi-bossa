@@ -48,7 +48,7 @@ struct TrackEffectsPopover: View {
                     Toggle("Same as song", isOn: Binding(
                         get: { busyness == nil },
                         set: { busyness = $0 ? nil : songBusyness }))
-                        .toggleStyle(.checkbox).font(.lfbCaption)
+                        .checkboxToggleStyle().font(.lfbCaption)
                 }
                 HStack(spacing: LFBSpace.sm) {
                     Text("Sparse").font(.lfbCaption).foregroundStyle(Color.lfbTextTertiary)
@@ -69,7 +69,7 @@ struct TrackEffectsPopover: View {
                     Toggle("Same as song", isOn: Binding(
                         get: { noteLength == nil },
                         set: { noteLength = $0 ? nil : songNoteLength }))
-                        .toggleStyle(.checkbox).font(.lfbCaption)
+                        .checkboxToggleStyle().font(.lfbCaption)
                 }
                 HStack(spacing: LFBSpace.sm) {
                     Text("Short").font(.lfbCaption).foregroundStyle(Color.lfbTextTertiary)

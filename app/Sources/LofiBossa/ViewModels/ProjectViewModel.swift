@@ -1,5 +1,7 @@
 import AVFoundation
+#if os(macOS)
 import AppKit
+#endif
 import Observation
 import UniformTypeIdentifiers
 
@@ -537,9 +539,7 @@ final class ProjectViewModel {
     func clearPinnedSeed() { project.pinnedSeed = nil; persist() }
     func copySeedToPasteboard() {
         guard let seed = displaySeed else { return }
-        let pb = NSPasteboard.general
-        pb.clearContents()
-        pb.setString(String(seed), forType: .string)
+        Pasteboard.copy(String(seed))
     }
 
     func rename(to name: String) {
@@ -708,12 +708,19 @@ final class ProjectViewModel {
     func canExport(range: ExportRange) -> Bool { range == .whole || loopRange != nil }
 
     func chooseExportDestination(format: ExportFormat) -> URL? {
+        #if os(iOS)
+        // No save panel on iOS: export to a temporary file, then Share / Save to Files (HANDOFF §8).
+        let seedPart = displaySeed.map { "-\($0)" } ?? ""
+        return FileManager.default.temporaryDirectory
+            .appendingPathComponent("\(project.name)\(seedPart)", conformingTo: format.type)
+        #else
         let panel = NSSavePanel()
         panel.allowedContentTypes = [format.type]
         let seedPart = displaySeed.map { "-\($0)" } ?? ""
         panel.nameFieldStringValue = "\(project.name)\(seedPart)"
         guard panel.runModal() == .OK else { return nil }
         return panel.url
+        #endif
     }
 
     func export(format: ExportFormat, range: ExportRange, to url: URL) async {

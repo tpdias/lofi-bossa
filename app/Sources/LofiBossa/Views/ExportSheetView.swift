@@ -76,7 +76,11 @@ struct ExportSheetView: View {
                 .font(.lfbBody).foregroundStyle(Color.lfbTextSecondary)
             HStack {
                 Spacer()
+                #if os(macOS)
                 Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([result.url]) }
+                #else
+                ShareLink("Share…", item: result.url)
+                #endif
                 Button("Done") { dismiss() }.buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
             }
         }
