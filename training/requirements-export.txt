@@ -1,0 +1,4 @@
+# Only needed for training/export_coreai.py (the Core AI on-device spike), not for
+# training, preprocessing or the inference server.
+coreai-torch
+coreai-opt
