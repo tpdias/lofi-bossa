@@ -24,6 +24,17 @@ struct WireSong: Codable {
             detectedKey: key)
     }
 
+    /// `song` with this answer's notes, length, seed and key; everything else (instruments,
+    /// volumes, effects) as it was. For /extend.
+    func extending(_ song: SongSnapshot) -> SongSnapshot {
+        var result = song
+        for i in result.tracks.indices { result.tracks[i].notes = notes(result.tracks[i].id) }
+        result.lengthSeconds = seconds
+        result.seed = UInt32(truncatingIfNeeded: seed)
+        result.detectedKey = key
+        return result
+    }
+
     init(seed: Int, seconds: Double, tracks: [String: [Note]], key: String? = nil) {
         self.seed = seed; self.seconds = seconds; self.tracks = tracks; self.key = key
     }
@@ -66,10 +77,33 @@ struct API {
 
     func generate(style: MusicStyle, model: NoteModel, seconds: Double, seed: UInt32?,
                   tracks: [TrackID] = TrackID.core, busyness: [TrackID: Double] = [:],
-                  noteLength: [TrackID: Double] = [:], key: String? = nil, strictKey: Bool = false) async throws -> WireSong {
+                  noteLength: [TrackID: Double] = [:], key: String? = nil, strictKey: Bool = false,
+                  keeping song: WireSong? = nil, locked: [TrackID] = []) async throws -> WireSong {
         var request = URLRequest(url: base.appending(path: "generate"))
         var body: [String: Any] = [
             "style": style.rawValue, "model": model.apiValue, "seconds": seconds, "format": "json",
+            "tracks": tracks.map(\.rawValue),
+            "busyness": Dictionary(uniqueKeysWithValues: busyness.map { ($0.key.rawValue, $0.value) }),
+            "note_length": Dictionary(uniqueKeysWithValues: noteLength.map { ($0.key.rawValue, $0.value) }),
+            "key": key ?? "auto", "strict_key": strictKey,
+        ]
+        if let seed { body["seed"] = Int(seed) }
+        if let song, !locked.isEmpty {
+            body["song"] = try JSONSerialization.jsonObject(with: JSONEncoder().encode(song))
+            body["locked"] = locked.map(\.rawValue)
+        }
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        return try await send(request)
+    }
+
+    /// Continues `song` for `seconds` more; the song's own notes come back exactly as sent.
+    func extend(_ song: WireSong, by seconds: Double, style: MusicStyle, model: NoteModel, seed: UInt32?,
+                tracks: [TrackID], busyness: [TrackID: Double] = [:], noteLength: [TrackID: Double] = [:],
+                key: String? = nil, strictKey: Bool = false) async throws -> WireSong {
+        var request = URLRequest(url: base.appending(path: "extend"))
+        var body: [String: Any] = [
+            "song": try JSONSerialization.jsonObject(with: JSONEncoder().encode(song)),
+            "seconds": seconds, "style": style.rawValue, "model": model.apiValue,
             "tracks": tracks.map(\.rawValue),
             "busyness": Dictionary(uniqueKeysWithValues: busyness.map { ($0.key.rawValue, $0.value) }),
             "note_length": Dictionary(uniqueKeysWithValues: noteLength.map { ($0.key.rawValue, $0.value) }),

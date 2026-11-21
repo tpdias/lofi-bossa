@@ -191,6 +191,12 @@ override in each track's effects popover, same shape as Busyness.
 `.venv/bin/python training/tidy.py --report song.json --note-length 0.8 --key auto` shows both
 on a song.
 
+**Building on the current song.** Lock a track (the lock key next to M and S, or ⌥⌘L) and the
+next Generate keeps it exactly as it is and writes the other tracks around it (`/generate` with the
+current `song` and a `locked` list). Extend (⇧⌘↩) continues the whole song for 30 more seconds,
+up to 3:00, starting from where it ends (`POST /extend` with the `song` and `seconds`); the song's
+own notes come back unchanged. Both are versions, so Undo goes back.
+
 ## Training data
 
 There is no ready-made dataset for either style, and no public collection labels them:

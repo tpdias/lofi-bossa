@@ -194,6 +194,8 @@ struct Track: Identifiable, Codable, Hashable {
     /// How long this track's new notes should be (see `Project.noteLength`); nil follows the
     /// song's setting.
     var noteLength: Double? = nil
+    /// Kept as it is by the next Generate: the model writes the other tracks around it.
+    var isLocked = false
 }
 
 // Decoding is written out by hand (in an extension, so the memberwise init survives) because
@@ -202,7 +204,7 @@ struct Track: Identifiable, Codable, Hashable {
 // later needs a decodeIfPresent line here too.
 extension Track {
     private enum CodingKeys: String, CodingKey {
-        case id, instrument, notes, volume, isMuted, isSoloed, effects, busyness, noteLength
+        case id, instrument, notes, volume, isMuted, isSoloed, effects, busyness, noteLength, isLocked
     }
 
     init(from decoder: Decoder) throws {
@@ -216,6 +218,7 @@ extension Track {
         effects = try c.decodeIfPresent(TrackEffects.self, forKey: .effects) ?? TrackEffects()
         busyness = try c.decodeIfPresent(Double.self, forKey: .busyness)
         noteLength = try c.decodeIfPresent(Double.self, forKey: .noteLength)
+        isLocked = try c.decodeIfPresent(Bool.self, forKey: .isLocked) ?? false
     }
 }
 
@@ -240,6 +243,10 @@ enum VersionKind: Codable, Hashable {
     /// An optional track was added to / removed from the song.
     case addTrack(TrackID)
     case removeTrack(TrackID)
+    /// A new take that kept some tracks as they were and wrote the rest around them.
+    case takeAroundLocked(seed: UInt32, kept: [TrackID])
+    /// The model continued the song; `to` is its new length in seconds.
+    case extend(to: Double)
 
     var title: String {
         switch self {
@@ -252,6 +259,9 @@ enum VersionKind: Codable, Hashable {
             "Rewrote \(track.rawValue) \(formatTimecode(start))–\(formatTimecode(end))"
         case .addTrack(let track): "Added \(track.title)"
         case .removeTrack(let track): "Removed \(track.title)"
+        case .takeAroundLocked(let seed, let kept):
+            "New take around \(kept.map(\.title).joined(separator: ", ")) · seed \(seed)"
+        case .extend(let to): "Extended to \(formatTimecode(to))"
         }
     }
 }

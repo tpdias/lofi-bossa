@@ -6,6 +6,10 @@
     POST /generate           JSON {style, seconds, model?, seed?, top_p?, format?, tracks?, busyness?}
     POST /regenerate_track   ?track=bass&style=lofi&model=&seed=&top_p=&busyness=, body = a song
                              [&start=&end=] (seconds) rewrites only that stretch
+    POST /extend             JSON {song, seconds, style, ...}: continues the song for `seconds` more
+
+/generate can also keep part of the current song: send it as "song" and name the tracks to keep
+in "locked"; those come back exactly as sent and the rest are written around them.
 
 busyness (0 sparse ... 0.5 default ... 1 untouched) thins out the model's notes per track (see
 tidy.py). /generate takes one value or {track: value}. Only newly generated notes are cleaned;
@@ -43,6 +47,7 @@ import uvicorn
 from anticipation import ops
 from anticipation.config import TIME_RESOLUTION
 from anticipation.convert import midi_to_events
+from anticipation.vocab import CONTROL_OFFSET, TIME_OFFSET
 from fastapi import FastAPI, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
 
@@ -130,6 +135,17 @@ def json_to_midi(song):
     return pm
 
 
+def events_of_song(song):
+    """Model events for a song JSON (through a MIDI file, which is what the library reads)."""
+    with tempfile.NamedTemporaryFile(suffix=".mid") as f:
+        json_to_midi(song).write(f.name)
+        return midi_to_events(f.name)
+
+
+def notes_of(song, names):
+    return [n for t in names for n in song.get("tracks", {}).get(t, [])]
+
+
 def respond(pm, seed, fmt):
     return song_json(pm, seed) if fmt == "json" else midi_response(pm, seed)
 
@@ -175,6 +191,23 @@ class GenerateRequest(BaseModel):
     note_length: float | dict[str, float] = 0.5
     key: str = "auto"
     strict_key: bool = False
+    # Keep part of the current song: its JSON (as /generate returns it) and the tracks to keep.
+    song: dict | None = None
+    locked: list[str] = Field(default_factory=list)
+
+
+class ExtendRequest(BaseModel):
+    song: dict
+    seconds: float = Field(30, ge=5, le=MAX_SECONDS)   # how much to add
+    style: str = "lofi"
+    model: str = "auto"
+    seed: int | None = None
+    top_p: float = Field(0.98, gt=0, le=1)
+    tracks: list[str] = Field(default_factory=lambda: list(tracks.TRACKS))
+    busyness: float | dict[str, float] = 0.5
+    note_length: float | dict[str, float] = 0.5
+    key: str = "auto"
+    strict_key: bool = False
 
 
 @app.get("/health")
@@ -191,34 +224,85 @@ def generate(req: GenerateRequest):
     unknown = [t for t in req.tracks if t not in tracks.ALL_TRACKS]
     if unknown or not wanted:
         raise HTTPException(422, f"tracks must be from {tracks.ALL_TRACKS}")
-    model = get_model(req.style, req.model, req.tracks)
+    locked = [t for t in wanted if t in req.locked] if req.song else []
+    free = [t for t in wanted if t not in locked]
+    if not free:
+        raise HTTPException(422, "every track is locked: unlock one to write something new")
+    model = get_model(req.style, req.model, free)
     seed = req.seed if req.seed is not None else random.randrange(2**31)
-    instruments = tracks.instruments_for(wanted)
-    # A brand new song has nothing to detect a key from yet; a named key still applies from
-    # the first note. The key actually used (including what "auto" detects once there is
-    # something to detect it from) is reported back below.
-    key_pcs, _ = resolve_key(req.key, [])
+    instruments = tracks.instruments_for(free)
+    # Locked tracks are fixed notes the new ones are written around ("controls"), and the key
+    # (when Auto) comes from them. A brand new song has nothing to detect a key from yet; a
+    # named key still applies from the first note.
+    locked_notes = notes_of(req.song, locked) if locked else []
+    fixed_events = events_of_song({"tracks": {t: req.song["tracks"].get(t, []) for t in locked}}) \
+        if locked_notes else []
+    key_pcs, _ = resolve_key(req.key, locked_notes)
     gap_ticks = drum_gap_ticks(instruments)
     with _lock:
         events = sampler.generate(model, 0, req.seconds, top_p=req.top_p, seed=seed,
+                                  controls=[tok + CONTROL_OFFSET for tok in fixed_events],
                                   instruments=instruments, key=key_pcs, key_strict=req.strict_key,
                                   drum_min_gap_ticks=gap_ticks)
         # the model often leaves an instrument out; write a part for any silent track
         by_track = tracks.split_events(events)
-        for t in wanted:
+        for t in free:
             if len(by_track[t]) // 3 < 0.25 * req.seconds:
-                fixed = ops.sort([tok for o in wanted if o != t for tok in by_track[o]])
+                fixed = ops.sort(list(fixed_events) + [tok for o in free if o != t for tok in by_track[o]])
                 by_track[t] = sampler.accompany(model, fixed, req.seconds, tracks.instruments_for([t]),
                                                 top_p=req.top_p, seed=seed, key=key_pcs,
                                                 key_strict=req.strict_key, drum_min_gap_ticks=gap_ticks)
-        events = ops.sort([tok for t in wanted for tok in by_track[t]])
+        events = ops.sort([tok for t in free for tok in by_track[t]])
     song = song_json(tracks.events_to_midi(events), seed)
     # Re-resolve now there is something to detect "auto" from; a named key is unchanged.
-    key_pcs, used_key = resolve_key(req.key, [n for notes in song["tracks"].values() for n in notes])
-    song["tracks"] = tidy.tidy_song(song["tracks"], req.busyness, seed, note_length=req.note_length,
-                                    key=key_pcs, key_strict=req.strict_key)
+    key_pcs, used_key = resolve_key(req.key, locked_notes + notes_of(song, free))
+    song["tracks"] = tidy.tidy_song(song["tracks"], req.busyness, seed, only=set(free),
+                                    note_length=req.note_length, key=key_pcs, key_strict=req.strict_key)
+    for t in locked:   # exactly as they were sent
+        song["tracks"][t] = req.song["tracks"].get(t, [])
+    song["seconds"] = round(max(song["seconds"], req.seconds,
+                                max((n["start"] + n["duration"] for n in locked_notes), default=0)), 3)
     song["key"] = used_key
     return song if req.format == "json" else midi_response(json_to_midi(song), seed)
+
+
+@app.post("/extend")
+def extend(req: ExtendRequest):
+    """Continue the song for `seconds` more, every listed track at once, from where it ends. The
+    song's own notes come back exactly as sent; only the new ones are cleaned up."""
+    wanted = [t for t in tracks.ALL_TRACKS if t in req.tracks]
+    if not wanted or any(t not in tracks.ALL_TRACKS for t in req.tracks):
+        raise HTTPException(422, f"tracks must be from {tracks.ALL_TRACKS}")
+    old_notes = notes_of(req.song, tracks.ALL_TRACKS)
+    if not old_notes:
+        raise HTTPException(422, "the song is empty: generate it first")
+    start = max(float(req.song.get("seconds") or 0), max(n["start"] + n["duration"] for n in old_notes))
+    end = min(start + req.seconds, MAX_SECONDS)
+    if end - start < 1:
+        raise HTTPException(422, f"the song is already at the {MAX_SECONDS}-second maximum")
+    model = get_model(req.style, req.model, wanted)
+    seed = req.seed if req.seed is not None else random.randrange(2**31)
+    instruments = tracks.instruments_for(wanted)
+    key_pcs, used_key = resolve_key(req.key, old_notes)
+    with _lock:
+        merged = sampler.generate(model, start, end, inputs=events_of_song(req.song), top_p=req.top_p,
+                                  seed=seed, instruments=instruments, key=key_pcs,
+                                  key_strict=req.strict_key, drum_min_gap_ticks=drum_gap_ticks(instruments))
+    start_tick = round(start * TIME_RESOLUTION)
+    new = [tok for i in range(0, len(merged), 3) if merged[i] - TIME_OFFSET >= start_tick
+           for tok in merged[i:i + 3]]
+    added = song_json(tracks.events_to_midi(new), seed)["tracks"]
+    added = tidy.tidy_song({t: added[t] for t in wanted}, req.busyness, seed,
+                           note_length=req.note_length, key=key_pcs, key_strict=req.strict_key)
+    out = {**req.song, "tracks": {**req.song.get("tracks", {})}}
+    for t in wanted:
+        out["tracks"][t] = sorted(list(req.song.get("tracks", {}).get(t, [])) +
+                                  [n for n in added[t] if n["start"] < end],
+                                  key=lambda n: (n["start"], n["pitch"]))
+    out["seconds"] = round(end, 3)
+    out["seed"] = seed
+    out["key"] = used_key
+    return out
 
 
 @app.post("/regenerate_track")

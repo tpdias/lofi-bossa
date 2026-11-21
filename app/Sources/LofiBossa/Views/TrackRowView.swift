@@ -62,6 +62,13 @@ struct TrackRowView: View {
                 Text(track.id.title)
                     .font(.lfbHeadline)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                Button { track.isLocked.toggle() } label: {
+                    Image(systemName: track.isLocked ? "lock.fill" : "lock.open").font(.system(size: 10, weight: .semibold))
+                }
+                .buttonStyle(KeyToggleStyle(isOn: track.isLocked, onFill: track.id.color, onText: .lfbWindow))
+                .help(track.isLocked ? "Locked: the next Generate keeps this track and writes the others around it"
+                                     : "Lock to keep this track on the next Generate")
+                .accessibilityLabel("Lock").accessibilityValue(track.isLocked ? "On" : "Off")
                 Button("M") { track.isMuted.toggle() }
                     .buttonStyle(KeyToggleStyle(isOn: track.isMuted, onFill: .lfbText, onText: .lfbWindow))
                     .accessibilityLabel("Mute").accessibilityValue(track.isMuted ? "On" : "Off")

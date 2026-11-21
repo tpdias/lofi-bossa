@@ -35,6 +35,9 @@ struct AppCommands: Commands {
 
         CommandMenu("Song") {
             Button("Generate New Take") { post(.lfbGenerate) }.keyboardShortcut(.return, modifiers: .command)
+            Button("Extend Song by 30 Seconds") { model?.extend() }
+                .keyboardShortcut(.return, modifiers: [.command, .shift])
+                .disabled(!(model?.canExtend ?? false))
             Button("Copy Seed") { post(.lfbCopySeed) }.keyboardShortcut("c", modifiers: [.command, .shift])
             Divider()
             Button("Export…") { post(.lfbExport) }.keyboardShortcut("e", modifiers: .command)
@@ -78,6 +81,8 @@ struct AppCommands: Commands {
                 .keyboardShortcut("m", modifiers: [.command, .option])
             Button("Solo Track") { model?.toggleSoloOfSelectedTrack() }
                 .keyboardShortcut("s", modifiers: [.command, .option])
+            Button("Lock Track") { model?.toggleLockOfSelectedTrack() }
+                .keyboardShortcut("l", modifiers: [.command, .option])
             Divider()
             Button("Open Piano Roll") { model?.openEditorForSelectedTrack() }
                 .keyboardShortcut("p", modifiers: [.command, .option])
@@ -114,7 +119,8 @@ enum KeyboardShortcuts {
     static let groups: [Group] = [
         Group(title: "Song", items: [
             Item(keys: "⌘N", what: "New project"),
-            Item(keys: "⌘↩", what: "Generate a new take"),
+            Item(keys: "⌘↩", what: "Generate a new take (locked tracks stay)"),
+            Item(keys: "⇧⌘↩", what: "Extend the song by 30 seconds"),
             Item(keys: "⇧⌘C", what: "Copy the seed"),
             Item(keys: "⌘E", what: "Export"),
             Item(keys: "⌘Z / ⇧⌘Z", what: "Undo / redo (steps through versions)"),
@@ -129,6 +135,7 @@ enum KeyboardShortcuts {
         Group(title: "Tracks", items: [
             Item(keys: "⌘1 – ⌘7", what: "Select the first to seventh track"),
             Item(keys: "⌥⌘M / ⌥⌘S", what: "Mute / solo the selected track"),
+            Item(keys: "⌥⌘L", what: "Lock / unlock the selected track"),
             Item(keys: "⌥⌘P", what: "Open the piano roll for the selected track"),
             Item(keys: "⌘R", what: "Rewrite the selected track with the model"),
             Item(keys: "⌥⌘I", what: "Show / hide the inspector"),
