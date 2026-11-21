@@ -222,8 +222,10 @@ enum DevTools {
         struct Preview: View {
             @State var effects = TrackEffects(warmth: 0.35, grit: 0.6, echo: 0, reverb: 0.2, pan: -0.4)
             @State var busyness: Double? = nil
+            @State var noteLength: Double? = nil
             var body: some View {
-                TrackEffectsPopover(track: .guitar, effects: $effects, busyness: $busyness, onReset: {})
+                TrackEffectsPopover(track: .guitar, effects: $effects, busyness: $busyness,
+                                    noteLength: $noteLength, onReset: {})
                     .background(Color.lfbRaised)
                     .environment(\.colorScheme, .dark)
             }

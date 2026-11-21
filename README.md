@@ -179,6 +179,18 @@ each track's effects popover; it applies to the next take or rewrite.
 `.venv/bin/python training/tidy.py --report song.json --busyness 0.5` shows what it would do to a
 song (notes per second, chord share, longest phrase, most notes sounding).
 
+**Note length and key.** Two more knobs, independent of busyness and of each other (they still
+apply even at busyness 1, the model's raw output). `note_length` (0 short, 0.5 default, 1 long)
+nudges new notes toward being longer while sampling, stretches the staccato notes that remain
+with `legato()`, and keeps drum hits short; `key` (a name like `"A minor"`, or `"auto"` to detect
+it from the song) keeps new, non-drum notes in that key, discouraged by default or forbidden
+outright with `strict_key`. `/generate` and `/regenerate_track` take `note_length`, `key` and
+`strict_key`, and report the key actually used as `"key"` in the response. In the app: the key
+button next to Busyness (shows the detected key when Auto), with Note Length and a per-track
+override in each track's effects popover, same shape as Busyness.
+`.venv/bin/python training/tidy.py --report song.json --note-length 0.8 --key auto` shows both
+on a song.
+
 ## Training data
 
 There is no ready-made dataset for either style, and no public collection labels them:

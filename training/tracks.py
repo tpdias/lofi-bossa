@@ -76,3 +76,61 @@ def events_to_midi(events):
             inst.notes.append(pretty_midi.Note(VELOCITY[t], pitch, start, start + dur))
         pm.instruments.append(inst)
     return pm
+
+
+# ---- Key: detection and the pitch-class set for each of the 24 major/minor keys ----
+
+_NOTE_NAMES = ("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")
+_MAJOR_STEPS = (0, 2, 4, 5, 7, 9, 11)
+_MINOR_STEPS = (0, 2, 3, 5, 7, 8, 10)   # natural minor
+
+# name ("C major", "A minor", ...) -> the pitch classes (0 = C) that belong to it
+KEYS = {
+    f"{name} {mode}": frozenset((root + step) % 12 for step in steps)
+    for root, name in enumerate(_NOTE_NAMES)
+    for mode, steps in (("major", _MAJOR_STEPS), ("minor", _MINOR_STEPS))
+}
+
+# Krumhansl-Schmuckler key profiles (how common each scale degree is in a major/minor melody),
+# indexed by pitch class relative to the tonic.
+_KS_MAJOR = (6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88)
+_KS_MINOR = (6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17)
+
+
+def detect_key(notes):
+    """Best-fit key ("A minor", ...) for a list of {"pitch", "duration", ...} note dicts,
+    by the Krumhansl-Schmuckler profile-correlation method. "C major" if there are no notes."""
+    weight = [0.0] * 12
+    for n in notes:
+        weight[int(n["pitch"]) % 12] += max(float(n["duration"]), 0.01)
+    if not any(weight):
+        return "C major"
+    best, best_score = "C major", float("-inf")
+    for root, name in enumerate(_NOTE_NAMES):
+        for mode, profile in (("major", _KS_MAJOR), ("minor", _KS_MINOR)):
+            score = sum(weight[pc] * profile[(pc - root) % 12] for pc in range(12))
+            if score > best_score:
+                best_score, best = score, f"{name} {mode}"
+    return best
+
+
+# ---- Drums: which GM percussion pitches play the same "job", and how close they may repeat ----
+
+DRUM_CATEGORY = {}
+for _pitches, _cat in (
+    ((35, 36), "kick"),
+    ((37, 38, 40), "snare"),
+    ((42, 44, 46), "hihat"),
+    ((49, 51, 52, 55, 57, 59), "cymbal"),
+    ((41, 43, 45, 47, 48, 50), "tom"),
+):
+    for _p in _pitches:
+        DRUM_CATEGORY[_p] = _cat
+
+# Default minimum time (seconds) between two hits of the same category; a pitch not listed
+# above (shaker, cowbell, claps...) falls back to "perc".
+DRUM_MIN_GAP = {"kick": 0.2, "snare": 0.2, "hihat": 0.08, "cymbal": 0.5, "tom": 0.15, "perc": 0.1}
+
+
+def drum_category(pitch):
+    return DRUM_CATEGORY.get(pitch, "perc")

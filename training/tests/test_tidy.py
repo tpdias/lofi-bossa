@@ -7,6 +7,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import tidy  # noqa: E402
+import tracks  # noqa: E402
 
 
 def note(start, pitch=60, duration=0.2, velocity=80):
@@ -93,6 +94,61 @@ class TidyTests(unittest.TestCase):
         run("bass", notes)
         self.assertEqual(notes, copy)
 
+    # ---- note_length and key: independent of busyness, and of each other ----
+
+    def test_note_length_applies_even_at_busyness_one(self):
+        notes = [note(0, 60, 0.03), note(0.1, 62, 0.03)]
+        out = tidy.tidy_track("piano", notes, 1.0, random.Random(0), note_length=0.5)
+        self.assertGreater(out[0]["duration"], 0.03, "stretched toward the next onset")
+        self.assertEqual(tidy.tidy_track("piano", notes, 1.0, random.Random(0)), notes,
+                         "without note_length, busyness 1 is still a no-op")
+
+    def test_legato_stretches_short_notes_to_the_next_onset(self):
+        notes = [note(0, 60, 0.02), note(1.0, 62, 0.02)]
+        out = tidy.legato("piano", notes, min_length=0.5)
+        self.assertAlmostEqual(out[0]["duration"], 0.5)   # capped, doesn't reach the next onset
+        self.assertAlmostEqual(out[1]["duration"], 0.5)   # nothing after it: gets the full length
+
+    def test_legato_never_overlaps_the_next_onset(self):
+        notes = [note(0, 60, 0.02), note(0.2, 62, 0.02)]
+        out = tidy.legato("piano", notes, min_length=0.5)
+        self.assertLessEqual(out[0]["start"] + out[0]["duration"], out[1]["start"])
+
+    def test_drums_are_clamped_not_stretched(self):
+        notes = [note(0, 36, 20.0)]
+        out = tidy.tidy_track("drums", notes, 1.0, random.Random(0), note_length=0.5)
+        self.assertEqual(out[0]["duration"], tidy.DRUM_MAX_DURATION)
+
+    def test_pitch_cooldown_drops_distant_repeats_of_one_pitch(self):
+        notes = [note(t, 60, 0.05) for t in (0, 0.3, 0.6, 0.9, 1.2)]   # same pitch, 5 times
+        out = tidy.pitch_cooldown("keys", notes)
+        self.assertLessEqual(len(out), tidy.PITCH_COOLDOWN_MAX["keys"])
+        self.assertEqual(out[0]["start"], 0, "the earliest onsets win")
+
+    def test_pitch_cooldown_leaves_other_pitches_alone(self):
+        notes = [note(t, p, 0.05) for t, p in ((0, 60), (0.1, 62), (0.2, 64))]
+        self.assertEqual(tidy.pitch_cooldown("keys", notes), notes)
+
+    def test_strict_key_snaps_out_of_key_notes(self):
+        key = tracks.KEYS["C major"]   # white keys only
+        notes = [note(0, 61)]   # C#, not in C major
+        out = tidy.tidy_track("piano", notes, 1.0, random.Random(0), key=key, key_strict=True)
+        self.assertIn(out[0]["pitch"] % 12, key)
+
+    def test_key_without_strict_leaves_notes_alone(self):
+        key = tracks.KEYS["C major"]
+        notes = [note(0, 61)]
+        out = tidy.tidy_track("piano", notes, 1.0, random.Random(0), key=key, key_strict=False)
+        self.assertEqual(out[0]["pitch"], 61)
+
+    def test_tidy_song_passes_note_length_and_key_per_track(self):
+        short = [note(0, 60, 0.02), note(0.5, 62, 0.02)]
+        out = tidy.tidy_song({"piano": short, "guitar": short}, 1.0,
+                             note_length={"piano": 0.5}, key=None)
+        self.assertGreater(out["piano"][0]["duration"], 0.02)
+        self.assertEqual(out["guitar"], short, "a track missing from the note_length dict is untouched")
+
 
 if __name__ == "__main__":
     unittest.main()
+

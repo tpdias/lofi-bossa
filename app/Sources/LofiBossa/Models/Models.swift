@@ -147,6 +147,15 @@ enum NoteModel: String, CaseIterable, Codable, Identifiable {
     var apiValue: String { self == .pretrained ? "pretrained" : "finetuned" }
 }
 
+/// The 24 major/minor keys the server can keep new notes in (training/tracks.py `KEYS`, same
+/// names and order); `Project.key == nil` means "Auto" (detect it instead of naming one).
+enum MusicKey {
+    static let names: [String] = {
+        let notes = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+        return notes.flatMap { ["\($0) major", "\($0) minor"] }
+    }()
+}
+
 // MARK: - Music data (seconds, not bars; a grid can be layered on later)
 
 struct Note: Identifiable, Codable, Hashable {
@@ -182,6 +191,9 @@ struct Track: Identifiable, Codable, Hashable {
     /// How much of the model's output to keep for this track on the next generate or rewrite
     /// (see `Project.busyness`); nil follows the song's setting.
     var busyness: Double? = nil
+    /// How long this track's new notes should be (see `Project.noteLength`); nil follows the
+    /// song's setting.
+    var noteLength: Double? = nil
 }
 
 // Decoding is written out by hand (in an extension, so the memberwise init survives) because
@@ -190,7 +202,7 @@ struct Track: Identifiable, Codable, Hashable {
 // later needs a decodeIfPresent line here too.
 extension Track {
     private enum CodingKeys: String, CodingKey {
-        case id, instrument, notes, volume, isMuted, isSoloed, effects, busyness
+        case id, instrument, notes, volume, isMuted, isSoloed, effects, busyness, noteLength
     }
 
     init(from decoder: Decoder) throws {
@@ -203,6 +215,7 @@ extension Track {
         isSoloed = try c.decodeIfPresent(Bool.self, forKey: .isSoloed) ?? false
         effects = try c.decodeIfPresent(TrackEffects.self, forKey: .effects) ?? TrackEffects()
         busyness = try c.decodeIfPresent(Double.self, forKey: .busyness)
+        noteLength = try c.decodeIfPresent(Double.self, forKey: .noteLength)
     }
 }
 
@@ -250,6 +263,10 @@ struct SongSnapshot: Codable, Hashable {
     var style: MusicStyle
     var lengthSeconds: Double
     var seed: UInt32
+    /// The key the server actually used when writing this song's new notes (from /generate's
+    /// or /regenerate_track's "key"), e.g. "A minor"; nil if it was never asked to keep one.
+    /// Shown next to the Key menu when the project's own `key` is Auto.
+    var detectedKey: String? = nil
 
     /// The tracks this song has, in display order (core ones first, then added ones).
     var trackIDs: [TrackID] { tracks.map(\.id) }
@@ -300,6 +317,18 @@ struct Project: Identifiable, Codable, Hashable {
     var busyness: Double? = nil
     var songBusyness: Double { busyness ?? Self.defaultBusyness }
     static let defaultBusyness = 0.5
+    /// How long new notes should be: 0 short, 0.5 default, 1 long. Same shape as busyness,
+    /// applied by the server with legato (stretches staccato notes) and a shorter cap on drum
+    /// hits; the user's own edits are never touched. Optional for the same decoding reason.
+    var noteLength: Double? = nil
+    var songNoteLength: Double { noteLength ?? Self.defaultNoteLength }
+    static let defaultNoteLength = 0.5
+    /// The key to keep new notes in; nil = detect it automatically (from the song once there
+    /// is one, otherwise no constraint). One of `MusicKey.all`.
+    var key: String? = nil
+    /// Forbid out-of-key notes outright instead of just discouraging them.
+    var strictKey: Bool? = nil
+    var isStrictKey: Bool { strictKey ?? false }
 
     var current: Version? { versions.first { $0.id == currentVersionID } }
     var currentSnapshot: SongSnapshot? { current?.snapshot }

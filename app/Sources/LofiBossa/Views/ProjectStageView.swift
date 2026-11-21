@@ -143,6 +143,7 @@ private struct ListeningBanner: View {
 private struct RecipeBar: View {
     @Bindable var model: ProjectViewModel
     let isCompact: Bool
+    @State private var showSongSettings = false
 
     /// One row when the stage is wide enough; otherwise two, so the controls never push the
     /// side panels narrower (which cut their text off).
@@ -152,6 +153,7 @@ private struct RecipeBar: View {
                 styleControl
                 lengthControl
                 busynessControl
+                songSettingsControl
                 SeedField(model: model)
                 if !isCompact { ModelPopup(model: model) }
                 Spacer(minLength: 0)
@@ -165,6 +167,7 @@ private struct RecipeBar: View {
                     styleControl
                     lengthControl
                     busynessControl
+                    songSettingsControl
                     Spacer(minLength: 0)
                 }
                 HStack(spacing: LFBSpace.md) {
@@ -205,6 +208,21 @@ private struct RecipeBar: View {
         .help("How many notes the model may play: sparse on the left, everything it writes on the right. Applies to the next take or rewrite; your own edits are never limited.")
     }
 
+    private var songSettingsControl: some View {
+        Button { showSongSettings.toggle() } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "tuningfork")
+                Text(model.displayedKey ?? "Auto").lineLimit(1)
+            }
+        }
+        .buttonStyle(.bordered).controlSize(.small).fixedSize()
+        .popover(isPresented: $showSongSettings, arrowEdge: .bottom) {
+            SongSettingsPopover(model: model)
+        }
+        .help("Key and note length for the next take or rewrite")
+        .accessibilityIdentifier("songSettings")
+    }
+
     private var generateButton: some View {
         Button {
             model.generate()
@@ -225,6 +243,53 @@ private struct RecipeBar: View {
     private var isWaitingForGenerator: Bool {
         if case .ready = model.status { return false }
         return true
+    }
+}
+
+private struct SongSettingsPopover: View {
+    @Bindable var model: ProjectViewModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: LFBSpace.md) {
+            Text("Key & note length").font(.lfbHeadline)
+
+            VStack(alignment: .leading, spacing: LFBSpace.xs) {
+                HStack {
+                    Text("Key").font(.lfbBodyMedium)
+                    Spacer()
+                    if model.project.key == nil, let detected = model.displayedKey {
+                        Text(detected).font(.lfbCaption).foregroundStyle(Color.lfbTextSecondary)
+                    }
+                }
+                Picker("Key", selection: Binding(
+                    get: { model.project.key ?? "Auto" },
+                    set: { model.setKey($0 == "Auto" ? nil : $0) })
+                ) {
+                    Text("Auto").tag("Auto")
+                    ForEach(MusicKey.names, id: \.self) { Text($0).tag($0) }
+                }
+                .labelsHidden()
+                Toggle("Strict (forbid out-of-key notes)", isOn: Binding(
+                    get: { model.project.isStrictKey }, set: { model.setStrictKey($0) }))
+                    .toggleStyle(.checkbox).font(.lfbCaption)
+            }
+
+            Divider()
+            VStack(alignment: .leading, spacing: LFBSpace.xs) {
+                Text("Note length").font(.lfbBodyMedium)
+                HStack(spacing: LFBSpace.sm) {
+                    Text("Short").font(.lfbCaption).foregroundStyle(Color.lfbTextTertiary)
+                    Slider(value: Binding(get: { model.project.songNoteLength }, set: { model.setNoteLength($0) }), in: 0...1)
+                        .accessibilityIdentifier("noteLength")
+                    Text("Long").font(.lfbCaption).foregroundStyle(Color.lfbTextTertiary)
+                }
+                Text("How long new notes are by default; override per track in its effects.")
+                    .font(.lfbCaption).foregroundStyle(Color.lfbTextSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(LFBSpace.md)
+        .frame(width: 260)
     }
 }
 
@@ -447,6 +512,7 @@ private struct RulerAndTracks: View {
             rewritingRange: model.rewritingTrack == id ? model.rewritingRange : nil,
             isGeneratorBusy: model.isGeneratorBusy,
             songBusyness: model.project.songBusyness,
+            songNoteLength: model.project.songNoteLength,
             onSeek: { model.clearSectionSelection(); model.seek(to: $0) },   // a click anywhere else deselects
             onSelect: { model.openEditor(for: id) },
             onRewrite: { model.rewrite(id) },
@@ -494,6 +560,7 @@ private struct RulerAndTracks: View {
                 if newValue.instrument != model.displayedSnapshot?.track(id).instrument { model.setInstrument(newValue.instrument, for: id) }
                 if newValue.effects != model.displayedSnapshot?.track(id).effects { model.setTrackEffects(newValue.effects, for: id) }
                 if newValue.busyness != model.displayedSnapshot?.track(id).busyness { model.setTrackBusyness(newValue.busyness, for: id) }
+                if newValue.noteLength != model.displayedSnapshot?.track(id).noteLength { model.setTrackNoteLength(newValue.noteLength, for: id) }
             }
         )
     }

@@ -20,6 +20,7 @@ struct TrackRowView: View {
     var isGeneratorBusy = false
     var compact = false                       // true while the piano roll is open
     var songBusyness: Double = Project.defaultBusyness
+    var songNoteLength: Double = Project.defaultNoteLength
     var onSeek: (Double) -> Void = { _ in }
     var onSelect: () -> Void = {}
     var onRewrite: () -> Void = {}
@@ -86,7 +87,8 @@ struct TrackRowView: View {
                     .accessibilityLabel("\(track.id.title) effects")
                     .popover(isPresented: $showEffects, arrowEdge: .bottom) {
                         TrackEffectsPopover(track: track.id, effects: $track.effects, busyness: $track.busyness,
-                                            songBusyness: songBusyness, onReset: onResetEffects)
+                                            noteLength: $track.noteLength, songBusyness: songBusyness,
+                                            songNoteLength: songNoteLength, onReset: onResetEffects)
                     }
                     if isRewriting {
                         Button(action: onCancelRewrite) { Image(systemName: "stop.fill") }

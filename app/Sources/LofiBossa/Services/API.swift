@@ -6,6 +6,9 @@ struct WireSong: Codable {
     var seed: Int
     var seconds: Double
     var tracks: [String: [Note]]
+    /// The key the server used for this take, e.g. "A minor"; nil when none was asked for, or
+    /// (for /regenerate_track) the song had no key constraint to report.
+    var key: String? = nil
 
     func notes(_ id: TrackID) -> [Note] { tracks[id.rawValue] ?? [] }
 
@@ -17,11 +20,12 @@ struct WireSong: Codable {
                 Track(id: $0, instrument: instruments[$0] ?? $0.defaultInstrument, notes: notes($0),
                       effects: style.defaultTrackEffects[$0] ?? TrackEffects())
             },
-            effects: style.defaultEffects, style: style, lengthSeconds: seconds, seed: UInt32(truncatingIfNeeded: seed))
+            effects: style.defaultEffects, style: style, lengthSeconds: seconds, seed: UInt32(truncatingIfNeeded: seed),
+            detectedKey: key)
     }
 
-    init(seed: Int, seconds: Double, tracks: [String: [Note]]) {
-        self.seed = seed; self.seconds = seconds; self.tracks = tracks
+    init(seed: Int, seconds: Double, tracks: [String: [Note]], key: String? = nil) {
+        self.seed = seed; self.seconds = seconds; self.tracks = tracks; self.key = key
     }
 
     /// Everything the server needs to rewrite one track: the full current song, so the model
@@ -61,12 +65,15 @@ struct API {
     }
 
     func generate(style: MusicStyle, model: NoteModel, seconds: Double, seed: UInt32?,
-                  tracks: [TrackID] = TrackID.core, busyness: [TrackID: Double] = [:]) async throws -> WireSong {
+                  tracks: [TrackID] = TrackID.core, busyness: [TrackID: Double] = [:],
+                  noteLength: [TrackID: Double] = [:], key: String? = nil, strictKey: Bool = false) async throws -> WireSong {
         var request = URLRequest(url: base.appending(path: "generate"))
         var body: [String: Any] = [
             "style": style.rawValue, "model": model.apiValue, "seconds": seconds, "format": "json",
             "tracks": tracks.map(\.rawValue),
             "busyness": Dictionary(uniqueKeysWithValues: busyness.map { ($0.key.rawValue, $0.value) }),
+            "note_length": Dictionary(uniqueKeysWithValues: noteLength.map { ($0.key.rawValue, $0.value) }),
+            "key": key ?? "auto", "strict_key": strictKey,
         ]
         if let seed { body["seed"] = Int(seed) }
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
@@ -74,13 +81,18 @@ struct API {
     }
 
     func regenerate(_ track: TrackID, in song: WireSong, style: MusicStyle, model: NoteModel, seed: UInt32,
-                    range: ClosedRange<Double>? = nil, busyness: Double = Project.defaultBusyness) async throws -> WireSong {
+                    range: ClosedRange<Double>? = nil, busyness: Double = Project.defaultBusyness,
+                    noteLength: Double = Project.defaultNoteLength, key: String? = nil,
+                    strictKey: Bool = false) async throws -> WireSong {
         var items = [
             URLQueryItem(name: "track", value: track.rawValue),
             URLQueryItem(name: "style", value: style.rawValue),
             URLQueryItem(name: "model", value: model.apiValue),
             URLQueryItem(name: "seed", value: String(seed)),
             URLQueryItem(name: "busyness", value: String(min(max(busyness, 0), 1))),
+            URLQueryItem(name: "note_length", value: String(min(max(noteLength, 0), 1))),
+            URLQueryItem(name: "key", value: key ?? "auto"),
+            URLQueryItem(name: "strict_key", value: String(strictKey)),
         ]
         if let range {   // rewrite only this stretch; the server keeps everything outside it
             items.append(URLQueryItem(name: "start", value: String(range.lowerBound)))
