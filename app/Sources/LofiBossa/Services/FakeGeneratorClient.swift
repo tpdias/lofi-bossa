@@ -20,6 +20,8 @@ final class FakeGeneratorClient: GeneratorClient {
     private(set) var lastGenerateNoteLength: [TrackID: Double] = [:]
     private(set) var lastGenerateKey: String? = nil
     private(set) var lastGenerateStrictKey = false
+    private(set) var lastGenerateLocked: Set<TrackID> = []
+    private(set) var extendCalls: [Double] = []
     /// What `rewrite`/`generate` hand back as the key actually used; "auto" (default) echoes
     /// back whatever key was asked for, same as a real song with nothing yet to detect.
     var detectedKey: String? = "auto"
@@ -30,8 +32,10 @@ final class FakeGeneratorClient: GeneratorClient {
 
     func generate(style: MusicStyle, model: NoteModel, length: Double, seed: UInt32?,
                   tracks: [TrackID], busyness: [TrackID: Double], noteLength: [TrackID: Double],
-                  key: String?, strictKey: Bool) -> AsyncThrowingStream<GenerationEvent, Error> {
+                  key: String?, strictKey: Bool, keeping song: SongSnapshot?,
+                  locked: Set<TrackID>) -> AsyncThrowingStream<GenerationEvent, Error> {
         generateCalls += 1
+        lastGenerateLocked = locked
         lastGenerateBusyness = busyness
         lastGenerateNoteLength = noteLength
         lastGenerateKey = key
@@ -46,6 +50,11 @@ final class FakeGeneratorClient: GeneratorClient {
                     if let failure { throw failure }
                     var result = Self.song(style: style, length: length, seed: seed, tracks: tracks, busyness: busyness)
                     result.detectedKey = key ?? detectedKey
+                    if let song {   // like the server: locked tracks come back exactly as sent
+                        for i in result.tracks.indices where locked.contains(result.tracks[i].id) {
+                            result.tracks[i].notes = song.track(result.tracks[i].id).notes
+                        }
+                    }
                     continuation.yield(.finished(result))
                     continuation.finish()
                 } catch {
@@ -56,13 +65,37 @@ final class FakeGeneratorClient: GeneratorClient {
         }
     }
 
+    func extend(_ song: SongSnapshot, by seconds: Double, model: NoteModel, seed: UInt32?,
+                busyness: [TrackID: Double], noteLength: [TrackID: Double], key: String?,
+                strictKey: Bool) async throws -> SongSnapshot {
+        extendCalls.append(seconds)
+        if delay > .zero { try await Task.sleep(for: delay) }
+        if let failure { throw failure }
+        var result = song
+        let start = song.lengthSeconds, end = min(start + seconds, 180)
+        for i in result.tracks.indices {
+            let id = result.tracks[i].id
+            let more = Self.notes(for: id, length: end - start, seed: seed ?? song.seed)
+                .map { Note(pitch: $0.pitch, start: $0.start + start, duration: $0.duration, velocity: $0.velocity) }
+            result.tracks[i].notes += more
+        }
+        result.lengthSeconds = end
+        result.detectedKey = key ?? detectedKey
+        return result
+    }
+
     func rewrite(track: TrackID, model: NoteModel, in song: SongSnapshot, seed: UInt32,
                  range: ClosedRange<Double>?, busyness: Double, noteLength: Double, key: String?,
                  strictKey: Bool) async throws -> (notes: [Note], detectedKey: String?) {
         rewriteCalls.append((track, range, busyness, noteLength, key))
         if delay > .zero { try await Task.sleep(for: delay) }
         if let failure { throw failure }
+        // A rewrite never gives back the very same notes (a real one almost never does): the
+        // seed-derived pitches can collide with the current ones about 1 time in 12.
+        let current = Set(song.track(track).notes.map { "\($0.start)-\($0.pitch)" })
         let fresh = Self.thinned(Self.notes(for: track, length: song.lengthSeconds, seed: seed ^ 0x9E37), busyness)
+            .map { n in current.contains("\(n.start)-\(n.pitch)")
+                ? Note(pitch: n.pitch + 1, start: n.start, duration: n.duration, velocity: n.velocity) : n }
         let usedKey = key ?? detectedKey
         guard let range else { return (fresh, usedKey) }
         // Like the real server: only the range is new, everything outside it is untouched.

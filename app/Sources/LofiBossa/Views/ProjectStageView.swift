@@ -157,6 +157,7 @@ private struct RecipeBar: View {
                 SeedField(model: model)
                 if !isCompact { ModelPopup(model: model) }
                 Spacer(minLength: 0)
+                extendButton(iconOnly: false)
                 generateButton
             }
             .padding(.horizontal, LFBSpace.lg)
@@ -174,6 +175,7 @@ private struct RecipeBar: View {
                     SeedField(model: model)
                     ModelPopup(model: model)
                     Spacer(minLength: 0)
+                    extendButton(iconOnly: true)
                     generateButton
                 }
             }
@@ -223,6 +225,19 @@ private struct RecipeBar: View {
         .accessibilityIdentifier("songSettings")
     }
 
+    @ViewBuilder private func extendButton(iconOnly: Bool) -> some View {
+        let button = Button { model.extend() } label: {
+            Label("Extend", systemImage: "arrow.right.to.line")
+        }
+        Group {
+            if iconOnly { button.labelStyle(.iconOnly) } else { button.labelStyle(.titleAndIcon) }
+        }
+        .buttonStyle(.bordered).fixedSize()
+        .disabled(!model.canExtend || isWaitingForGenerator)
+        .help("Continue the song for \(Int(ProjectViewModel.extendStep)) more seconds, every track at once (up to 3:00)")
+        .accessibilityIdentifier("extend")
+    }
+
     private var generateButton: some View {
         Button {
             model.generate()
@@ -236,7 +251,9 @@ private struct RecipeBar: View {
         }
         .buttonStyle(.borderedProminent)
         .keyboardShortcut(.return, modifiers: .command)
-        .disabled(model.isGeneratorBusy || isWaitingForGenerator)
+        .disabled(model.isGeneratorBusy || isWaitingForGenerator || !model.canGenerate)
+        .help(model.lockedTracks.isEmpty ? "Write a new take of every track"
+              : "Write a new take around the locked tracks (they stay as they are)")
         .accessibilityIdentifier("generate")
     }
 
@@ -561,6 +578,7 @@ private struct RulerAndTracks: View {
                 if newValue.effects != model.displayedSnapshot?.track(id).effects { model.setTrackEffects(newValue.effects, for: id) }
                 if newValue.busyness != model.displayedSnapshot?.track(id).busyness { model.setTrackBusyness(newValue.busyness, for: id) }
                 if newValue.noteLength != model.displayedSnapshot?.track(id).noteLength { model.setTrackNoteLength(newValue.noteLength, for: id) }
+                if newValue.isLocked != model.displayedSnapshot?.track(id).isLocked { model.setLocked(newValue.isLocked, for: id) }
             }
         )
     }

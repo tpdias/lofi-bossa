@@ -48,9 +48,18 @@ protocol GeneratorClient: AnyObject, Observable {
     /// `busyness` per track: how much of the model's output the server keeps (see Project.busyness).
     /// `noteLength` per track (see Project.noteLength). `key` nil = Auto (detect it); strictKey
     /// forbids out-of-key notes instead of discouraging them.
+    /// With `song` and some `locked` tracks, those come back exactly as they are in `song` and
+    /// the other tracks are written around them.
     func generate(style: MusicStyle, model: NoteModel, length: Double, seed: UInt32?,
                   tracks: [TrackID], busyness: [TrackID: Double], noteLength: [TrackID: Double],
-                  key: String?, strictKey: Bool) -> AsyncThrowingStream<GenerationEvent, Error>
+                  key: String?, strictKey: Bool, keeping song: SongSnapshot?,
+                  locked: Set<TrackID>) -> AsyncThrowingStream<GenerationEvent, Error>
+
+    /// Continues the song for `seconds` more on every track it has; returns the whole song (its
+    /// own notes unchanged, instruments and mix kept) at its new length.
+    func extend(_ song: SongSnapshot, by seconds: Double, model: NoteModel, seed: UInt32?,
+                busyness: [TrackID: Double], noteLength: [TrackID: Double], key: String?,
+                strictKey: Bool) async throws -> SongSnapshot
 
     /// Rewrites one track so it fits the others. Seed is derived from the song seed plus
     /// the track by the caller. With a `range` only that stretch (seconds) is rewritten; the
@@ -123,12 +132,15 @@ final class LocalGeneratorClient: GeneratorClient {
 
     func generate(style: MusicStyle, model: NoteModel, length: Double, seed: UInt32?,
                   tracks: [TrackID], busyness: [TrackID: Double], noteLength: [TrackID: Double],
-                  key: String?, strictKey: Bool) -> AsyncThrowingStream<GenerationEvent, Error> {
+                  key: String?, strictKey: Bool, keeping song: SongSnapshot?,
+                  locked: Set<TrackID>) -> AsyncThrowingStream<GenerationEvent, Error> {
         AsyncThrowingStream { continuation in
             let task = Task {
                 do {
                     let wire = try await api.generate(style: style, model: model, seconds: length, seed: seed, tracks: tracks,
-                                                     busyness: busyness, noteLength: noteLength, key: key, strictKey: strictKey)
+                                                     busyness: busyness, noteLength: noteLength, key: key, strictKey: strictKey,
+                                                     keeping: song.map(WireSong.init(from:)),
+                                                     locked: tracks.filter(locked.contains))
                     let instruments = Dictionary(uniqueKeysWithValues: style.defaultInstruments.map { ($0.key, $0.value) })
                     continuation.yield(.finished(wire.snapshot(style: style, instruments: instruments, tracks: tracks)))
                     continuation.finish()
@@ -138,6 +150,15 @@ final class LocalGeneratorClient: GeneratorClient {
             }
             continuation.onTermination = { _ in task.cancel() }
         }
+    }
+
+    func extend(_ song: SongSnapshot, by seconds: Double, model: NoteModel, seed: UInt32?,
+                busyness: [TrackID: Double], noteLength: [TrackID: Double], key: String?,
+                strictKey: Bool) async throws -> SongSnapshot {
+        let wire = try await api.extend(WireSong(from: song), by: seconds, style: song.style, model: model, seed: seed,
+                                        tracks: song.trackIDs, busyness: busyness, noteLength: noteLength,
+                                        key: key, strictKey: strictKey)
+        return wire.extending(song)
     }
 
     func rewrite(track: TrackID, model: NoteModel, in song: SongSnapshot, seed: UInt32,

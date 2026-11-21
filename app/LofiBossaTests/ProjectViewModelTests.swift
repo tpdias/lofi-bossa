@@ -545,6 +545,54 @@ final class ProjectViewModelTests: XCTestCase {
         XCTAssertEqual(model.project.currentSnapshot?.detectedKey, "E minor")
     }
 
+    // MARK: Building on the current song
+
+    func testLockedTracksStayAndTheOthersAreRewritten() async {
+        await generate(seed: 1)
+        let piano = notes(.piano), guitar = notes(.guitar)
+        model.setLocked(true, for: .piano)
+        await generate(seed: 2)
+        XCTAssertEqual(generator.lastGenerateLocked, [.piano])
+        XCTAssertEqual(notes(.piano), piano, "a locked track comes back exactly as it was")
+        XCTAssertNotEqual(notes(.guitar), guitar)
+        XCTAssertEqual(model.project.current?.changedTracks.contains(.piano), false)
+        XCTAssertEqual(model.project.currentSnapshot?.track(.piano).isLocked, true, "the lock stays on")
+        if case .takeAroundLocked(_, let kept) = model.project.current?.kind {
+            XCTAssertEqual(kept, [.piano])
+        } else { XCTFail("expected a take around the locked tracks") }
+    }
+
+    func testGenerateIsOffWhenEveryTrackIsLocked() async {
+        await generate(seed: 1)
+        for id in TrackID.core { model.setLocked(true, for: id) }
+        XCTAssertFalse(model.canGenerate)
+        let calls = generator.generateCalls
+        model.generate()
+        XCTAssertEqual(generator.generateCalls, calls)
+    }
+
+    func testExtendAddsTimeAndKeepsTheOldNotes() async {
+        await generate(seed: 1)
+        let before = notes(.bass), length = model.project.currentSnapshot!.lengthSeconds
+        XCTAssertTrue(model.canExtend)
+        model.extend()
+        await waitUntilIdle()
+        let after = model.project.currentSnapshot!
+        XCTAssertEqual(after.lengthSeconds, min(length + 30, 180))
+        XCTAssertEqual(Array(after.track(.bass).notes.prefix(before.count)), before)
+        XCTAssertGreaterThan(after.track(.bass).notes.count, before.count)
+        if case .extend(let to) = model.project.current?.kind { XCTAssertEqual(to, after.lengthSeconds) }
+        else { XCTFail("expected an extend version") }
+        model.undo()
+        XCTAssertEqual(model.project.currentSnapshot?.lengthSeconds, length, "undo goes back to the shorter song")
+    }
+
+    func testExtendIsOffAtTheMaximumLength() async {
+        model.setLength(180)
+        await generate(seed: 1)
+        XCTAssertFalse(model.canExtend)
+    }
+
     func testOldProjectsWithoutNoteLengthOrKeyDecodeToDefaults() throws {
         // Everything busyness/noteLength/key/strictKey existed before: a project saved before
         // today has exactly these keys and no others.

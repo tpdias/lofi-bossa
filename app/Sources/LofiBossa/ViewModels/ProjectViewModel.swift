@@ -127,8 +127,20 @@ final class ProjectViewModel {
         project.currentSnapshot?.track(id).noteLength ?? project.songNoteLength
     }
 
+    /// Tracks the next Generate keeps as they are (and writes the others around).
+    var lockedTracks: Set<TrackID> {
+        Set(project.currentSnapshot?.tracks.filter(\.isLocked).map(\.id) ?? [])
+    }
+
+    /// Every track locked leaves nothing for Generate to write.
+    var canGenerate: Bool {
+        guard let snapshot = project.currentSnapshot else { return true }
+        return !snapshot.tracks.allSatisfy(\.isLocked)
+    }
+
     func generate() {
-        guard !isGeneratorBusy else { return }
+        guard !isGeneratorBusy, canGenerate else { return }
+        let locked = lockedTracks
         let seed = project.pinnedSeed ?? UInt32.random(in: 0...UInt32.max)
         phase = .generating(startedAt: .now, seed: seed)
         generateTask = Task {
@@ -138,17 +150,55 @@ final class ProjectViewModel {
                     seed: project.pinnedSeed, tracks: tracksToGenerate,
                     busyness: Dictionary(uniqueKeysWithValues: tracksToGenerate.map { ($0, busyness(for: $0)) }),
                     noteLength: Dictionary(uniqueKeysWithValues: tracksToGenerate.map { ($0, noteLength(for: $0)) }),
-                    key: project.key, strictKey: project.isStrictKey
+                    key: project.key, strictKey: project.isStrictKey,
+                    keeping: locked.isEmpty ? nil : project.currentSnapshot, locked: locked
                 ) {
                     guard case .finished(var snapshot) = event else { continue }
                     snapshot = carryOverMixIfSameStyle(onto: snapshot)
-                    appendVersion(kind: .newTake(seed: snapshot.seed), changed: Set(snapshot.trackIDs), snapshot: snapshot)
+                    for i in snapshot.tracks.indices { snapshot.tracks[i].isLocked = locked.contains(snapshot.tracks[i].id) }
+                    let kept = snapshot.trackIDs.filter(locked.contains)
+                    appendVersion(kind: kept.isEmpty ? .newTake(seed: snapshot.seed)
+                                                     : .takeAroundLocked(seed: snapshot.seed, kept: kept),
+                                  changed: Set(snapshot.trackIDs).subtracting(locked), snapshot: snapshot)
                 }
                 phase = .idle
             } catch is CancellationError {
                 phase = .idle
             } catch {
                 phase = .failed(message: "That take didn't finish.",
+                                detail: (error as? API.ServerError)?.message ?? error.localizedDescription,
+                                trackScope: nil)
+            }
+        }
+    }
+
+    nonisolated static let maxSongLength: Double = 180
+    nonisolated static let extendStep: Double = 30
+
+    var canExtend: Bool {
+        guard let snapshot = project.currentSnapshot else { return false }
+        return !isGeneratorBusy && listeningVersionID == nil && snapshot.lengthSeconds < Self.maxSongLength - 1
+    }
+
+    /// Continues the current song for `seconds` more, every track at once; a new version.
+    func extend(by seconds: Double = ProjectViewModel.extendStep) {
+        guard canExtend, let snapshot = project.currentSnapshot else { return }
+        let seed = UInt32.random(in: 0...UInt32.max)
+        phase = .generating(startedAt: .now, seed: seed)
+        generateTask = Task {
+            do {
+                let ids = snapshot.trackIDs
+                let longer = try await generator.extend(
+                    snapshot, by: seconds, model: activeModel, seed: seed,
+                    busyness: Dictionary(uniqueKeysWithValues: ids.map { ($0, busyness(for: $0)) }),
+                    noteLength: Dictionary(uniqueKeysWithValues: ids.map { ($0, noteLength(for: $0)) }),
+                    key: project.key, strictKey: project.isStrictKey)
+                appendVersion(kind: .extend(to: longer.lengthSeconds), changed: Set(ids), snapshot: longer)
+                phase = .idle
+            } catch is CancellationError {
+                phase = .idle
+            } catch {
+                phase = .failed(message: "The song couldn't be extended.",
                                 detail: (error as? API.ServerError)?.message ?? error.localizedDescription,
                                 trackScope: nil)
             }
@@ -433,6 +483,7 @@ final class ProjectViewModel {
     /// nil = follow the song's busyness. Takes effect on the next generate or rewrite.
     func setTrackBusyness(_ value: Double?, for id: TrackID) { mutateCurrentTrack(id) { $0.busyness = value } }
     func setTrackNoteLength(_ value: Double?, for id: TrackID) { mutateCurrentTrack(id) { $0.noteLength = value } }
+    func setLocked(_ locked: Bool, for id: TrackID) { mutateCurrentTrack(id) { $0.isLocked = locked } }
 
     /// Back to the style's starting effects for this track (neutral if the style gives it none).
     func resetTrackEffects(for id: TrackID) {
@@ -592,6 +643,11 @@ final class ProjectViewModel {
     func nudgePlayhead(by seconds: Double) { seek(to: min(max(position + seconds, 0), duration)) }
 
     func selectTrack(_ id: TrackID) { selectedTrack = id }
+    func toggleLockOfSelectedTrack() {
+        guard let id = selectedTrack, let track = displayedSnapshot?.track(id) else { return }
+        setLocked(!track.isLocked, for: id)
+    }
+
     func toggleMuteOfSelectedTrack() {
         guard let id = selectedTrack, let track = displayedSnapshot?.track(id) else { return }
         setMuted(!track.isMuted, for: id)
