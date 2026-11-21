@@ -122,6 +122,11 @@ final class ProjectViewModel {
         project.currentSnapshot?.track(id).busyness ?? project.songBusyness
     }
 
+    /// How long a track's new notes should be: the track's own, or the song's.
+    func noteLength(for id: TrackID) -> Double {
+        project.currentSnapshot?.track(id).noteLength ?? project.songNoteLength
+    }
+
     func generate() {
         guard !isGeneratorBusy else { return }
         let seed = project.pinnedSeed ?? UInt32.random(in: 0...UInt32.max)
@@ -131,7 +136,9 @@ final class ProjectViewModel {
                 for try await event in generator.generate(
                     style: project.style, model: activeModel, length: project.lengthSeconds,
                     seed: project.pinnedSeed, tracks: tracksToGenerate,
-                    busyness: Dictionary(uniqueKeysWithValues: tracksToGenerate.map { ($0, busyness(for: $0)) })
+                    busyness: Dictionary(uniqueKeysWithValues: tracksToGenerate.map { ($0, busyness(for: $0)) }),
+                    noteLength: Dictionary(uniqueKeysWithValues: tracksToGenerate.map { ($0, noteLength(for: $0)) }),
+                    key: project.key, strictKey: project.isStrictKey
                 ) {
                     guard case .finished(var snapshot) = event else { continue }
                     snapshot = carryOverMixIfSameStyle(onto: snapshot)
@@ -170,9 +177,12 @@ final class ProjectViewModel {
         let seed = rewriteSeed(songSeed: snapshot.seed, track: track, attempt: attempt)
         generateTask = Task {
             do {
-                let notes = try await generator.rewrite(track: track, model: activeModel, in: snapshot, seed: seed, range: range,
-                                                         busyness: busyness(for: track))
+                let (notes, detectedKey) = try await generator.rewrite(
+                    track: track, model: activeModel, in: snapshot, seed: seed, range: range,
+                    busyness: busyness(for: track), noteLength: noteLength(for: track),
+                    key: project.key, strictKey: project.isStrictKey)
                 var newSnapshot = snapshot
+                newSnapshot.detectedKey = detectedKey
                 if let i = newSnapshot.tracks.firstIndex(where: { $0.id == track }) {
                     newSnapshot.tracks[i].notes = notes
                 }
@@ -215,6 +225,7 @@ final class ProjectViewModel {
             result.tracks[i].isSoloed = previous.isSoloed
             result.tracks[i].effects = previous.effects
             result.tracks[i].busyness = previous.busyness
+            result.tracks[i].noteLength = previous.noteLength
         }
         return result
     }
@@ -421,6 +432,7 @@ final class ProjectViewModel {
     func setTrackEffects(_ effects: TrackEffects, for id: TrackID) { mutateCurrentTrack(id) { $0.effects = effects } }
     /// nil = follow the song's busyness. Takes effect on the next generate or rewrite.
     func setTrackBusyness(_ value: Double?, for id: TrackID) { mutateCurrentTrack(id) { $0.busyness = value } }
+    func setTrackNoteLength(_ value: Double?, for id: TrackID) { mutateCurrentTrack(id) { $0.noteLength = value } }
 
     /// Back to the style's starting effects for this track (neutral if the style gives it none).
     func resetTrackEffects(for id: TrackID) {
@@ -461,6 +473,14 @@ final class ProjectViewModel {
     func setModel(_ model: NoteModel) { project.model = model; persist() }
     func setLength(_ seconds: Double) { project.lengthSeconds = seconds; persist() }
     func setBusyness(_ value: Double) { project.busyness = min(max(value, 0), 1); persist() }
+    func setNoteLength(_ value: Double) { project.noteLength = min(max(value, 0), 1); persist() }
+    /// `nil` (Auto) detects the key from the song; a name from `MusicKey.names` pins it.
+    func setKey(_ name: String?) { project.key = name; persist() }
+    func setStrictKey(_ strict: Bool) { project.strictKey = strict; persist() }
+
+    /// What to show next to the Key menu: the detected key when Auto and there is a current
+    /// song to have detected one from, otherwise nothing.
+    var displayedKey: String? { project.key ?? project.currentSnapshot?.detectedKey }
 
     func pinSeed(_ seed: UInt32) { project.pinnedSeed = seed; persist() }
     func clearPinnedSeed() { project.pinnedSeed = nil; persist() }

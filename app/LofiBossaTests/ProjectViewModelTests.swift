@@ -491,4 +491,72 @@ final class ProjectViewModelTests: XCTestCase {
         XCTAssertEqual(notes(.piano), before)
         XCTAssertEqual(notes(.piano).filter { $0.start == 4 && $0.duration == 1 }.count, 6)
     }
+
+    // MARK: Note length & key
+
+    func testGenerateSendsTheSongNoteLengthKeyAndStrictFlag() async {
+        model.setNoteLength(0.8)
+        model.setKey("A minor")
+        model.setStrictKey(true)
+        await generate(seed: 1)
+        XCTAssertEqual(generator.lastGenerateNoteLength, Dictionary(uniqueKeysWithValues: TrackID.core.map { ($0, 0.8) }))
+        XCTAssertEqual(generator.lastGenerateKey, "A minor")
+        XCTAssertTrue(generator.lastGenerateStrictKey)
+    }
+
+    func testDefaultKeyIsAutoAndNotStrict() async {
+        await generate(seed: 1)
+        XCTAssertNil(generator.lastGenerateKey)
+        XCTAssertFalse(generator.lastGenerateStrictKey)
+    }
+
+    func testATracksOwnNoteLengthWinsOnRewrite() async {
+        await generate(seed: 1)
+        model.setTrackNoteLength(0.9, for: .bass)
+        model.rewrite(.bass)
+        await waitUntilIdle()
+        XCTAssertEqual(generator.rewriteCalls.last?.noteLength, 0.9)
+        model.rewrite(.piano)
+        await waitUntilIdle()
+        XCTAssertEqual(generator.rewriteCalls.last?.noteLength, Project.defaultNoteLength)
+    }
+
+    func testTrackNoteLengthIsKeptOnTheNextTake() async {
+        await generate(seed: 1)
+        model.setTrackNoteLength(0.1, for: .guitar)
+        await generate(seed: 2)
+        XCTAssertEqual(model.project.currentSnapshot?.track(.guitar).noteLength, 0.1)
+        XCTAssertEqual(generator.lastGenerateNoteLength[.guitar], 0.1)
+    }
+
+    func testDisplayedKeyShowsTheDetectedKeyWhenAuto() async {
+        generator.detectedKey = "G minor"
+        await generate(seed: 1)
+        XCTAssertEqual(model.displayedKey, "G minor")
+        model.setKey("C major")
+        XCTAssertEqual(model.displayedKey, "C major", "a chosen key always wins over what was detected")
+    }
+
+    func testRewriteReportsTheKeyUsedOnTheSnapshot() async {
+        await generate(seed: 1)
+        generator.detectedKey = "E minor"
+        model.rewrite(.bass)
+        await waitUntilIdle()
+        XCTAssertEqual(model.project.currentSnapshot?.detectedKey, "E minor")
+    }
+
+    func testOldProjectsWithoutNoteLengthOrKeyDecodeToDefaults() throws {
+        // Everything busyness/noteLength/key/strictKey existed before: a project saved before
+        // today has exactly these keys and no others.
+        let json = Data("""
+        {"id":"\(UUID().uuidString)","name":"Old","createdAt":0,"modifiedAt":0,"style":"lofi",
+         "model":"fineTuned","lengthSeconds":90,"versions":[]}
+        """.utf8)
+        let project = try JSONDecoder().decode(Project.self, from: json)
+        XCTAssertNil(project.busyness)
+        XCTAssertNil(project.noteLength)
+        XCTAssertEqual(project.songNoteLength, Project.defaultNoteLength)
+        XCTAssertNil(project.key)
+        XCTAssertFalse(project.isStrictKey)
+    }
 }

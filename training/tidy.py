@@ -9,7 +9,12 @@ Every function works on the song JSON's note dicts ({"start", "duration", "pitch
 seconds). `busyness` goes from 0 (sparse) through 0.5 (default) to 1 (the model's notes,
 untouched). Results are deterministic for a given seed.
 
-    python training/tidy.py --report song.json [--busyness 0.5]
+Two more, independent knobs, applied whenever the caller passes them (unlike busyness, they are
+never skipped at the model's raw output): `note_length` (0 short .. 0.5 default .. 1 long)
+stretches staccato notes with `legato()` and clamps drum hits, and `key` (e.g. "A minor", from
+`tracks.KEYS`) optionally snaps stray out-of-key notes back in when `key_strict`.
+
+    python training/tidy.py --report song.json [--busyness 0.5] [--note-length 0.5] [--key "A minor"]
 """
 
 import argparse
@@ -57,6 +62,89 @@ def settings(track, busyness):
     }
 
 
+# ---- Note length: a separate knob from busyness, so it still applies at busyness == 1 ----
+
+# Seconds: the "normal" (note_length 0.5) minimum new note length, per melodic track.
+NOTE_LENGTH = {"piano": 0.20, "keys": 0.35, "guitar": 0.18, "bass": 0.30, "lead": 0.30, "vibes": 0.18}
+DRUM_MAX_DURATION = 0.12   # seconds; a drum hit, not a held chord
+
+# Within PITCH_COOLDOWN seconds, the same pitch may restart at most this many times, even with
+# other notes in between (the busyness repeat-spam step above only catches back-to-back repeats
+# of the very same chord). Keys is the track this shows up on most.
+PITCH_COOLDOWN = 1.5
+PITCH_COOLDOWN_MAX = {"keys": 2, "lead": 2, "vibes": 2, "piano": 3, "guitar": 3, "bass": 2}
+
+
+def min_duration(track, note_length):
+    """Seconds: the shortest a new note on this (non-drum) track should be."""
+    base = NOTE_LENGTH.get(track, NOTE_LENGTH["piano"])
+    return knob(note_length, base * 0.3, base, base * 3)
+
+
+def legato(track, notes, min_length):
+    """Notes shorter than `min_length` are stretched up to the next onset of this track (any
+    pitch), capped at `min_length`, instead of ending early and leaving a silent gap. A note
+    past every other one is simply given the full length."""
+    if not notes:
+        return notes
+    notes = sorted((dict(n) for n in notes), key=lambda n: (n["start"], n["pitch"]))
+    for i, n in enumerate(notes):
+        if n["duration"] >= min_length:
+            continue
+        j = i + 1
+        while j < len(notes) and notes[j]["start"] <= n["start"]:
+            j += 1
+        ceiling = notes[j]["start"] if j < len(notes) else n["start"] + min_length
+        n["duration"] = max(n["duration"], min(min_length, max(ceiling - n["start"], MIN_LENGTH)))
+    return notes
+
+
+def clamp_drums(notes):
+    """A drum "note" is a hit, not a held chord; anything longer than DRUM_MAX_DURATION is cut."""
+    return [{**n, "duration": min(n["duration"], DRUM_MAX_DURATION)} for n in notes]
+
+
+def pitch_cooldown(track, notes):
+    """Drop the extra onsets once the same pitch has restarted PITCH_COOLDOWN_MAX[track] times
+    within any PITCH_COOLDOWN-second span (deterministic: the earliest onsets win)."""
+    limit = PITCH_COOLDOWN_MAX.get(track)
+    if not limit or not notes:
+        return notes
+    by_pitch = {}
+    for n in sorted(notes, key=lambda n: n["start"]):
+        by_pitch.setdefault(n["pitch"], []).append(n)
+    drop = set()
+    for group in by_pitch.values():
+        window = []
+        for n in group:
+            window = [t for t in window if n["start"] - t < PITCH_COOLDOWN]
+            if len(window) >= limit:
+                drop.add(id(n))
+            else:
+                window.append(n["start"])
+    return [n for n in notes if id(n) not in drop]
+
+
+def snap_to_key(notes, key):
+    """Move any note outside `key` (a set of pitch classes, e.g. tracks.KEYS["A minor"]) to the
+    nearest in-key pitch. A backstop for `key_strict`, since the sampler already keeps new notes
+    in key; this only matters for notes that came from elsewhere."""
+    out = []
+    for n in notes:
+        n = dict(n)
+        pc = n["pitch"] % 12
+        if pc not in key:
+            for d in range(1, 7):
+                if (pc - d) % 12 in key:
+                    n["pitch"] -= d
+                    break
+                if (pc + d) % 12 in key:
+                    n["pitch"] += d
+                    break
+        out.append(n)
+    return out
+
+
 def groups_of(notes):
     """Notes sorted and grouped by onset."""
     out = []
@@ -88,11 +176,32 @@ def _cut(n, at):
     n["duration"] = max(at - n["start"], MIN_LENGTH)
 
 
-def tidy_track(track, notes, busyness, rng):
-    """Cleaned copy of one track's notes. busyness >= 1 returns them unchanged."""
+def tidy_track(track, notes, busyness, rng, note_length=None, key=None, key_strict=False):
+    """Cleaned copy of one track's notes.
+
+    busyness >= 1 skips the busyness-driven thinning below (steps 1-6: the model's raw notes).
+    note_length and key are independent of busyness and of each other, and still apply even
+    then: note_length (0 short .. 1 long, None = off) runs legato/clamp_drums/pitch_cooldown;
+    key (a set of pitch classes, None = off) runs snap_to_key when key_strict.
+    """
     notes = [dict(n) for n in notes]
-    if busyness >= 1 or not notes:
+    if not notes:
         return notes
+    if busyness < 1:
+        notes = _thin(track, notes, busyness, rng)
+    if note_length is not None:
+        if track == "drums":
+            notes = clamp_drums(notes)
+        else:
+            notes = pitch_cooldown(track, legato(track, notes, min_duration(track, note_length)))
+    if key is not None and key_strict and track != "drums":
+        notes = snap_to_key(notes, key)
+    return sorted(notes, key=lambda n: (n["start"], n["pitch"]))
+
+
+def _thin(track, notes, busyness, rng):
+    """Steps 1-6 of tidy_track: the busyness-driven thinning, unchanged from before note_length
+    and key existed."""
     s = settings(track, busyness)
     drums = track == "drums"
     groups = groups_of(notes)
@@ -171,20 +280,29 @@ def tidy_track(track, notes, busyness, rng):
                 _cut(n, t)
             active = [n for n in active if _end(n) > t + 1e-6] + g
 
-    return sorted((n for g in groups for n in g), key=lambda n: (n["start"], n["pitch"]))
+    return [n for g in groups for n in g]
 
 
-def tidy_song(tracks, busyness, seed=0, only=None):
-    """Cleaned copy of {track: notes}. `busyness` is one value or {track: value} (missing
-    tracks use 0.5). `only` limits the clean-up to those tracks; the rest are copied as-is."""
+def _per_track(value, track, default):
+    if value is None:
+        return None
+    return value.get(track, default) if isinstance(value, dict) else value
+
+
+def tidy_song(tracks, busyness, seed=0, only=None, note_length=None, key=None, key_strict=False):
+    """Cleaned copy of {track: notes}. `busyness` and `note_length` are each one value or
+    {track: value} (missing tracks use 0.5 for busyness, are skipped for note_length). `key`
+    is one set of pitch classes for the whole song, or None. `only` limits the clean-up to
+    those tracks; the rest are copied as-is."""
     out = {}
     for track, notes in tracks.items():
-        b = busyness.get(track, 0.5) if isinstance(busyness, dict) else busyness
         if only is not None and track not in only:
             out[track] = [dict(n) for n in notes]
             continue
+        b = _per_track(busyness, track, 0.5)
+        nl = _per_track(note_length, track, None)
         rng = random.Random(f"{seed}-{track}")
-        out[track] = tidy_track(track, notes, b, rng)
+        out[track] = tidy_track(track, notes, b, rng, note_length=nl, key=key, key_strict=key_strict)
     return out
 
 
@@ -218,12 +336,25 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--report", required=True, help="a song JSON as /generate returns it")
     ap.add_argument("--busyness", type=float, default=0.5)
+    ap.add_argument("--note-length", type=float, help="0 short .. 0.5 default .. 1 long; omit to skip")
+    ap.add_argument("--key", help='e.g. "A minor"; omit to skip, or "auto" to detect it')
+    ap.add_argument("--strict-key", action="store_true")
     ap.add_argument("--seed", type=int, default=0)
     args = ap.parse_args()
     song = json.load(open(args.report))
     seconds = float(song.get("seconds") or 1)
-    tidied = tidy_song(song["tracks"], args.busyness, args.seed)
-    print(f"busyness {args.busyness}")
+
+    key_pcs, key_name = None, None
+    if args.key:
+        import tracks
+        key_name = tracks.detect_key([n for notes in song["tracks"].values() for n in notes]) \
+            if args.key == "auto" else args.key
+        key_pcs = tracks.KEYS[key_name]
+
+    tidied = tidy_song(song["tracks"], args.busyness, args.seed, note_length=args.note_length,
+                       key=key_pcs, key_strict=args.strict_key)
+    print(f"busyness {args.busyness}" + (f"  note_length {args.note_length}" if args.note_length is not None else "")
+          + (f"  key {key_name}" if key_name else ""))
     for track, notes in song["tracks"].items():
         if not notes:
             continue

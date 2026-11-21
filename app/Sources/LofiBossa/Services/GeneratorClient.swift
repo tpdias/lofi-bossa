@@ -46,14 +46,18 @@ protocol GeneratorClient: AnyObject, Observable {
     var finetunedStyles: Set<MusicStyle> { get }
 
     /// `busyness` per track: how much of the model's output the server keeps (see Project.busyness).
+    /// `noteLength` per track (see Project.noteLength). `key` nil = Auto (detect it); strictKey
+    /// forbids out-of-key notes instead of discouraging them.
     func generate(style: MusicStyle, model: NoteModel, length: Double, seed: UInt32?,
-                  tracks: [TrackID], busyness: [TrackID: Double]) -> AsyncThrowingStream<GenerationEvent, Error>
+                  tracks: [TrackID], busyness: [TrackID: Double], noteLength: [TrackID: Double],
+                  key: String?, strictKey: Bool) -> AsyncThrowingStream<GenerationEvent, Error>
 
     /// Rewrites one track so it fits the others. Seed is derived from the song seed plus
     /// the track by the caller. With a `range` only that stretch (seconds) is rewritten; the
     /// track's notes outside it come back unchanged.
     func rewrite(track: TrackID, model: NoteModel, in song: SongSnapshot, seed: UInt32,
-                 range: ClosedRange<Double>?, busyness: Double) async throws -> [Note]
+                 range: ClosedRange<Double>?, busyness: Double, noteLength: Double, key: String?,
+                 strictKey: Bool) async throws -> (notes: [Note], detectedKey: String?)
 
     /// Wired to "Restart generator" in the offline banner.
     func restart() async throws
@@ -118,12 +122,13 @@ final class LocalGeneratorClient: GeneratorClient {
     }
 
     func generate(style: MusicStyle, model: NoteModel, length: Double, seed: UInt32?,
-                  tracks: [TrackID], busyness: [TrackID: Double]) -> AsyncThrowingStream<GenerationEvent, Error> {
+                  tracks: [TrackID], busyness: [TrackID: Double], noteLength: [TrackID: Double],
+                  key: String?, strictKey: Bool) -> AsyncThrowingStream<GenerationEvent, Error> {
         AsyncThrowingStream { continuation in
             let task = Task {
                 do {
                     let wire = try await api.generate(style: style, model: model, seconds: length, seed: seed, tracks: tracks,
-                                                     busyness: busyness)
+                                                     busyness: busyness, noteLength: noteLength, key: key, strictKey: strictKey)
                     let instruments = Dictionary(uniqueKeysWithValues: style.defaultInstruments.map { ($0.key, $0.value) })
                     continuation.yield(.finished(wire.snapshot(style: style, instruments: instruments, tracks: tracks)))
                     continuation.finish()
@@ -136,9 +141,11 @@ final class LocalGeneratorClient: GeneratorClient {
     }
 
     func rewrite(track: TrackID, model: NoteModel, in song: SongSnapshot, seed: UInt32,
-                 range: ClosedRange<Double>?, busyness: Double) async throws -> [Note] {
+                 range: ClosedRange<Double>?, busyness: Double, noteLength: Double, key: String?,
+                 strictKey: Bool) async throws -> (notes: [Note], detectedKey: String?) {
         let wire = try await api.regenerate(track, in: WireSong(from: song), style: song.style, model: model,
-                                            seed: seed, range: range, busyness: busyness)
-        return wire.notes(track)
+                                            seed: seed, range: range, busyness: busyness, noteLength: noteLength,
+                                            key: key, strictKey: strictKey)
+        return (wire.notes(track), wire.key)
     }
 }

@@ -7,7 +7,10 @@ struct TrackEffectsPopover: View {
     @Binding var effects: TrackEffects
     /// This track's own busyness; nil follows the song's.
     @Binding var busyness: Double?
+    /// This track's own note length; nil follows the song's.
+    @Binding var noteLength: Double?
     var songBusyness: Double = Project.defaultBusyness
+    var songNoteLength: Double = Project.defaultNoteLength
     var onReset: () -> Void
 
     var body: some View {
@@ -54,6 +57,27 @@ struct TrackEffectsPopover: View {
                     Text("Busy").font(.lfbCaption).foregroundStyle(Color.lfbTextTertiary)
                 }
                 Text("How many of the model's notes this track keeps on the next rewrite or take.")
+                    .font(.lfbCaption).foregroundStyle(Color.lfbTextSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Divider()
+            VStack(alignment: .leading, spacing: LFBSpace.xs) {
+                HStack {
+                    Text("Note length").font(.lfbBodyMedium)
+                    Spacer()
+                    Toggle("Same as song", isOn: Binding(
+                        get: { noteLength == nil },
+                        set: { noteLength = $0 ? nil : songNoteLength }))
+                        .toggleStyle(.checkbox).font(.lfbCaption)
+                }
+                HStack(spacing: LFBSpace.sm) {
+                    Text("Short").font(.lfbCaption).foregroundStyle(Color.lfbTextTertiary)
+                    Slider(value: Binding(get: { noteLength ?? songNoteLength }, set: { noteLength = $0 }), in: 0...1)
+                        .tint(track.color)
+                    Text("Long").font(.lfbCaption).foregroundStyle(Color.lfbTextTertiary)
+                }
+                Text("How long this track's new notes are, on the next rewrite or take.")
                     .font(.lfbCaption).foregroundStyle(Color.lfbTextSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }

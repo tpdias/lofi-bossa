@@ -90,7 +90,9 @@ def _sample(logits, top_p, rng):
 @torch.no_grad()
 def generate(model, start_time, end_time, inputs=None, controls=None, instruments=None,
              top_p=0.98, seed=None, progress=None, rest_penalty=0.0, max_notes_per_second=24,
-             max_rests=2):
+             max_rests=2, key=None, key_strict=False, key_penalty=3.0,
+             min_duration_ticks=0, duration_bias_ticks=200, duration_bias=1.5,
+             drum_min_gap_ticks=None):
     """Generate events between start_time and end_time (seconds).
 
     inputs       events to continue from (those after start_time are kept fixed)
@@ -104,6 +106,17 @@ def generate(model, start_time, end_time, inputs=None, controls=None, instrument
                  fine-tuned checkpoints do on longer songs.
     rest_penalty amount subtracted from the "rest" logit; math.inf forbids rests, so every
                  event is a note. Used when the model would otherwise leave a track silent.
+    key          pitch classes (0 = C .. 11 = B) new, non-drum notes are nudged or (key_strict)
+                 confined to, e.g. tracks.KEYS["A minor"]. None = no key.
+    key_strict   forbid out-of-key pitches outright instead of just penalizing them.
+    min_duration_ticks  hard floor on new notes' duration (10 ms ticks); only sound when every
+                 new note is for a single track (instruments all one family), since duration is
+                 sampled before the model has chosen which track the note belongs to.
+    duration_bias_ticks, duration_bias  below this many ticks, duration logits are penalized in
+                 proportion to how short they are (times `duration_bias`); a softer, multi-track
+                 version of the same idea, finished off afterwards by tidy.py's legato step.
+    drum_min_gap_ticks  {GM drum pitch: minimum ticks since that pitch's last hit}; hits that
+                 come sooner are forbidden. Only matters when instrument 128 (drums) is allowed.
     Returns the new events merged with `inputs`; controls are not included.
     """
     inputs = inputs or []
@@ -120,6 +133,22 @@ def generate(model, start_time, end_time, inputs=None, controls=None, instrument
     allowed[MAX_NOTE] = True
     note_bias = torch.zeros(MAX_NOTE + 1)
     note_bias[MAX_NOTE] = -rest_penalty
+    if key is not None:
+        for instr in range(MAX_INSTR - 1):            # every pitched instrument, not drums (128)
+            for pitch in range(MAX_PITCH):
+                if pitch % 12 not in key:
+                    idx = instr * MAX_PITCH + pitch
+                    if key_strict:
+                        allowed[idx] = False
+                    else:
+                        note_bias[idx] -= key_penalty
+    drum_min_gap_ticks = drum_min_gap_ticks or {}
+    drum_last = {}   # GM pitch -> tick it last sounded, for drum_min_gap_ticks
+
+    duration_bias_arr = torch.zeros(MAX_DUR)
+    if duration_bias_ticks > 0 and duration_bias > 0:
+        short = torch.arange(1, min(duration_bias_ticks, MAX_DUR))
+        duration_bias_arr[1:len(short) + 1] = -duration_bias * (1 - short.float() / duration_bias_ticks)
 
     prompt = ops.pad(ops.clip(inputs, 0, start, clip_duration=False, seconds=False), start)
     future = ops.clip(inputs, start + 1, ops.max_time(inputs, seconds=False),
@@ -177,17 +206,28 @@ def generate(model, start_time, end_time, inputs=None, controls=None, instrument
             break
         ctx.feed_one(TIME_OFFSET + rel_time)
 
-        logits = ctx.logits[DUR_OFFSET:DUR_OFFSET + MAX_DUR].clone()
+        logits = ctx.logits[DUR_OFFSET:DUR_OFFSET + MAX_DUR].clone() + duration_bias_arr
         force_note = rest_run >= max_rests
         if rest_penalty > 0 or force_note:
             logits[0] = -math.inf   # zero duration only makes sense for a rest
+        if min_duration_ticks > 1:
+            logits[1:min(min_duration_ticks, MAX_DUR)] = -math.inf
         dur = _sample(logits, top_p, rng)
         ctx.feed_one(DUR_OFFSET + dur)
 
+        note_mask = no_rest if force_note else allowed
+        if drum_min_gap_ticks and allowed[MAX_INSTR * MAX_PITCH - MAX_PITCH]:   # drums allowed
+            for pitch, min_gap in drum_min_gap_ticks.items():
+                last = drum_last.get(pitch)
+                if last is not None and new_time - last < min_gap:
+                    note_mask = note_mask.clone()
+                    note_mask[128 * MAX_PITCH + pitch] = False
         logits = (ctx.logits[NOTE_OFFSET:NOTE_OFFSET + MAX_NOTE + 1] + note_bias).masked_fill(
-            ~(no_rest if force_note else allowed), -math.inf)
+            ~note_mask, -math.inf)
         note = _sample(logits, top_p, rng)
         ctx.feed_one(NOTE_OFFSET + note)
+        if note // MAX_PITCH == 128:
+            drum_last[note % MAX_PITCH] = new_time
 
         tokens.extend([TIME_OFFSET + new_time, DUR_OFFSET + dur, NOTE_OFFSET + note])
         same_tick = same_tick + 1 if new_time == current else 0
@@ -205,7 +245,8 @@ def generate(model, start_time, end_time, inputs=None, controls=None, instrument
 
 
 def accompany(model, fixed_events, seconds, instruments, top_p=0.98, seed=None, progress=None,
-              min_notes_per_second=0.5):
+              min_notes_per_second=0.5, key=None, key_strict=False, min_duration_ticks=0,
+              drum_min_gap_ticks=None):
     """Write new notes for `instruments` around fixed events. Returns only the new events.
 
     The model sometimes answers with silence (rests only). If the result is sparser than
@@ -215,14 +256,16 @@ def accompany(model, fixed_events, seconds, instruments, top_p=0.98, seed=None, 
     for rest_penalty in (0.0, 4.0, math.inf):
         new = generate(model, 0, seconds, controls=controls, instruments=instruments,
                        top_p=top_p, seed=seed, progress=progress, rest_penalty=rest_penalty,
-                       max_notes_per_second=12, max_rests=8)
+                       max_notes_per_second=12, max_rests=8, key=key, key_strict=key_strict,
+                       min_duration_ticks=min_duration_ticks, drum_min_gap_ticks=drum_min_gap_ticks)
         if len(new) // 3 >= min_notes_per_second * seconds:
             break
     return new
 
 
 def rewrite_range(model, events, instruments, start, end, top_p=0.98, seed=None, progress=None,
-                  min_notes_per_second=0.5):
+                  min_notes_per_second=0.5, key=None, key_strict=False, min_duration_ticks=0,
+                  drum_min_gap_ticks=None):
     """Rewrite one instrument group between `start` and `end` seconds; everything else is kept.
 
     events       the whole song as event triples
@@ -247,7 +290,8 @@ def rewrite_range(model, events, instruments, start, end, top_p=0.98, seed=None,
     for rest_penalty in (0.0, 4.0, math.inf):
         merged = generate(model, start, end, inputs=kept, instruments=instruments, top_p=top_p,
                           seed=seed, progress=progress, rest_penalty=rest_penalty,
-                          max_notes_per_second=12, max_rests=8)
+                          max_notes_per_second=12, max_rests=8, key=key, key_strict=key_strict,
+                          min_duration_ticks=min_duration_ticks, drum_min_gap_ticks=drum_min_gap_ticks)
         new = []
         for i in range(0, len(merged), 3):
             time = merged[i] - TIME_OFFSET
