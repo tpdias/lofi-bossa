@@ -1,5 +1,7 @@
 import Foundation
 
+#if os(macOS)
+
 /// Launches and supervises the local Python generator (`training/server.py`) as a child
 /// process, so the app does not depend on the user starting it by hand in a terminal.
 ///
@@ -95,3 +97,24 @@ final class GeneratorProcess {
         if recentLog.count > 200 { recentLog.removeFirst(recentLog.count - 200) }
     }
 }
+
+#else
+
+/// iOS cannot launch a helper process, so there is no local Python server to supervise. This
+/// stub keeps `LocalGeneratorClient` compiling (it can still reach a server someone else
+/// started, e.g. the Mac's own, from the Simulator with `--local-generator`); the app's iOS
+/// default is `OnDeviceGeneratorClient`.
+@MainActor
+final class GeneratorProcess {
+    let isRunning = false
+    let recentLog: [String] = []
+    var isAvailable: Bool { false }
+    func start() {}
+    func stop() {}
+    func restart() {}
+    var hasFailedRepeatedly: Bool { false }
+    var lastLogLine: String? { nil }
+    var fullLog: String { "" }
+}
+
+#endif

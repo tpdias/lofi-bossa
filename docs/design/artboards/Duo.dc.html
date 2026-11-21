@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lo-Fi &amp; Bossa — iPhone Duo, open</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./lfb.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Nunito:wght@500;600;700&display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div class="lfb m-root m-short {{themeCls}}" style="width: {{w}}px; height: {{h}}px">
+<div class="m-col" style="padding-top: {{safeTop}}px">
+<div class="d-pages {{pagesCls}}">
+
+  <!-- ===== LEFT (or TOP) PAGE ===== -->
+  <section class="d-page" aria-label="{{leftLabel}}">
+
+    <sc-if value="{{isLib}}" hint-placeholder-val="{{false}}">
+    <div class="m-col">
+      <div class="m-nav"><span class="grow"></span><button class="m-ib solid" aria-label="New project"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="{{ic.plus}}"></path></svg></button></div>
+      <h1 class="m-large rd" style="font-size: 28px">Projects</h1>
+      <label class="m-search"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="{{ic.search}}"></path></svg><input type="search" placeholder="Search projects" aria-label="Search projects"></label>
+      <div style="display: flex; flex-direction: column; gap: 2px; padding: 0 8px; overflow: hidden">
+        <sc-for list="{{cards}}" as="c" hint-placeholder-count="6">
+        <button class="d-row {{c.cls}}">
+          <span class="thumb" aria-hidden="true"><sc-for list="{{c.lanes}}" as="l" hint-placeholder-count="4"><span class="tl4 {{l.cls}}"><sc-for list="{{l.notes}}" as="n" hint-placeholder-count="0"><i class="nt" style="left: {{n.x}}%; top: {{n.y}}%; width: {{n.w}}%"></i></sc-for></span></sc-for></span>
+          <span style="min-width: 0"><b class="rd">{{c.name}}</b><small class="num">{{c.meta}}</small></span>
+        </button>
+        </sc-for>
+      </div>
+    </div>
+    </sc-if>
+
+    <sc-if value="{{isSong}}" hint-placeholder-val="{{true}}">
+    <div class="m-col">
+      <div class="m-nav">
+        <button class="m-back"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="{{ic.chev}}"></path></svg>Projects</button>
+        <div class="m-ttl"><b class="rd">Sunday Market B-roll</b><span>Lo-Fi · 1:30 · Saved</span></div>
+        <button class="m-ib" aria-label="Undo"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="{{ic.undo}}"></path></svg></button>
+        <button class="m-ib" aria-label="More"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="{{ic.more}}"></path></svg></button>
+      </div>
+      <sc-if value="{{gen}}" hint-placeholder-val="{{false}}">
+      <div class="ban" role="status" style="flex-wrap: wrap"><span class="spin"></span><div class="tx"><b>Writing a new take</b> <span>21 s so far. Your current take is kept.</span></div><button class="btn">Cancel</button><div class="prog"><i></i></div></div>
+      </sc-if>
+      <sc-if value="{{notGen}}" hint-placeholder-val="{{true}}">
+      <div class="m-strip">
+        <button class="m-chip">Lo-Fi<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="{{ic.down}}"></path></svg></button>
+        <button class="m-chip num">1:30</button>
+        <button class="m-chip num"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="{{ic.dice}}"></path></svg>48213</button>
+        <span class="grow"></span>
+        <button class="m-gen"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="{{ic.sparkle}}"></path></svg>New take</button>
+      </div>
+      </sc-if>
+      <div class="m-cards">
+        <sc-for list="{{tracks}}" as="t" hint-placeholder-count="4">
+        <div class="m-card {{t.cls}}">
+          <div class="m-ch">
+            <span class="tile"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="{{t.icon}}"></path></svg></span>
+            <button class="m-nm" aria-label="{{t.name}} track options"><b class="rd">{{t.name}}</b><span>{{t.inst}}</span></button>
+            <button class="m-ms {{t.regenCls}}" aria-label="Rewrite {{t.lname}}"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="{{ic.regen}}"></path></svg></button>
+            <button class="m-ms" aria-label="Mute {{t.lname}}">M</button>
+            <button class="m-ms" aria-label="Solo {{t.lname}}">S</button>
+          </div>
+          <div class="m-lane">
+            <sc-if value="{{showLoop}}" hint-placeholder-val="{{true}}"><i class="m-loop" style="left: 33.33%; width: 24.44%"></i></sc-if>
+            <div class="notes"><sc-for list="{{t.notes}}" as="n" hint-placeholder-count="0"><i class="nt" style="left: {{n.x}}%; top: {{n.y}}%; width: {{n.w}}%"></i></sc-for></div>
+            <sc-if value="{{notGen}}" hint-placeholder-val="{{true}}"><i class="m-ph" style="left: 40.2%"></i></sc-if>
+            <sc-if value="{{gen}}" hint-placeholder-val="{{false}}"><i class="m-wh" style="left: 46%"></i></sc-if>
+          </div>
+        </div>
+        </sc-for>
+      </div>
+      <div class="d-tp">
+        <button class="m-play" aria-label="Play"><svg class="i f" viewBox="0 0 16 16" aria-hidden="true"><path d="{{ic.play}}"></path></svg></button>
+        <span class="time rd num">{{time}} <small>/ 1:30</small></span>
+        <div class="m-scrub" aria-label="Playhead" role="slider" aria-valuetext="{{time}} of 1:30"><i class="bar"></i><sc-if value="{{showLoop}}" hint-placeholder-val="{{true}}"><i class="rng" style="left: 33.33%; width: 24.44%"></i></sc-if><i class="done" style="width: {{phPct}}%"></i><i class="knob" style="left: {{phPct}}%"></i></div>
+        <button class="m-tb {{loopCls}}" aria-label="Loop the selected range"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="{{ic.loop}}"></path></svg></button>
+      </div>
+    </div>
+    </sc-if>
+
+    <sc-if value="{{isTable}}" hint-placeholder-val="{{false}}">
+    <div class="m-col" style="gap: 8px">
+      <div class="m-nav">
+        <button class="m-back"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="{{ic.chev}}"></path></svg>Projects</button>
+        <div class="m-ttl"><b class="rd">Sunday Market B-roll</b><span>Lo-Fi · 1:30 · Version 7</span></div>
+        <span style="width: 88px; flex: none"></span>
+      </div>
+      <div class="d-lanes">
+        <sc-for list="{{tracks}}" as="t" hint-placeholder-count="4">
+        <div class="d-ln {{t.cls}}">
+          <span class="tag"><span class="tile"><svg class="i sm" viewBox="0 0 16 16" aria-hidden="true"><path d="{{t.icon}}"></path></svg></span>{{t.name}}</span>
+          <div class="m-lane"><i class="m-loop" style="left: 33.33%; width: 24.44%"></i><div class="notes"><sc-for list="{{t.notes}}" as="n" hint-placeholder-count="0"><i class="nt" style="left: {{n.x}}%; top: {{n.y}}%; width: {{n.w}}%"></i></sc-for></div><i class="m-ph" style="left: 40.2%"></i></div>
+        </div>
+        </sc-for>
+      </div>
+    </div>
+    </sc-if>
+  </section>
+
+  <div class="d-fold" aria-hidden="true"></div>
+
+  <!-- ===== RIGHT (or BOTTOM) PAGE ===== -->
+  <section class="d-page r" aria-label="{{rightLabel}}">
+
+    <sc-if value="{{hasTabs}}" hint-placeholder-val="{{true}}">
+    <div class="seg wide d-tabs" role="tablist" aria-label="Panel"><button class="{{tab.sound}}" role="tab">Sound</button><button class="{{tab.vers}}" role="tab">Versions</button><button class="{{tab.notes}}" role="tab">Notes</button></div>
+    </sc-if>
+
+    <sc-if value="{{paneSound}}" hint-placeholder-val="{{true}}">
+    <div style="display: flex; flex-direction: column; gap: 10px">
+      <sc-for list="{{macros}}" as="m" hint-placeholder-count="3">
+      <div class="macro">
+        <div class="fill" style="width: {{m.v}}%"></div>
+        <div class="in"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="{{m.icon}}"></path></svg><div><b class="rd" style="font-size: 16px">{{m.name}}</b><small style="font-size: 12px">{{m.d}}</small></div><span class="v rd num">{{m.v}}</span></div>
+      </div>
+      </sc-for>
+      <div class="irow"><span class="grow" style="font-size: 13px">Lo-Fi defaults, adjusted</span><button class="btn">Reset</button></div>
+      <sc-if value="{{gen}}" hint-placeholder-val="{{false}}"><p class="m-sub">Keep playing with the sound while the new take is written. Effects carry over to it.</p></sc-if>
+    </div>
+    </sc-if>
+
+    <sc-if value="{{paneVers}}" hint-placeholder-val="{{false}}">
+    <div style="display: flex; flex-direction: column; gap: 8px; min-height: 0">
+      <div class="ban" role="status" style="margin: 0; flex-wrap: wrap"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="{{ic.headphones}}"></path></svg><div class="tx" style="flex-basis: 180px"><b>Listening to version 4</b> <span>Same spot in the song.</span></div><button class="btn">Back to current</button><button class="btn pri">Restore</button></div>
+      <sc-for list="{{versions}}" as="v" hint-placeholder-count="6">
+      <div class="ver {{v.cls}}">
+        <span class="chips" aria-hidden="true"><sc-for list="{{v.chips}}" as="c" hint-placeholder-count="4"><i class="{{c.cls}}"></i></sc-for></span>
+        <div class="tl"><b>{{v.t}}</b><small class="num">{{v.s}}</small></div>
+        <sc-if value="{{v.cur}}" hint-placeholder-val="{{false}}"><span class="badge">Current</span></sc-if>
+        <sc-if value="{{v.on}}" hint-placeholder-val="{{false}}"><span class="badge acc">Listening</span></sc-if>
+        <button class="ib" aria-label="Listen to this version"><svg class="i f sm" viewBox="0 0 16 16" aria-hidden="true"><path d="{{v.pIcon}}"></path></svg></button>
+      </div>
+      </sc-for>
+    </div>
+    </sc-if>
+
+    <sc-if value="{{paneNotes}}" hint-placeholder-val="{{false}}">
+    <div class="m-col t-piano" style="gap: 8px; min-height: 0">
+      <div style="display: flex; align-items: center; gap: 6px; flex: none">
+        <span class="tile" style="width: 30px; height: 30px"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="{{ic.piano}}"></path></svg></span>
+        <b class="rd" style="font-size: 16px">Piano</b>
+        <span class="grow"></span>
+        <div class="seg" role="group" aria-label="Tool"><button class="on" aria-label="Select"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="{{ic.pointer}}"></path></svg></button><button aria-label="Draw"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="{{ic.pencil}}"></path></svg></button></div>
+        <button class="m-chip">Snap 0.25 s</button>
+      </div>
+      <div class="m-roll" style="border-radius: 12px; border: 1px solid var(--line)">
+        <div class="m-eruler" aria-hidden="true"><sc-for list="{{eticks}}" as="k" hint-placeholder-count="6"><span class="tick num" style="left: {{k.x}}%">{{k.label}}</span></sc-for></div>
+        <div class="m-rollb">
+          <div class="m-keys" aria-hidden="true"><sc-for list="{{keys}}" as="k" hint-placeholder-count="18"><div class="m-key {{k.cls}}" style="height: {{rowH}}px">{{k.label}}</div></sc-for></div>
+          <div class="m-g">
+            <sc-for list="{{keys}}" as="k" hint-placeholder-count="18"><div class="m-r {{k.cls}}" style="height: {{rowH}}px"></div></sc-for>
+            <sc-for list="{{eticks}}" as="k" hint-placeholder-count="6"><i class="gl" style="left: {{k.x}}%"></i></sc-for>
+            <sc-for list="{{ghosts}}" as="g" hint-placeholder-count="0"><i class="m-gh {{g.cls}}" style="left: {{g.x}}%; top: {{g.t}}px; width: {{g.w}}%; height: {{g.h}}px"></i></sc-for>
+            <sc-for list="{{enotes}}" as="n" hint-placeholder-count="0"><i class="m-en {{n.cls}}" style="left: {{n.x}}%; top: {{n.t}}px; width: {{n.w}}%; height: {{n.h}}px"><sc-if value="{{n.handle}}" hint-placeholder-val="{{false}}"><b class="m-handle"></b></sc-if></i></sc-for>
+            <i class="eph" style="left: 41%"></i>
+          </div>
+        </div>
+        <div class="m-vel" aria-label="Loudness"><sc-for list="{{enotes}}" as="n" hint-placeholder-count="0"><i class="vb {{n.cls}}" style="left: {{n.vx}}%; height: {{n.v}}%"></i></sc-for></div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 6px; flex: none">
+        <span class="lb" style="font-size: 13px; white-space: nowrap">4 selected · Loudness</span>
+        <div class="sl" style="height: 24px; --fill: var(--tc)"><i style="width: 78%; top: 10px"></i><b style="left: 78%; width: 24px; height: 24px; margin-left: -12px"></b></div>
+        <button class="m-ib" aria-label="Delete selected notes"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="{{ic.trash}}"></path></svg></button>
+        <button class="btn" style="height: 36px; border-radius: 18px">Done</button>
+      </div>
+    </div>
+    </sc-if>
+
+    <sc-if value="{{paneProject}}" hint-placeholder-val="{{false}}">
+    <div class="d-prev">
+      <div class="thumb" aria-hidden="true"><sc-for list="{{prevLanes}}" as="l" hint-placeholder-count="4"><span class="tl4 {{l.cls}}"><sc-for list="{{l.notes}}" as="n" hint-placeholder-count="0"><i class="nt" style="left: {{n.x}}%; top: {{n.y}}%; width: {{n.w}}%"></i></sc-for></span></sc-for></div>
+      <div><b class="rd" style="font-size: 20px; display: block">Rainy Window Study</b><span class="lb num" style="font-size: 13px">Lo-Fi · 2:00 · seed 7719 · 12 versions · edited yesterday</span></div>
+      <div style="display: flex; gap: 8px"><button class="m-big" style="flex: 1">Open</button><button class="m-ib solid" aria-label="Play preview"><svg class="i f" viewBox="0 0 16 16" aria-hidden="true"><path d="{{ic.play}}"></path></svg></button><button class="m-ib solid" aria-label="Duplicate"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="{{ic.copy}}"></path></svg></button><button class="m-ib solid" aria-label="Export"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="{{ic.share}}"></path></svg></button></div>
+    </div>
+    </sc-if>
+
+    <sc-if value="{{paneTable}}" hint-placeholder-val="{{false}}">
+    <div class="m-col" style="gap: 12px">
+      <div style="display: flex; align-items: center; justify-content: center; gap: 14px; flex: none">
+        <button class="m-tb" aria-label="Back to start"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="{{ic.start}}"></path></svg></button>
+        <button class="m-play" style="width: 64px; height: 64px" aria-label="Play"><svg class="i f" viewBox="0 0 16 16" aria-hidden="true"><path d="{{ic.play}}"></path></svg></button>
+        <button class="m-tb acc" aria-label="Loop the selected range"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="{{ic.loop}}"></path></svg></button>
+        <span class="time rd num" style="font-size: 24px">0:36 <small>/ 1:30</small></span>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px">
+        <sc-for list="{{macros}}" as="m" hint-placeholder-count="3">
+        <div class="macro" style="height: 112px">
+          <div class="fill" style="width: {{m.v}}%"></div>
+          <div class="in" style="flex-direction: column; align-items: flex-start; justify-content: center; gap: 4px"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="{{m.icon}}"></path></svg><b class="rd" style="font-size: 16px">{{m.name}}</b><span class="v rd num" style="margin: 0">{{m.v}}</span></div>
+        </div>
+        </sc-for>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px">
+        <sc-for list="{{tracks}}" as="t" hint-placeholder-count="4"><button class="m-ms {{t.cls}}" style="width: auto; height: 44px; gap: 6px; font-size: 13px"><svg class="i" viewBox="0 0 16 16" aria-hidden="true" style="color: var(--ti)"><path d="{{t.icon}}"></path></svg>Solo</button></sc-for>
+      </div>
+    </div>
+    </sc-if>
+  </section>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light"},"view":{"editor":"enum","options":["open","generating","edit","versions","library","tabletop"],"default":"open"},"w":{"editor":"int","default":890},"h":{"editor":"int","default":626},"$preview":{"width":890,"height":626}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var p = this.props, view = p.view || 'open', dark = p.theme === 'dark';
+    var w = Number(p.w || 890), h = Number(p.h || 626), table = view === 'tabletop';
+    var ic = {
+      play: 'M5 3.2v9.6L12.8 8z', stop: 'M4.5 4.5h7v7h-7z', start: 'M4 3.5v9M12.5 3.5v9L6 8z',
+      loop: 'M3 7V6a2 2 0 0 1 2-2h7.5M10.5 2l2 2-2 2M13 9v1a2 2 0 0 1-2 2H3.5M5.5 14l-2-2 2-2',
+      regen: 'M13 8a5 5 0 0 1-9 3M3 8a5 5 0 0 1 9-3M12 2.5V5H9.5M4 13.5V11h2.5',
+      undo: 'M4 6.5h5.5a3 3 0 0 1 0 6H6M6.5 4 4 6.5 6.5 9', plus: 'M8 3.5v9M3.5 8h9', more: 'M4 8h.01M8 8h.01M12 8h.01',
+      chev: 'M10 3 5 8l5 5', down: 'M4.5 6.5 8 10l3.5-3.5',
+      dice: 'M3.5 2.5h9a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1zM5.5 5.5h.01M10.5 5.5h.01M8 8h.01M5.5 10.5h.01M10.5 10.5h.01',
+      copy: 'M5.5 5.5v-2a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-2M3.5 5.5h6a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-6a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1z',
+      share: 'M8 10V2.5M5.5 5 8 2.5 10.5 5M3.5 8.5v4a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1v-4',
+      search: 'M7 11.5a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9zM10.5 10.5l3 3',
+      pencil: 'M10.5 3l2.5 2.5-7 7-3 .5.5-3z', pointer: 'M4 2.5l8 6-3.5.7 2 3.8-1.5.8-2-3.8L4.5 12.5z',
+      trash: 'M3 4.5h10M6 4.5v-2h4v2M4.5 4.5l.5 9h6l.5-9',
+      piano: 'M2.5 3.5h11v9h-11zM6.2 12.5v-4M9.8 12.5v-4M5 3.5v5h2.4v-5M8.6 3.5v5H11v-5',
+      guitar: 'M6 13.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM8.5 7.5l5-5M12 2l2 2M6 10h.01',
+      bass: 'M2 8c1.5-5 3.5-5 6 0s4.5 5 6 0',
+      drums: 'M3 6.5c0-1.4 2.2-2.5 5-2.5s5 1.1 5 2.5v4c0 1.4-2.2 2.5-5 2.5s-5-1.1-5-2.5zM3 6.5c0 1.4 2.2 2.5 5 2.5s5-1.1 5-2.5M4 1.5l3 3M12 1.5l-3 3',
+      sparkle: 'M8 2.5l1.3 3.7 3.7 1.3-3.7 1.3L8 12.5 6.7 8.8 3 7.5l3.7-1.3z',
+      headphones: 'M3 9.5V8a5 5 0 0 1 10 0v1.5M3 9.5h2v4H4a1 1 0 0 1-1-1zM13 9.5h-2v4h1a1 1 0 0 0 1-1z',
+      sun: 'M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM8 1.5V3M8 13v1.5M1.5 8H3M13 8h1.5M3.4 3.4l1.1 1.1M11.5 11.5l1.1 1.1M3.4 12.6l1.1-1.1M11.5 4.5l1.1-1.1',
+      rings: 'M8 9.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zM4.5 11.5a5 5 0 0 1 0-7M11.5 4.5a5 5 0 0 1 0 7M2.5 13.5a8 8 0 0 1 0-11M13.5 2.5a8 8 0 0 1 0 11',
+      record: 'M8 14a6 6 0 1 0 0-12 6 6 0 0 0 0 12zM8 9.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zM4.5 8A3.5 3.5 0 0 1 8 4.5'
+    };
+    function rng(s) { return function () { s = (s * 1664525 + 1013904223) % 4294967296; return s / 4294967296; }; }
+    function notes(kind, seed, n) {
+      var r = rng(seed), o = [], u = 100 / n, i, k, y;
+      if (kind === 'piano') for (i = 0; i < n; i++) { if (r() < 0.08) continue; y = 22 + Math.floor(r() * 4) * 8; for (k = 0; k < 3; k++) o.push({ x: i * u + 0.3, w: u * (0.55 + r() * 0.35), y: y + k * 18 }); }
+      if (kind === 'guitar') { var pat = [80, 50, 25, 50, 65, 25, 50, 8]; for (i = 0; i < n * 4; i++) { if (r() < 0.22) continue; o.push({ x: i * u / 4 + 0.2, w: u * 0.18, y: pat[i % 8] }); } }
+      if (kind === 'bass') for (i = 0; i < n; i++) { y = 20 + Math.floor(r() * 4) * 18; o.push({ x: i * u + 0.3, w: u * 0.6, y: y }); }
+      if (kind === 'drums') for (i = 0; i < n * 4; i++) { if (i % 2 === 0) o.push({ x: i * u / 4 + 0.2, w: u * 0.08, y: 8 }); if (i % 4 === 2) o.push({ x: i * u / 4 + 0.2, w: u * 0.1, y: 48 }); if (i % 4 === 0) o.push({ x: i * u / 4 + 0.2, w: u * 0.1, y: 88 }); }
+      return o;
+    }
+    var gen = view === 'generating', edit = view === 'edit', vers = view === 'versions', lib = view === 'library';
+    var ids = ['piano', 'guitar', 'bass', 'drums'];
+    var defs = [['Piano', 'Electric Piano', 11], ['Guitar', 'Soft Electric Guitar', vers ? 91 : 23], ['Bass', 'Round Bass', 37], ['Drums', 'Dusty Kit', 53]];
+    var tracks = defs.map(function (d, i) {
+      var ns = notes(ids[i], d[2], table ? 24 : 14);
+      if (gen) ns = ns.filter(function (n) { return n.x + n.w < 46; });
+      return { name: d[0], lname: ids[i], inst: d[1], icon: ic[ids[i]], notes: ns, regenCls: gen ? 'off' : '',
+        cls: 't-' + ids[i] + (edit && i === 0 ? ' sel' : '') };
+    });
+    var list = [
+      ['Sunday Market B-roll', 'Lo-Fi · 1:30 · 2 min ago'], ['Rainy Window Study', 'Lo-Fi · 2:00 · Yesterday'],
+      ['Lisbon, Day Two', 'Bossa Nova · 1:15 · Yesterday'], ['Morning Coffee Intro', 'Bossa Nova · 0:30 · Fri'],
+      ['Beach Walk Outro', 'Bossa Nova · 0:45 · Fri'], ['Packing Montage', 'Lo-Fi · 1:00 · 9 Nov']
+    ];
+    var cards = list.map(function (c, i) { return { name: c[0], meta: c[1], cls: i === 1 ? 'on' : '', lanes: ids.map(function (id, k) { return { cls: 't-' + id, notes: notes(id, 17 + i * 31 + k * 7, 6) }; }) }; });
+    var prevLanes = ids.map(function (id, k) { return { cls: 't-' + id, notes: notes(id, 48 + k * 7, 12) }; });
+    var versions = [
+      { t: 'Rewrote bass', s: 'Version 7 · 14:21', ch: [0, 0, 1, 0], cur: true }, { t: 'Rewrote drums', s: 'Version 6 · 14:18', ch: [0, 0, 0, 1] },
+      { t: 'Rewrote bass', s: 'Version 5 · 14:10', ch: [0, 0, 1, 0] }, { t: 'Rewrote guitar', s: 'Version 4 · 14:02', ch: [0, 1, 0, 0], on: true },
+      { t: 'Edited piano notes', s: 'Version 3 · 13:55', ch: [1, 0, 0, 0] }, { t: 'New take · seed 48213', s: 'Version 2 · 13:41', ch: [1, 1, 1, 1] }
+    ].map(function (v) { v.cls = v.on ? 'on' : ''; v.pIcon = v.on ? ic.stop : ic.play; v.chips = v.ch.map(function (c, i) { return { cls: c ? 'c t-' + ids[i] : '' }; }); return v; });
+
+    /* piano roll on the right page: 18 rows, 0:24 to 0:36 */
+    var rows = 18, rowH = 17, T0 = 24, TW = 12;
+    function ex(t) { return (t - T0) / TW * 100; }
+    var black = { 1: 1, 3: 1, 5: 1, 8: 1, 10: 1 };
+    var keys = []; for (var i = 0; i < rows; i++) keys.push({ cls: black[(i + 4) % 12] ? 'bk' : '', label: i === 7 ? 'C4' : '' });
+    var eticks = []; for (var s = 24; s < 36; s += 2) eticks.push({ x: ex(s), label: '0:' + s });
+    var r2 = rng(7), enotes = [], ghosts = [];
+    [[24.4, [12, 9, 6, 3]], [27.5, [14, 11, 8, 5]], [30.5, [13, 10, 7, 4]], [33.6, [11, 9, 6, 2]]].forEach(function (c) {
+      var sel = c[0] === 27.5;
+      c[1].forEach(function (row, k) { enotes.push({ x: ex(c[0]), vx: ex(c[0]) + k * 0.6, w: 2.6 / TW * 100, t: row * rowH + 1, h: rowH - 2, cls: sel ? 's' : '', handle: sel && k === 0, v: sel ? 74 + k * 3 : 45 + Math.floor(r2() * 35) }); });
+      ghosts.push({ cls: 't-bass', x: ex(c[0]), w: 2 / TW * 100, t: (16 + Math.floor(r2() * 2)) * rowH + rowH / 3, h: rowH / 3 });
+    });
+    for (var g = 0; g < 25; g++) { if (r2() < 0.2) continue; ghosts.push({ cls: 't-guitar', x: ex(24 + g * 0.48), w: 0.28 / TW * 100, t: [8, 6, 4, 6, 7, 4, 6, 3][g % 8] * rowH + rowH / 3, h: rowH / 3 }); }
+
+    var right = lib ? 'project' : table ? 'table' : edit ? 'notes' : vers ? 'vers' : 'sound';
+    return {
+      themeCls: dark ? 'dark' : '', w: w, h: h, ic: ic, safeTop: table ? 0 : 20, pagesCls: table ? 'v' : '',
+      leftLabel: lib ? 'Projects' : 'Song', rightLabel: lib ? 'Selected project' : table ? 'Controls' : 'Panel',
+      isLib: lib, isSong: !lib && !table, isTable: table, gen: gen, notGen: !gen,
+      showLoop: !gen && !vers, loopCls: (!gen && !vers) ? 'acc' : '', time: gen ? '0:00' : '0:36', phPct: gen ? 0 : 40.2,
+      hasTabs: !lib && !table, tab: { sound: right === 'sound' ? 'on' : '', vers: right === 'vers' ? 'on' : '', notes: right === 'notes' ? 'on' : '' },
+      paneSound: right === 'sound', paneVers: right === 'vers', paneNotes: right === 'notes', paneProject: right === 'project', paneTable: right === 'table',
+      tracks: tracks, cards: cards, prevLanes: prevLanes, versions: versions,
+      macros: [{ name: 'Warmth', d: 'Softens the highs', v: 62, icon: ic.sun }, { name: 'Reverb', d: 'Room around the band', v: 28, icon: ic.rings }, { name: 'Vinyl', d: 'Hiss and crackle', v: 40, icon: ic.record }],
+      rows: rows, rowH: rowH, keys: keys, eticks: eticks, enotes: enotes, ghosts: ghosts
+    };
+  }
+}
+</script>
+</body>
+</html>

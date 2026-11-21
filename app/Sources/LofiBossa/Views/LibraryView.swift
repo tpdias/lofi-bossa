@@ -13,7 +13,7 @@ struct SidebarView: View {
     @Binding var selection: SidebarSelection
 
     var body: some View {
-        List(selection: $selection) {
+        List(selection: listSelection) {
             Section {
                 Label("All Projects", systemImage: "square.grid.2x2")
                     .badge(store.active.count)
@@ -46,6 +46,14 @@ struct SidebarView: View {
         }
         .navigationSplitViewColumnWidth(min: 190, ideal: LFBSize.sidebarWidth, max: 280)
     }
+    /// iOS lists only take an optional selection; the Mac keeps its non-optional one.
+    #if os(macOS)
+    private var listSelection: Binding<SidebarSelection> { $selection }
+    #else
+    private var listSelection: Binding<SidebarSelection?> {
+        Binding(get: { selection }, set: { if let value = $0 { selection = value } })
+    }
+    #endif
 }
 
 /// Project library grid, and the same component filtered to Recently Deleted.
@@ -139,9 +147,7 @@ struct LibraryGridView: View {
 
     private func copySeed(of project: Project) {
         guard let seed = project.current?.snapshot.seed else { return }
-        let pb = NSPasteboard.general
-        pb.clearContents()
-        pb.setString(String(seed), forType: .string)
+        Pasteboard.copy(String(seed))
     }
 }
 

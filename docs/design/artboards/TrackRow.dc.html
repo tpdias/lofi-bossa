@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Track row — all states</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./lfb.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Nunito:wght@500;600;700&display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div class="sheetpg" style="width: 1400px; min-height: 1060px">
+<sc-for list="{{themes}}" as="th" hint-placeholder-count="2">
+<div class="lfb panel {{th.cls}}">
+  <h2 class="rd">Track row · {{th.name}}</h2>
+  <sc-for list="{{th.states}}" as="t" hint-placeholder-count="7">
+  <div style="display: flex; flex-direction: column; gap: 6px">
+    <h3>{{t.label}}</h3>
+    <div class="demo">
+      <div class="row {{t.cls}}">
+        <div class="th">
+          <div class="l1">
+            <span class="tile"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="{{t.icon}}"></path></svg></span>
+            <b class="tn rd">{{t.name}}</b>
+            <button class="ms {{t.mCls}}" aria-label="Mute">M</button>
+            <button class="ms {{t.sCls}}" aria-label="Solo">S</button>
+          </div>
+          <div class="l2">
+            <button class="btn sm pop"><span>{{t.inst}}</span><svg class="i sm" viewBox="0 0 16 16" aria-hidden="true"><path d="{{ic.updown}}"></path></svg></button>
+            <sc-if value="{{t.idle}}" hint-placeholder-val="{{true}}"><button class="ib" aria-label="Rewrite this part"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="{{ic.regen}}"></path></svg></button></sc-if>
+            <sc-if value="{{t.busy}}" hint-placeholder-val="{{false}}"><button class="ib" aria-label="Stop rewriting"><svg class="i f" viewBox="0 0 16 16" aria-hidden="true"><path d="{{ic.stop}}"></path></svg></button></sc-if>
+          </div>
+          <div class="l3">
+            <svg class="i sm" viewBox="0 0 16 16" aria-hidden="true"><path d="{{ic.speaker}}"></path></svg>
+            <div class="sl"><i style="width: {{t.vol}}%"></i><b style="left: {{t.vol}}%"></b></div>
+            <span class="v num">{{t.vol}}</span>
+          </div>
+        </div>
+        <div class="lane">
+          <div class="notes"><sc-for list="{{t.notes}}" as="n" hint-placeholder-count="0"><i class="nt" style="left: {{n.x}}%; top: {{n.y}}%; width: {{n.w}}%"></i></sc-for></div>
+          <sc-if value="{{t.busy}}" hint-placeholder-val="{{false}}">
+          <div class="busyv"><div class="pill"><span class="spin"></span><span>Rewriting the {{t.lname}}…</span><button class="lk">Stop</button></div></div>
+          </sc-if>
+          <sc-if value="{{t.empty}}" hint-placeholder-val="{{false}}">
+          <div class="emptyv"><div class="pill"><span>No notes in this part</span><button class="lk">Write the {{t.lname}}</button></div></div>
+          </sc-if>
+          <sc-if value="{{t.playing}}" hint-placeholder-val="{{false}}"><i class="ph" style="left: 40%; top: 0"></i></sc-if>
+        </div>
+      </div>
+    </div>
+  </div>
+  </sc-for>
+</div>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1400,"height":1060}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var ic = {
+      stop: 'M4.5 4.5h7v7h-7z', regen: 'M13 8a5 5 0 0 1-9 3M3 8a5 5 0 0 1 9-3M12 2.5V5H9.5M4 13.5V11h2.5',
+      speaker: 'M2.5 6.5v3h2l3 2.5v-8l-3 2.5zM10 6a3 3 0 0 1 0 4M11.8 4.2a5.5 5.5 0 0 1 0 7.6',
+      updown: 'M5.5 6.5 8 4l2.5 2.5M5.5 9.5 8 12l2.5-2.5',
+      piano: 'M2.5 3.5h11v9h-11zM6.2 12.5v-4M9.8 12.5v-4M5 3.5v5h2.4v-5M8.6 3.5v5H11v-5',
+      guitar: 'M6 13.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM8.5 7.5l5-5M12 2l2 2M6 10h.01',
+      bass: 'M2 8c1.5-5 3.5-5 6 0s4.5 5 6 0',
+      drums: 'M3 6.5c0-1.4 2.2-2.5 5-2.5s5 1.1 5 2.5v4c0 1.4-2.2 2.5-5 2.5s-5-1.1-5-2.5zM3 6.5c0 1.4 2.2 2.5 5 2.5s5-1.1 5-2.5M4 1.5l3 3M12 1.5l-3 3'
+    };
+    function rng(s) { return function () { s = (s * 1664525 + 1013904223) % 4294967296; return s / 4294967296; }; }
+    function notes(kind, seed) {
+      var r = rng(seed), o = [], n = 12, u = 100 / n, i, k, y, m;
+      if (kind === 'piano') for (i = 0; i < n; i++) {
+        if (r() < 0.08) continue;
+        y = 34 + Math.floor(r() * 4) * 6;
+        for (k = 0; k < 3; k++) o.push({ x: i * u + 0.3, w: u * (0.55 + r() * 0.35), y: y + k * 13 });
+        if (r() < 0.6) { m = 1 + Math.floor(r() * 3); for (k = 0; k < m; k++) o.push({ x: i * u + u * (0.2 + k * 0.25), w: u * 0.18, y: 2 + Math.floor(r() * 5) * 5 }); }
+      }
+      if (kind === 'guitar') { var pat = [72, 50, 30, 50, 60, 30, 50, 18]; for (i = 0; i < n * 4; i++) { if (r() < 0.22) continue; o.push({ x: i * u / 4 + 0.3, w: u * 0.2, y: pat[i % 8] }); } }
+      if (kind === 'bass') for (i = 0; i < n; i++) { y = 34 + Math.floor(r() * 4) * 12; o.push({ x: i * u + 0.3, w: u * 0.62, y: y }); if (r() < 0.55) o.push({ x: i * u + u * 0.74, w: u * 0.2, y: y - 12 }); }
+      if (kind === 'drums') for (i = 0; i < n * 4; i++) { if (r() > 0.12) o.push({ x: i * u / 4 + 0.3, w: u * 0.08, y: 14 }); if (i % 4 === 2) o.push({ x: i * u / 4 + 0.3, w: u * 0.1, y: 50 }); if (i % 4 === 0) o.push({ x: i * u / 4 + 0.3, w: u * 0.1, y: 86 }); }
+      return o;
+    }
+    var insts = { piano: 'Electric Piano', guitar: 'Soft Electric Guitar', bass: 'Round Bass', drums: 'Dusty Kit' };
+    var names = { piano: 'Piano', guitar: 'Guitar', bass: 'Bass', drums: 'Drums' };
+    var states = [
+      { label: 'Normal · playing', id: 'guitar', vol: 58, playing: true },
+      { label: 'Selected · open in the piano-roll editor', id: 'piano', vol: 72, cls: 'sel' },
+      { label: 'Muted · notes go grey, M is filled', id: 'bass', vol: 70, cls: 'muted', mCls: 'm' },
+      { label: 'Soloed · S is filled in the accent', id: 'drums', vol: 64, sCls: 's' },
+      { label: 'Silenced by another track’s solo · dimmed, controls stay live', id: 'piano', vol: 72, cls: 'dim' },
+      { label: 'Rewriting · old notes fade, a sweep moves across, Stop replaces the rewrite button', id: 'bass', vol: 70, cls: 'busy', busy: true },
+      { label: 'Empty · no notes, with a one-click way to fill it', id: 'guitar', vol: 58, empty: true }
+    ].map(function (s, i) {
+      return { label: s.label, name: names[s.id], lname: s.id, inst: insts[s.id], icon: ic[s.id], vol: s.vol,
+        cls: 't-' + s.id + (s.cls ? ' ' + s.cls : ''), mCls: s.mCls || '', sCls: s.sCls || '',
+        busy: !!s.busy, idle: !s.busy, empty: !!s.empty, playing: !!s.playing, notes: s.empty ? [] : notes(s.id, 13 + i * 9) };
+    });
+    return { ic: ic, themes: [{ name: 'Light', cls: '', states: states }, { name: 'Dark', cls: 'dark', states: states }] };
+  }
+}
+</script>
+</body>
+</html>

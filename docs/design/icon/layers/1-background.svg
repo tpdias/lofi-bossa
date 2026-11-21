@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024"><defs>
+  <linearGradient id="body" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4A3D34"/><stop offset="1" stop-color="#26201C"/></linearGradient>
+  <linearGradient id="sun" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FF9A6E"/><stop offset="1" stop-color="#C4441A"/></linearGradient>
+  <linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".16"/><stop offset=".45" stop-color="#fff" stop-opacity="0"/></linearGradient>
+  <filter id="gray"><feColorMatrix type="saturate" values="0"/></filter>
+</defs><rect width="1024" height="1024" fill="url(#body)"/><rect width="1024" height="512" fill="url(#sheen)"/></svg>

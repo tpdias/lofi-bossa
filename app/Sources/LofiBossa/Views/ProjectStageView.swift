@@ -72,6 +72,9 @@ struct ProjectStageView: View {
     }
 
     private func showLog() {
+        #if os(iOS)
+        Pasteboard.copy(model.generator.fullLog)   // placeholder until the iOS layouts show a Details sheet
+        #else
         let panel = NSAlert()
         panel.messageText = "Generator Log"
         panel.informativeText = model.generator.fullLog.isEmpty ? "No output yet." : model.generator.fullLog
@@ -81,6 +84,7 @@ struct ProjectStageView: View {
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(model.generator.fullLog, forType: .string)
         }
+        #endif
     }
 }
 
@@ -288,7 +292,7 @@ private struct SongSettingsPopover: View {
                 .labelsHidden()
                 Toggle("Strict (forbid out-of-key notes)", isOn: Binding(
                     get: { model.project.isStrictKey }, set: { model.setStrictKey($0) }))
-                    .toggleStyle(.checkbox).font(.lfbCaption)
+                    .checkboxToggleStyle().font(.lfbCaption)
             }
 
             Divider()

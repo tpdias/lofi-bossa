@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lo-Fi &amp; Bossa — project library</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./lfb.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Nunito:wght@500;600;700&display=swap">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div class="lfb win {{themeCls}} {{platCls}}" style="width: {{w}}px; height: {{h}}px">
+
+<nav class="side" aria-label="Projects">
+  <sc-if value="{{mac}}" hint-placeholder-val="{{true}}"><div class="lights" aria-hidden="true"><i style="background: #FF5F57"></i><i style="background: #FEBC2E"></i><i style="background: #28C840"></i></div></sc-if>
+  <button class="si on"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="{{ic.grid}}"></path></svg><span>All Projects</span><small>{{count}}</small></button>
+  <button class="si"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="{{ic.trash}}"></path></svg><span>Recently Deleted</span></button>
+  <div class="sh">Recent</div>
+  <sc-if value="{{first}}" hint-placeholder-val="{{false}}"><p class="note" style="padding: 2px 8px">Projects you make will be listed here.</p></sc-if>
+  <sc-for list="{{recent}}" as="p" hint-placeholder-count="6">
+  <button class="si"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="{{ic.note}}"></path></svg><span>{{p.name}}</span></button>
+  </sc-for>
+  <span class="grow"></span>
+  <button class="btn" style="justify-content: center"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="{{ic.plus}}"></path></svg>New Project</button>
+</nav>
+
+<div class="main">
+  <div class="tbar">
+    <button class="tb" aria-label="Show or hide the project list"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="{{ic.sidebar}}"></path></svg></button>
+    <div class="ttl"><b class="rd">All Projects</b><span>{{sub}}</span></div>
+    <span class="grow"></span>
+    <sc-if value="{{hasProjects}}" hint-placeholder-val="{{true}}">
+    <div style="display: flex; align-items: center; gap: 10px">
+      <button class="btn sm pop"><span>Last edited</span><svg class="i sm" viewBox="0 0 16 16" aria-hidden="true"><path d="{{ic.updown}}"></path></svg></button>
+      <label class="search"><svg class="i sm" viewBox="0 0 16 16" aria-hidden="true"><path d="{{ic.search}}"></path></svg><input type="search" placeholder="Search projects" aria-label="Search projects"></label>
+      <button class="btn pri"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="{{ic.plus}}"></path></svg>New Project <kbd>⌘N</kbd></button>
+    </div>
+    </sc-if>
+  </div>
+
+  <sc-if value="{{hasProjects}}" hint-placeholder-val="{{true}}">
+  <div class="lib">
+    <sc-for list="{{cards}}" as="c" hint-placeholder-count="8">
+    <button class="card {{c.cls}}">
+      <span class="thumb" aria-hidden="true">
+        <sc-for list="{{c.lanes}}" as="l" hint-placeholder-count="4"><span class="tl4 {{l.cls}}"><sc-for list="{{l.notes}}" as="n" hint-placeholder-count="0"><i class="nt" style="left: {{n.x}}%; top: {{n.y}}%; width: {{n.w}}%"></i></sc-for></span></sc-for>
+      </span>
+      <span class="cm"><b class="rd">{{c.name}}</b><small class="num">{{c.meta}}</small></span>
+    </button>
+    </sc-for>
+
+    <div class="menu" role="menu" style="left: 400px; top: 96px">
+      <button class="mi on" role="menuitem"><span>Open</span><small>↩</small></button>
+      <button class="mi" role="menuitem"><span>Rename</span></button>
+      <button class="mi" role="menuitem"><span>Duplicate</span><small>⌘D</small></button>
+      <div class="msep"></div>
+      <button class="mi" role="menuitem"><span>Export…</span><small>⌘E</small></button>
+      <button class="mi" role="menuitem"><span>Copy Seed</span></button>
+      <div class="msep"></div>
+      <button class="mi del" role="menuitem"><span>Delete</span><small>⌘⌫</small></button>
+    </div>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{first}}" hint-placeholder-val="{{false}}">
+  <div class="welcome">
+    <div class="mark" aria-hidden="true"><i class="t-piano" style="height: 30px"></i><i class="t-guitar" style="height: 44px"></i><i class="t-bass" style="height: 22px"></i><i class="t-drums" style="height: 36px"></i></div>
+    <h1 class="rd">Make your first track</h1>
+    <p>Pick a feel. Lo-Fi &amp; Bossa writes a short four-part song — piano, guitar, bass and drums — that you can mix, rework and export.</p>
+    <div class="styles" role="group" aria-label="Style">
+      <button class="sc on"><b class="rd">Lo-Fi</b><span>Electric piano, soft guitar, round bass and a dusty kit, with tape warmth and a little vinyl.</span></button>
+      <button class="sc"><b class="rd">Bossa Nova</b><span>Nylon guitar, grand piano, upright bass and light percussion, with an open, airy room.</span></button>
+    </div>
+    <div class="fld" style="gap: 12px"><span class="lb">Length</span><div class="sl" style="width: 220px; flex: none"><i style="width: 45%"></i><b style="left: 45%"></b></div><span class="val num">1:30</span></div>
+    <button class="btn pri lg"><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="{{ic.sparkle}}"></path></svg>Generate <kbd>⌘↩</kbd></button>
+    <span class="status"><i class="dot"></i><span>Generator ready · usually under a minute</span></span>
+  </div>
+  </sc-if>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light"},"first":{"editor":"enum","options":["no","yes"],"default":"no"},"platform":{"editor":"enum","options":["mac","ipad"],"default":"mac"},"w":{"editor":"int","default":1280},"h":{"editor":"int","default":800},"$preview":{"width":1280,"height":800}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var p = this.props, dark = p.theme === 'dark', first = p.first === 'yes', touch = p.platform === 'ipad';
+    var w = Number(p.w || 1280), h = Number(p.h || 800);
+    var ic = {
+      plus: 'M8 3.5v9M3.5 8h9',
+      sidebar: 'M2.5 4a1.5 1.5 0 0 1 1.5-1.5h8A1.5 1.5 0 0 1 13.5 4v8a1.5 1.5 0 0 1-1.5 1.5H4A1.5 1.5 0 0 1 2.5 12zM6 2.5v11',
+      search: 'M7 11.5a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9zM10.5 10.5l3 3',
+      updown: 'M5.5 6.5 8 4l2.5 2.5M5.5 9.5 8 12l2.5-2.5',
+      trash: 'M3 4.5h10M6 4.5v-2h4v2M4.5 4.5l.5 9h6l.5-9',
+      sparkle: 'M8 2.5l1.3 3.7 3.7 1.3-3.7 1.3L8 12.5 6.7 8.8 3 7.5l3.7-1.3z',
+      note: 'M6 12V4l6.5-1.5v8M6 12a1.75 1.75 0 1 1-3.5 0 1.75 1.75 0 0 1 3.5 0zM12.5 10.5a1.75 1.75 0 1 1-3.5 0 1.75 1.75 0 0 1 3.5 0z',
+      grid: 'M2.5 2.5h4.5v4.5H2.5zM9 2.5h4.5v4.5H9zM2.5 9h4.5v4.5H2.5zM9 9h4.5v4.5H9z'
+    };
+    function rng(s) { return function () { s = (s * 1664525 + 1013904223) % 4294967296; return s / 4294967296; }; }
+    function notes(kind, seed) {
+      var r = rng(seed), o = [], n = 10, u = 100 / n, i, k, y;
+      if (kind === 'piano') for (i = 0; i < n; i++) { if (r() < 0.1) continue; y = 20 + Math.floor(r() * 3) * 10; for (k = 0; k < 3; k++) o.push({ x: i * u + 0.6, w: u * (0.5 + r() * 0.35), y: y + k * 24 }); }
+      if (kind === 'guitar') { var pat = [75, 45, 15, 45, 60, 15, 45, 0]; for (i = 0; i < n * 4; i++) { if (r() < 0.25) continue; o.push({ x: i * u / 4 + 0.6, w: u * 0.18, y: pat[i % 8] }); } }
+      if (kind === 'bass') for (i = 0; i < n; i++) { y = 15 + Math.floor(r() * 4) * 20; o.push({ x: i * u + 0.6, w: u * 0.6, y: y }); }
+      if (kind === 'drums') for (i = 0; i < n * 4; i++) { if (i % 4 === 2) o.push({ x: i * u / 4 + 0.6, w: u * 0.1, y: 20 }); if (i % 4 === 0 || (i % 8 === 5 && r() < 0.7)) o.push({ x: i * u / 4 + 0.6, w: u * 0.1, y: 75 }); }
+      return o;
+    }
+    var ids = ['piano', 'guitar', 'bass', 'drums'];
+    var list = [
+      ['Sunday Market B-roll', 'Lo-Fi · 1:30 · Edited 2 min ago'], ['Rainy Window Study', 'Lo-Fi · 2:00 · Yesterday'],
+      ['Lisbon, Day Two', 'Bossa Nova · 1:15 · Yesterday'], ['Morning Coffee Intro', 'Bossa Nova · 0:30 · Friday'],
+      ['Beach Walk Outro', 'Bossa Nova · 0:45 · Friday'], ['Packing Montage', 'Lo-Fi · 1:00 · 9 Nov'],
+      ['Night Drive Titles', 'Lo-Fi · 0:20 · 7 Nov'], ['Studio Tour', 'Lo-Fi · 3:00 · 2 Nov'],
+      ['Recipe Short', 'Bossa Nova · 0:15 · 30 Oct'], ['Q&A Background', 'Lo-Fi · 2:30 · 28 Oct'], ['Train to Porto', 'Bossa Nova · 1:45 · 21 Oct']
+    ];
+    var cards = first ? [] : list.map(function (c, i) {
+      return { name: c[0], meta: c[1], cls: i === 1 ? 'on' : '', lanes: ids.map(function (id, k) { return { cls: 't-' + id, notes: notes(id, 17 + i * 31 + k * 7) }; }) };
+    });
+    return {
+      themeCls: dark ? 'dark' : '', platCls: touch ? 'touch' : '', mac: !touch, w: w, h: h,
+      ic: ic, first: first, hasProjects: !first, cards: touch ? cards.slice(0, 9) : cards,
+      count: first ? '0' : '11', sub: first ? 'No projects yet' : '11 projects · saved automatically on this ' + (touch ? 'iPad' : 'Mac'),
+      recent: first ? [] : list.slice(0, 6).map(function (c) { return { name: c[0] }; })
+    };
+  }
+}
+</script>
+</body>
+</html>

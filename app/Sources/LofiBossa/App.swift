@@ -11,31 +11,59 @@ enum Main {
             // the same shape saved under processed/check/ earlier in this project.
             exit(DevTools.render(wireSongPath: args[flag + 1], style: args[flag + 2], output: args[flag + 3]))
         }
+        #if os(macOS)
         if let flag = args.firstIndex(of: "--render-fx-popover"), args.count > flag + 1 {
             // Draws the per-track effects popover to a PNG (popovers are separate windows, so
             // --screenshot can't capture them).
             MainActor.assumeIsolated { DevTools.renderEffectsPopover(to: args[flag + 1]) }
             exit(0)
         }
+        #endif
         LoFiBossaApp.main()
     }
 }
 
+/// One app for Mac, iPad and iPhone. `AppSession` (generator, selection, open project) sits
+/// above `AdaptiveRootView`, which picks the layout per window size and fold.
 struct LoFiBossaApp: App {
+    #if os(macOS)
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
-    @State private var store = ProjectStore()
+    #else
+    @Environment(\.scenePhase) private var scenePhase
+    #endif
+    @State private var store: ProjectStore
+    @State private var session: AppSession
+
+    init() {
+        let store = ProjectStore()
+        _store = State(initialValue: store)
+        _session = State(initialValue: AppSession(store: store))
+    }
 
     var body: some Scene {
         WindowGroup("Lo-Fi & Bossa") {
-            RootView()
+            AdaptiveRootView()
                 .environment(store)
+                .environment(session)
+                #if os(macOS)
                 .frame(minWidth: LFBSize.minWindow.width, minHeight: LFBSize.minWindow.height)
+                #endif
                 .task {
                     store.load()
+                    #if os(macOS)
                     delegate.store = store   // so Cmd-Q can flush any edit still waiting to autosave
+                    #else
+                    // .playback, background audio, pause on calls and headphone unplug (HANDOFF §8)
+                    AudioSessionController.shared.activate { [session] in session.activeModel?.pause() }
+                    #endif
                 }
         }
+        #if os(macOS)
         .defaultSize(width: 1180, height: 760)
+        #else
+        // iOS can suspend or end the app at any time once it leaves the foreground.
+        .onChange(of: scenePhase) { _, phase in if phase == .background { store.flushPendingSaves() } }
+        #endif
         .commands { AppCommands() }
     }
 }
@@ -50,6 +78,7 @@ extension Notification.Name {
     static let lfbShowShortcuts = Notification.Name("lfbShowShortcuts")
 }
 
+#if os(macOS)
 /// Run from `swift run` there is no app bundle, so ask for a normal Dock app and focus it.
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -122,9 +151,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
+#endif
+
 /// Command-line checks that don't need a window: audio rendering and (via --screenshot above)
 /// a picture of a real running window.
 enum DevTools {
+    /// `--demo [style] [length]` creates a project and generates, exactly as the UI would, so
+    /// the core flow can be checked (and screenshotted) without clicking. `--sections` and
+    /// `--editor` go on to drive section edits or open the piano roll.
+    @MainActor static func runDemoIfAsked(_ session: AppSession) {
+        let args = CommandLine.arguments
+        guard let flag = args.firstIndex(of: "--demo") else { return }
+        let store = session.store
+        let style = args.count > flag + 1 ? (MusicStyle(rawValue: args[flag + 1]) ?? .lofi) : .lofi
+        let length = args.count > flag + 2 ? (Double(args[flag + 2]) ?? 90) : 90
+        var project = store.create(style: style)
+        project.lengthSeconds = length
+        store.update(project)
+        session.selection = .project(project.id)
+        session.syncActiveModel()
+        session.activeModel?.generate()
+        if args.contains("--sections") {
+            Task {
+                while session.activeModel?.isGeneratorBusy == true || session.activeModel?.project.currentSnapshot == nil {
+                    try? await Task.sleep(for: .milliseconds(300))
+                }
+                if let model = session.activeModel { await runSectionDemo(model) }
+            }
+        }
+        if args.contains("--editor") {
+            Task {
+                while session.activeModel?.isGeneratorBusy == true { try? await Task.sleep(for: .milliseconds(300)) }
+                session.activeModel?.openEditor(for: .guitar)
+            }
+        }
+    }
+
     /// Drives every section operation through the real view model and prints what happened
     /// (`--demo --sections`), since the gestures themselves can't be clicked from a script.
     @MainActor static func runSectionDemo(_ m: ProjectViewModel) async {
@@ -218,6 +280,7 @@ enum DevTools {
         say("final selection \(String(describing: m.sectionSelection?.range)), canEdit \(m.canEditSections)")
     }
 
+    #if os(macOS)
     @MainActor static func renderEffectsPopover(to path: String) {
         struct Preview: View {
             @State var effects = TrackEffects(warmth: 0.35, grit: 0.6, echo: 0, reverb: 0.2, pan: -0.4)
@@ -238,6 +301,7 @@ enum DevTools {
         }
         try? png.write(to: URL(fileURLWithPath: path))
     }
+    #endif
 
     static func render(wireSongPath: String, style name: String, output: String) -> Int32 {
         do {
