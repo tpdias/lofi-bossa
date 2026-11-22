@@ -29,7 +29,14 @@ final class AppSession {
     /// `--local-generator` a server already running on the Mac (reachable from the Simulator).
     static func defaultGenerator() -> any GeneratorClient {
         let args = CommandLine.arguments
-        if args.contains("--fake-generator") { return FakeGeneratorClient() }
+        if args.contains("--fake-generator") {
+            let fake = FakeGeneratorClient()
+            // `--fake-delay SECONDS` makes the fake take time, to look at the generating state.
+            if let i = args.firstIndex(of: "--fake-delay"), args.count > i + 1, let s = Double(args[i + 1]) {
+                fake.delay = .milliseconds(Int(s * 1000))
+            }
+            return fake
+        }
         #if os(macOS)
         return LocalGeneratorClient()
         #else

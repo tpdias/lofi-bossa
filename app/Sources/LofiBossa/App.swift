@@ -30,6 +30,8 @@ struct LoFiBossaApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     #else
     @Environment(\.scenePhase) private var scenePhase
+    /// Only answers which orientations are allowed (iPhone: portrait outside the piano roll).
+    @UIApplicationDelegateAdaptor(PhoneAppDelegate.self) private var phoneDelegate
     #endif
     @State private var store: ProjectStore
     @State private var session: AppSession
