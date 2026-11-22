@@ -32,7 +32,7 @@ struct EffectCard: View {
                 amount = min(max(g.location.x / geo.size.width, 0), 1)
             })
         }
-        .frame(height: LFBSize.effectCardHeight)
+        .frame(height: LFBSize.isTouch ? LFBTouchSize.effectCardHeight : LFBSize.effectCardHeight)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(title)
         .accessibilityValue("\(Int(amount * 100))")

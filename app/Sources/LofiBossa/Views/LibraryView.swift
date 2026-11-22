@@ -186,7 +186,7 @@ private struct ProjectCard: View {
         .padding(LFBSpace.md)
         .background(Color.lfbSurface, in: RoundedRectangle(cornerRadius: LFBRadius.card))
         .contentShape(Rectangle())
-        .onTapGesture(count: 2, perform: onOpen)
+        .onTapGesture(count: LFBSize.isTouch ? 1 : 2, perform: onOpen)   // a tap opens on touch
         .contextMenu { contextMenuItems }
     }
 
