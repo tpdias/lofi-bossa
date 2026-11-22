@@ -113,7 +113,7 @@ struct LibraryGridView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     Text(isTrash ? "Recently Deleted" : "All Projects").font(.lfbTitle)
                     if !isTrash {
-                        Text("\(store.active.count) projects · saved automatically on this Mac")
+                        Text("\(store.active.count) projects · saved automatically on this \(LFBSize.isTouch ? "device" : "Mac")")
                             .font(.lfbCaption).foregroundStyle(Color.lfbTextSecondary)
                     }
                 }
@@ -186,7 +186,7 @@ private struct ProjectCard: View {
         .padding(LFBSpace.md)
         .background(Color.lfbSurface, in: RoundedRectangle(cornerRadius: LFBRadius.card))
         .contentShape(Rectangle())
-        .onTapGesture(count: 2, perform: onOpen)
+        .onTapGesture(count: LFBSize.isTouch ? 1 : 2, perform: onOpen)   // a tap opens on touch
         .contextMenu { contextMenuItems }
     }
 

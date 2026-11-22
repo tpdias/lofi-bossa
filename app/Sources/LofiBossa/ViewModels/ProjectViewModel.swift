@@ -711,8 +711,10 @@ final class ProjectViewModel {
         #if os(iOS)
         // No save panel on iOS: export to a temporary file, then Share / Save to Files (HANDOFF §8).
         let seedPart = displaySeed.map { "-\($0)" } ?? ""
+        // Spelled out: deriving it from the UTType gave ".mp4" for M4A.
+        let ext = switch format { case .m4a: "m4a"; case .wav: "wav"; case .midi: "mid" }
         return FileManager.default.temporaryDirectory
-            .appendingPathComponent("\(project.name)\(seedPart)", conformingTo: format.type)
+            .appendingPathComponent("\(project.name)\(seedPart)").appendingPathExtension(ext)
         #else
         let panel = NSSavePanel()
         panel.allowedContentTypes = [format.type]

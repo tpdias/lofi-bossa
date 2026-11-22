@@ -44,6 +44,16 @@ struct PianoRollView: View {
     @State private var stemID: Note.ID?
     // copy / paste inside the roll
     @State private var noteClipboard: [Note] = []
+    // touch (iOS)
+    @State private var heldModifiers: EventModifiers = []
+    @State private var touchMode: TouchMode?
+    @State private var touchStart: CGPoint = .zero          // on the surface
+    @State private var touchAnchor: CGPoint = .zero         // where the pan began, in the view
+    @State private var scrollAtTouchStart: CGPoint = .zero
+    @State private var zoomAtPinchStart: CGFloat = 1
+    @AppStorage("lfb.pencilUsed") private var pencilUsed = false
+
+    private enum TouchMode { case scroll, notes, marquee, pinch }
 
     private enum DragMode { case move, resize }
 
@@ -134,6 +144,11 @@ struct PianoRollView: View {
         .focused($focused)
         .focusEffectDisabled()
         .onKeyPress(phases: [.down, .repeat], action: handleKey)
+        #if os(iOS)
+        // Squeeze (Apple Pencil Pro) or double-tap (Apple Pencil 2) toggles Select / Draw.
+        .onPencilSqueeze { phase in if case .ended = phase { toggleTool() } }
+        .onPencilDoubleTap { _ in toggleTool() }
+        #endif
         .onAppear {
             focused = true
             // `--roll-zoom N [seconds]` opens zoomed (and scrolled to a time), for screenshot checks.
@@ -191,12 +206,22 @@ struct PianoRollView: View {
                 Slider(value: zoomSliderBinding, in: 0...1).frame(width: 90).controlSize(.small)
                     .help("Zoom the timeline")
                     .accessibilityIdentifier("roll-zoom").accessibilityLabel("Zoom")
-                Button("Fit") { setZoom(1) }.help("Show the whole song (⌘0)").disabled(zoom <= 1.001)
+                Button("Fit") { setZoom(1) }.help("Show the whole song (⌘0)").disabled(zoom <= 1.001).fixedSize()
             }
             .buttonStyle(.borderless)
 
             Toggle("Follow", isOn: $followPlayhead).toggleStyle(.button).controlSize(.small)
                 .help("Scroll along with the playhead while playing")
+
+            #if os(iOS)
+            if !pencilUsed {
+                Text("Pencil draws · finger moves")
+                    .font(.system(size: 12, weight: .medium)).foregroundStyle(Color.lfbTextSecondary)
+                    .padding(.horizontal, 8).frame(height: 24)
+                    .background(Color.lfbWell, in: Capsule())
+                    .fixedSize()
+            }
+            #endif
 
             Spacer()
 
@@ -317,12 +342,16 @@ struct PianoRollView: View {
                 .allowsHitTesting(false)
             // Takes the clicks and drags. Points are in the window's coordinates; the surface
             // they mean is that plus the scroll offset.
+            #if os(macOS)
             Color.clear
                 .contentShape(Rectangle())
                 .gesture(canvasDrag)
                 .simultaneousGesture(pressSelect)
                 .onTapGesture(count: 2) { addNote(at: onSurface($0)) }
                 .onTapGesture(count: 1) { tapCanvas(at: onSurface($0)) }
+            #else
+            touchSurface
+            #endif
             if let rect = marqueeRect {
                 Rectangle().fill(Color.lfbAccent.opacity(0.12))
                     .overlay(Rectangle().stroke(Color.lfbAccent, lineWidth: 1))
@@ -333,7 +362,7 @@ struct PianoRollView: View {
             scrollIndicators.allowsHitTesting(false)
             // Wheel / trackpad scrolling and pinch: SwiftUI (macOS 14) has no hook for them, so a
             // small AppKit view answers only those events and lets everything else through.
-            // (Touch gestures for the iPhone and iPad piano roll come with those layouts.)
+            // Touch, Pencil and pinch on iOS: `touchSurface` (PianoRollView+Touch below).
             #if os(macOS)
             ScrollCatcher(
                 onScroll: { dx, dy, precise in
@@ -426,8 +455,9 @@ struct PianoRollView: View {
     private var shiftHeld: Bool { NSEvent.modifierFlags.contains(.shift) }
     private var optionHeld: Bool { NSEvent.modifierFlags.contains(.option) }
     #else
-    private var shiftHeld: Bool { false }   // hardware-keyboard modifiers: iPad layout work
-    private var optionHeld: Bool { false }
+    // Hardware-keyboard modifiers (iPad), read from each touch's recognizer (RollRecognizer).
+    private var shiftHeld: Bool { heldModifiers.contains(.shift) }
+    private var optionHeld: Bool { heldModifiers.contains(.option) }
     #endif
 
     private func audition(_ pitch: Int, _ velocity: Int = 90) {
@@ -778,3 +808,199 @@ private struct ScrollCatcher: NSViewRepresentable {
 private extension Comparable {
     func clamped(to range: ClosedRange<Self>) -> Self { min(max(self, range.lowerBound), range.upperBound) }
 }
+
+#if os(iOS)
+import UIKit
+
+// MARK: - Touch and Apple Pencil (iPad, iPhone)
+
+/// HANDOFF §4 and §5.5. Finger and Pencil are told apart with UIKit recognizers limited to one
+/// touch type, so no tool switch is needed:
+/// - **Finger:** tap selects a note (tap empty space deselects; with the Draw tool it adds a note);
+///   drag a note to move it, drag its right end to resize; drag empty space to scroll (time and
+///   pitch); long press then drag draws a marquee; pinch zooms time (moving the fingers scrolls).
+/// - **Pencil:** tap adds a note at the snap length; press and drag draws a note as long as the
+///   stroke; on an existing note it moves or resizes it like a finger.
+extension PianoRollView {
+    fileprivate static let fingerTypes = [NSNumber(value: UITouch.TouchType.direct.rawValue)]
+    fileprivate static let pencilTypes = [NSNumber(value: UITouch.TouchType.pencil.rawValue)]
+
+    var touchSurface: some View {
+        Color.clear
+            .contentShape(Rectangle())
+            .gesture(roll({
+                let tap = UITapGestureRecognizer(); tap.allowedTouchTypes = Self.fingerTypes; return tap
+            }) { r, p in if r.state == .ended { tapCanvas(at: onSurface(p)) } })
+            .gesture(roll({
+                let tap = UITapGestureRecognizer(); tap.allowedTouchTypes = Self.pencilTypes; return tap
+            }) { r, p in
+                guard r.state == .ended else { return }
+                pencilUsed = true
+                if let hit = touchHitTest(onSurface(p)) { model.selectedNoteIDs = [hit.note.id]; audition(hit.note.pitch, hit.note.velocity) }
+                else { addNote(at: onSurface(p)) }
+            })
+            .gesture(roll({
+                let pan = UIPanGestureRecognizer(); pan.allowedTouchTypes = Self.fingerTypes
+                pan.maximumNumberOfTouches = 1; return pan
+            }) { r, p in fingerPan(r, at: p) })
+            .gesture(roll({
+                let pan = UIPanGestureRecognizer(); pan.allowedTouchTypes = Self.pencilTypes; return pan
+            }) { r, p in pencilPan(r, at: p) })
+            .gesture(roll({
+                let press = UILongPressGestureRecognizer(); press.allowedTouchTypes = Self.fingerTypes
+                press.minimumPressDuration = 0.35; return press
+            }) { r, p in marqueePress(r, at: p) })
+            .gesture(roll({ UIPinchGestureRecognizer() }) { r, p in pinch(r, at: p) })
+    }
+
+    /// A recognizer that also keeps `heldModifiers` (shift-tap adds to the selection, ⌥-drag copies).
+    fileprivate func roll<R: UIGestureRecognizer>(_ make: @escaping () -> R,
+                                                  _ action: @escaping (R, CGPoint) -> Void) -> RollRecognizer<R> {
+        RollRecognizer(make: make, onModifiers: { heldModifiers = $0 }, action: action)
+    }
+
+    fileprivate func toggleTool() { tool = tool == .select ? .draw : .select }
+
+    /// Like `hitTest`, with a bigger target for a fingertip: a few points around each note, and the
+    /// last 14 points (at most half the note) resize.
+    fileprivate func touchHitTest(_ point: CGPoint) -> (note: Note, nearRightEdge: Bool)? {
+        if let exact = hitTest(point) {
+            let r = noteRect(exact.note)
+            return (exact.note, point.x > r.maxX - min(14, r.width / 2))
+        }
+        let near = notes.reversed().first { noteRect($0).insetBy(dx: -6, dy: -4).contains(point) }
+        guard let near else { return nil }
+        let r = noteRect(near)
+        return (near, point.x > r.maxX - min(14, r.width / 2))
+    }
+
+    /// How far the pan has gone. Measured from locations: the representable's recognizer reports
+    /// no translation of its own.
+    private func moved(to p: CGPoint) -> CGPoint { CGPoint(x: p.x - touchAnchor.x, y: p.y - touchAnchor.y) }
+
+    fileprivate func fingerPan(_ r: UIGestureRecognizer, at p: CGPoint) {
+        switch r.state {
+        case .began:
+            focused = true
+            touchAnchor = p
+            let moved = CGPoint.zero
+            touchStart = onSurface(p)
+            scrollAtTouchStart = scroll
+            if let hit = touchHitTest(touchStart) {
+                touchMode = .notes
+                beginNoteDrag(on: hit.note, resize: hit.nearRightEdge)
+                applyDrag(dragMode ?? .move, translation: CGSize(width: moved.x, height: moved.y))
+            } else {
+                touchMode = .scroll
+                scrollTo(x: scrollAtTouchStart.x - moved.x, y: scrollAtTouchStart.y - moved.y)
+            }
+        case .changed:
+            let moved = moved(to: p)
+            switch touchMode {
+            case .scroll: scrollTo(x: scrollAtTouchStart.x - moved.x, y: scrollAtTouchStart.y - moved.y)
+            case .notes: if let mode = dragMode { applyDrag(mode, translation: CGSize(width: moved.x, height: moved.y)) }
+            default: break
+            }
+        default:
+            endTouch()
+        }
+    }
+
+    fileprivate func pencilPan(_ r: UIGestureRecognizer, at p: CGPoint) {
+        switch r.state {
+        case .began:
+            focused = true
+            pencilUsed = true
+            touchAnchor = p
+            let moved = CGPoint.zero
+            let start = onSurface(p)
+            touchMode = .notes
+            if let hit = touchHitTest(start) {
+                beginNoteDrag(on: hit.note, resize: hit.nearRightEdge)
+            } else {
+                // Draw: a new note at the snapped start, as long as the stroke.
+                let begin = snapTime(xToTime(start.x))
+                let pitch = yToPitch(start.y)
+                let note = Note(pitch: pitch, start: min(begin, max(duration - 0.05, 0)), duration: max(effectiveSnap, 0.05), velocity: 90)
+                model.updateEditingNotes(notes + [note], for: track)
+                model.selectedNoteIDs = [note.id]
+                audition(pitch)
+                beginNoteDrag(on: note, resize: true)
+            }
+            if let mode = dragMode { applyDrag(mode, translation: CGSize(width: moved.x, height: moved.y)) }
+        case .changed:
+            let moved = moved(to: p)
+            if let mode = dragMode { applyDrag(mode, translation: CGSize(width: moved.x, height: moved.y)) }
+        default:
+            endTouch()
+        }
+    }
+
+    fileprivate func marqueePress(_ r: UIGestureRecognizer, at p: CGPoint) {
+        switch r.state {
+        case .began:
+            focused = true
+            touchMode = .marquee
+            marqueeStart = onSurface(p)
+            marqueeRect = CGRect(origin: onSurface(p), size: .zero)
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        case .changed:
+            guard let start = marqueeStart else { return }
+            let here = onSurface(p)
+            let rect = CGRect(x: min(start.x, here.x), y: min(start.y, here.y),
+                              width: abs(here.x - start.x), height: abs(here.y - start.y))
+            marqueeRect = rect
+            model.selectedNoteIDs = Set(notes.filter { noteRect($0).intersects(rect) }.map(\.id))
+        default:
+            endTouch()
+        }
+    }
+
+    /// Pinch zooms time around the fingers; moving both fingers scrolls (time and pitch).
+    fileprivate func pinch(_ r: UIGestureRecognizer, at p: CGPoint) {
+        guard let pinch = r as? UIPinchGestureRecognizer else { return }
+        switch r.state {
+        case .began:
+            touchMode = .pinch
+            zoomAtPinchStart = zoom
+            touchStart = p                       // window point, for the two-finger scroll
+            scrollAtTouchStart = scroll
+        case .changed:
+            let anchorTime = xToTime(scroll.x + p.x)
+            let newZoom = min(max(zoomAtPinchStart * pinch.scale, 1), maxZoom)
+            if abs(newZoom - zoom) > 0.0001 {
+                zoom = newZoom
+                let width = max(CGFloat(duration) * fitPPS * newZoom, viewW)
+                scrollTo(x: timeToX(anchorTime) - p.x, contentWidth: width)
+            }
+            scrollTo(y: scrollAtTouchStart.y - (p.y - touchStart.y))
+        default:
+            endTouch()
+        }
+    }
+
+    private func endTouch() {
+        touchMode = nil
+        dragOriginals = [:]; dragMode = nil; dragAnchorID = nil; lastAuditionPitch = nil
+        marqueeStart = nil; marqueeRect = nil
+    }
+}
+
+/// One UIKit recognizer as a SwiftUI gesture; reports its state and location in the view.
+fileprivate struct RollRecognizer<R: UIGestureRecognizer>: UIGestureRecognizerRepresentable {
+    let make: () -> R
+    var onModifiers: (EventModifiers) -> Void = { _ in }
+    let action: (R, CGPoint) -> Void
+
+    func makeUIGestureRecognizer(context: Context) -> R { make() }
+    func handleUIGestureRecognizerAction(_ recognizer: R, context: Context) {
+        let flags = recognizer.modifierFlags
+        var mods: EventModifiers = []
+        if flags.contains(.shift) { mods.insert(.shift) }
+        if flags.contains(.alternate) { mods.insert(.option) }
+        if flags.contains(.command) { mods.insert(.command) }
+        onModifiers(mods)
+        action(recognizer, context.converter.localLocation)
+    }
+}
+#endif
