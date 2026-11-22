@@ -166,7 +166,17 @@ struct PianoRollView: View {
 
     // MARK: Header
 
-    private var header: some View {
+    /// On iOS the roll can sit in a narrow pane (the iPhone Duo's right page), so the header
+    /// scrolls sideways there instead of squeezing its controls. The Mac is unchanged.
+    @ViewBuilder private var header: some View {
+        #if os(iOS)
+        ScrollView(.horizontal, showsIndicators: false) { headerRow }
+        #else
+        headerRow
+        #endif
+    }
+
+    private var headerRow: some View {
         HStack(spacing: LFBSpace.md) {
             TrackGlyph(id: track, size: 22)
             Text(track.title).font(.lfbHeadline)

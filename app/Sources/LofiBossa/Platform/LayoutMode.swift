@@ -10,13 +10,16 @@ enum LayoutMode: Equatable {
     case tabletop    // iPhone Duo half folded with a horizontal fold: watch on top, touch below
 }
 
-/// Where the fold is. Nothing sets this yet: the Duo layout session populates it from Apple's
-/// iOS 27.1 fold APIs (`onHingeChange`, `ReservedRegion`, `ArrangementView`; verify the shipping
-/// signatures first). Until then the Duo's inner display behaves like an iPad (regular/regular).
+/// Where the fold is. `LayoutModeReader` sets it from Apple's iOS 27.1 fold APIs (see
+/// `Views/Duo/DuoFoldSensor.swift`: `onHingeChange` for the hinge status and the `.division`
+/// `ReservedRegion` for where the fold runs). With no fold it stays nil and the size class decides.
 struct FoldInfo: Equatable {
     enum Axis { case vertical, horizontal }
     var axis: Axis              // vertical = book held open; horizontal = rotated, fold across
     var isHalfFolded: Bool      // partially open; prefer the hinge *status*, not an angle threshold
+    /// The fold's area in global coordinates, so a layout can centre its gap on it. Nil when
+    /// only the posture is known (for example under `--layout`); layouts then split in half.
+    var frame: CGRect? = nil
 }
 
 private struct FoldInfoKey: EnvironmentKey { static let defaultValue: FoldInfo? = nil }
@@ -31,12 +34,31 @@ extension EnvironmentValues {
 /// Reads the size class and the fold and hands the resulting `LayoutMode` to its content.
 struct LayoutModeReader<Content: View>: View {
     @ViewBuilder var content: (LayoutMode) -> Content
-    @Environment(\.foldInfo) private var fold
+    @Environment(\.foldInfo) private var outerFold
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var horizontal
+    /// What the hinge and the reserved regions say (iOS 27.1 and later; nil elsewhere).
+    @State private var sensedFold: FoldInfo?
     #endif
 
-    var body: some View { content(mode) }
+    /// A fold set from outside (previews, tests) wins over the sensed one.
+    private var fold: FoldInfo? {
+        #if os(iOS)
+        outerFold ?? sensedFold
+        #else
+        outerFold
+        #endif
+    }
+
+    var body: some View {
+        #if os(iOS)
+        content(mode)
+            .environment(\.foldInfo, fold)
+            .modifier(DuoFoldSensor(fold: $sensedFold))
+        #else
+        content(mode)
+        #endif
+    }
 
     /// `--layout compact|regular|twoPage|tabletop` forces a layout, so each one can be built and
     /// checked on any simulator (there is no iPhone Duo simulator with fold APIs yet).
