@@ -41,8 +41,9 @@ enum TimelineRuler {
     }
 
     static func drawTicks(_ ctx: inout GraphicsContext, size: CGSize, duration: Double,
-                          window: TimelineWindow, style: Style) {
+                          window: TimelineWindow, style: Style, grid: BeatGrid? = nil) {
         guard duration > 0, size.width > 0 else { return }
+        if let grid { drawBeats(&ctx, size: size, duration: duration, window: window, style: style, grid: grid) }
         let step = labelStep(visibleSeconds: window.visibleSeconds(duration: duration),
                              width: size.width, minSpacing: style.minLabelSpacing)
         var t = (window.start / step).rounded(.down) * step
@@ -58,6 +59,42 @@ enum TimelineRuler {
                          at: CGPoint(x: x + style.labelInset, y: size.height - style.labelRise), anchor: .leading)
             }
             t += step
+        }
+    }
+}
+
+extension TimelineRuler {
+    /// Bar lines (accent, the ruler's full tick height) and, when zoomed in far enough to read,
+    /// beat lines (half height), under the time labels.
+    static func drawBeats(_ ctx: inout GraphicsContext, size: CGSize, duration: Double,
+                          window: TimelineWindow, style: Style, grid: BeatGrid) {
+        let beatWidth = window.width(of: grid.beat, width: size.width, duration: duration)
+        let barWidth = beatWidth * CGFloat(grid.beatsPerBar)
+        guard barWidth >= 6 else { return }
+        let end = min(window.end(duration: duration), duration)
+        for b in grid.beats(from: max(window.start, 0), to: end) where b.isBar || beatWidth >= 10 {
+            let x = window.x(for: b.time, width: size.width, duration: duration)
+            let h = b.isBar ? style.tickHeight * 1.6 : style.tickHeight * 0.7
+            var tick = Path()
+            tick.move(to: CGPoint(x: x, y: size.height - h))
+            tick.addLine(to: CGPoint(x: x, y: size.height))
+            ctx.stroke(tick, with: .color(b.isBar ? Color.lfbAccent.opacity(0.7) : Color.lfbTextTertiary.opacity(0.5)),
+                       lineWidth: b.isBar ? 1.2 : 0.8)
+        }
+    }
+
+    /// Faint bar lines (and beat lines when zoomed in) behind a lane's notes.
+    static func drawLaneGrid(_ ctx: inout GraphicsContext, size: CGSize, duration: Double,
+                             window: TimelineWindow, grid: BeatGrid) {
+        let beatWidth = window.width(of: grid.beat, width: size.width, duration: duration)
+        guard beatWidth * CGFloat(grid.beatsPerBar) >= 8 else { return }
+        let end = min(window.end(duration: duration), duration)
+        for b in grid.beats(from: max(window.start, 0), to: end) where b.isBar || beatWidth >= 14 {
+            let x = window.x(for: b.time, width: size.width, duration: duration)
+            var line = Path()
+            line.move(to: CGPoint(x: x, y: 0))
+            line.addLine(to: CGPoint(x: x, y: size.height))
+            ctx.stroke(line, with: .color(Color.lfbTextTertiary.opacity(b.isBar ? 0.22 : 0.1)), lineWidth: 1)
         }
     }
 }

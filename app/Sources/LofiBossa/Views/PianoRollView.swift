@@ -22,7 +22,8 @@ struct PianoRollView: View {
     enum Tool { case select, draw }
 
     @State private var tool: Tool = .select
-    @State private var snap: Double = 0.25   // seconds; 0 = off
+    /// "s:<seconds>" or "b:<beats>" (beats only when the song has a tempo); "s:0" = off.
+    @State private var snapChoice = "s:0.25"
     @State private var showOtherParts = true
     @State private var followPlayhead = true
     @State private var zoom: CGFloat = 1
@@ -58,6 +59,16 @@ struct PianoRollView: View {
     private enum DragMode { case move, resize }
 
     private static let snapOptions: [Double] = [0, 0.1, 0.25, 0.5, 1]
+    private static let beatSnapOptions: [(beats: Double, label: String)] =
+        [(0.25, "1/16"), (0.5, "1/8"), (1, "Beat"), (4, "Bar")]
+    private var grid: BeatGrid? { model.displayedSnapshot?.beatGrid }
+    /// Seconds between snap points (0 = off), and whether they count from the song's first beat.
+    private var snapStep: Double {
+        let value = Double(snapChoice.dropFirst(2)) ?? 0
+        if snapChoice.hasPrefix("b:") { return grid.map { $0.beat * value } ?? 0.25 }
+        return value
+    }
+    private var snapsToBeat: Bool { snapChoice.hasPrefix("b:") && grid != nil }
     // Spelled out rather than formatted from the Double, so the decimal point doesn't turn
     // into a comma under locales that format numbers that way.
     private static let snapLabels: [Double: String] = [0: "Off", 0.1: "0.1s", 0.25: "0.25s", 0.5: "0.5s", 1: "1s"]
@@ -102,10 +113,11 @@ struct PianoRollView: View {
         min(max(Self.highPitch - Int(y / Self.rowHeight), Self.lowPitch), Self.highPitch)
     }
     private func snapTime(_ t: Double) -> Double {
-        guard snap > 0 else { return max(t, 0) }
-        return max((t / snap).rounded() * snap, 0)
+        guard snapStep > 0 else { return max(t, 0) }
+        if snapsToBeat, let grid { return max(grid.snap(t, step: snapStep), 0) }
+        return max((t / snapStep).rounded() * snapStep, 0)
     }
-    private var effectiveSnap: Double { snap == 0 ? 0.05 : snap }
+    private var effectiveSnap: Double { snapStep == 0 ? 0.05 : snapStep }
 
     // MARK: Body
 
@@ -197,12 +209,17 @@ struct PianoRollView: View {
             .pickerStyle(.segmented).labelsHidden().fixedSize()
             .help("Select (V) or draw (P)")
 
-            Picker("Snap", selection: $snap) {
+            Picker("Snap", selection: $snapChoice) {
+                if grid != nil {
+                    ForEach(Self.beatSnapOptions, id: \.beats) { o in Text(o.label).tag("b:\(o.beats)") }
+                    Divider()
+                }
                 ForEach(Self.snapOptions, id: \.self) { s in
-                    Text(Self.snapLabels[s] ?? "\(s)s").tag(s)
+                    Text(Self.snapLabels[s] ?? "\(s)s").tag("s:\(s)")
                 }
             }
             .pickerStyle(.menu).fixedSize()
+            .onAppear { if grid != nil, snapChoice == "s:0.25" { snapChoice = "b:0.25" } }
 
             Toggle("Other parts", isOn: $showOtherParts).toggleStyle(.button).controlSize(.small)
                 .help("Show the other instruments' notes, each in its own colour, faded")
@@ -497,7 +514,7 @@ struct PianoRollView: View {
         focused = true
         let start = snapTime(xToTime(point.x))
         let pitch = yToPitch(point.y)
-        let note = Note(pitch: pitch, start: min(start, max(duration - 0.05, 0)), duration: max(snap, 0.25), velocity: 90)
+        let note = Note(pitch: pitch, start: min(start, max(duration - 0.05, 0)), duration: max(snapStep, 0.25), velocity: 90)
         model.updateEditingNotes(notes + [note], for: track)
         model.selectedNoteIDs = [note.id]
         audition(pitch)

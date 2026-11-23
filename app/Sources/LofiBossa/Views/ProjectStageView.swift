@@ -536,7 +536,7 @@ private struct RulerAndTracks: View {
 
     private func fullRow(_ id: TrackID) -> some View {
         TrackRowView(
-            track: trackBinding(id), duration: duration, window: window,
+            track: trackBinding(id), duration: duration, window: window, grid: snapshot.beatGrid,
             isSelected: model.selectedTrack == id,
             isDimmedBySolo: model.isDimmedBySolo(id),
             isRewriting: model.rewritingTrack == id,
@@ -571,7 +571,7 @@ private struct RulerAndTracks: View {
 
     private func compactRow(_ id: TrackID) -> some View {
         TrackRowView(
-            track: trackBinding(id), duration: duration, window: window,
+            track: trackBinding(id), duration: duration, window: window, grid: snapshot.beatGrid,
             isSelected: model.editingTrack == id,
             isRewriting: model.rewritingTrack == id,
             isGeneratorBusy: model.isGeneratorBusy,
@@ -602,7 +602,8 @@ private struct RulerAndTracks: View {
             Color.clear.frame(width: laneX)
             GeometryReader { geo in
                 Canvas { ctx, size in
-                    TimelineRuler.drawTicks(&ctx, size: size, duration: duration, window: window, style: TimelineRuler.mac)
+                    TimelineRuler.drawTicks(&ctx, size: size, duration: duration, window: window, style: TimelineRuler.mac,
+                                            grid: snapshot.beatGrid)
                 }
                 .contentShape(Rectangle())
                 .gesture(rangeDrag(width: geo.size.width))

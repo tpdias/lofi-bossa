@@ -81,6 +81,7 @@ struct PadTracksView: View {
     private func row(_ id: TrackID, compact: Bool) -> some View {
         PadTrackRow(
             track: trackBinding(id), duration: duration, window: window,
+            grid: model.displayedSnapshot?.beatGrid,
             isSelected: compact ? model.editingTrack == id : model.selectedTrack == id,
             isDimmedBySolo: model.isDimmedBySolo(id),
             isRewriting: model.rewritingTrack == id,
@@ -158,7 +159,8 @@ struct PadTracksView: View {
             Color.lfbWindow.frame(width: laneX)
             GeometryReader { geo in
                 Canvas { ctx, size in
-                    TimelineRuler.drawTicks(&ctx, size: size, duration: duration, window: window, style: TimelineRuler.pad)
+                    TimelineRuler.drawTicks(&ctx, size: size, duration: duration, window: window, style: TimelineRuler.pad,
+                                            grid: model.displayedSnapshot?.beatGrid)
                 }
                 .contentShape(Rectangle())
                 .gesture(rangeDrag(width: geo.size.width))

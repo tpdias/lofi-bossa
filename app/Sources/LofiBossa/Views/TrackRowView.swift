@@ -15,6 +15,7 @@ struct TrackRowView: View {
     let duration: Double
     /// The stretch of the song the lane shows (the stage's timeline zoom).
     var window = TimelineWindow()
+    var grid: BeatGrid? = nil
     var isSelected = false
     var isDimmedBySolo = false
     var isRewriting = false
@@ -147,7 +148,7 @@ struct TrackRowView: View {
             Color.lfbSurface
             if isSelected { track.id.color.opacity(0.06) }
             NoteLaneView(notes: track.notes, duration: duration, window: window,
-                         color: track.isMuted ? .lfbTextTertiary : track.id.color, onSeek: onSeek)
+                         color: track.isMuted ? .lfbTextTertiary : track.id.color, onSeek: onSeek, grid: grid)
                 .opacity(isRewriting && rewritingRange == nil ? 0.2 : (track.isMuted ? 0.45 : (isDimmedBySolo ? 0.3 : 1)))
             if isRewriting {
                 if let range = rewritingRange {

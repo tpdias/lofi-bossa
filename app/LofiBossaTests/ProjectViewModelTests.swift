@@ -800,6 +800,25 @@ final class ProjectViewModelTests: XCTestCase {
         XCTAssertEqual(song.beatOffset, 0.25)
     }
 
+    func testBeatGridSnapsAndMarksBars() {
+        let grid = BeatGrid(bpm: 120, offset: 0.25)          // beat 0.5 s, bar 2 s
+        XCTAssertEqual(grid.snap(0.9, step: grid.beat), 0.75, accuracy: 1e-9)
+        XCTAssertEqual(grid.snap(1.2, step: grid.beat / 4), 1.25, accuracy: 1e-9)
+        let beats = grid.beats(from: 0, to: 4.3)
+        XCTAssertEqual(beats.first?.time ?? -1, 0.25, accuracy: 1e-9)
+        XCTAssertEqual(beats.filter(\.isBar).map(\.time), [0.25, 2.25, 4.25])
+        XCTAssertEqual(beats.count, 9)
+    }
+
+    func testASongWithATempoHasAGrid() async {
+        generator.detectedTempo = 90
+        await generate(seed: 1)
+        XCTAssertEqual(model.project.currentSnapshot?.beatGrid?.bpm, 90)
+        generator.detectedTempo = nil
+        await generate(seed: 2)
+        XCTAssertNil(model.project.currentSnapshot?.beatGrid)
+    }
+
     func testOldProjectsWithoutNoteLengthOrKeyDecodeToDefaults() throws {
         // Everything busyness/noteLength/key/strictKey existed before: a project saved before
         // today has exactly these keys and no others.

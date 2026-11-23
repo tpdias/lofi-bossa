@@ -148,6 +148,37 @@ enum NoteModel: String, CaseIterable, Codable, Identifiable {
     var apiValue: String { self == .pretrained ? "pretrained" : "finetuned" }
 }
 
+/// The song's beat, from the tempo the server used or detected (`SongSnapshot.beatGrid`): drives
+/// the bar and beat lines on the timeline and beat snapping in the piano roll. 4/4 throughout.
+struct BeatGrid: Equatable {
+    var bpm: Double
+    var offset: Double = 0          // seconds to the first beat
+    var beatsPerBar = 4
+
+    var beat: Double { 60 / bpm }
+    var bar: Double { beat * Double(beatsPerBar) }
+
+    /// `t` moved to the nearest multiple of `step` seconds, counted from the first beat.
+    func snap(_ t: Double, step: Double) -> Double {
+        guard step > 0 else { return t }
+        return offset + ((t - offset) / step).rounded() * step
+    }
+
+    /// Beat times from `from` to `to`, each with whether it starts a bar.
+    func beats(from: Double, to: Double) -> [(time: Double, isBar: Bool)] {
+        guard beat > 0, to > from else { return [] }
+        var i = Int(((from - offset) / beat).rounded(.down))
+        var out: [(Double, Bool)] = []
+        while true {
+            let t = offset + Double(i) * beat
+            if t > to { break }
+            if t >= from { out.append((t, ((i % beatsPerBar) + beatsPerBar) % beatsPerBar == 0)) }
+            i += 1
+        }
+        return out
+    }
+}
+
 /// Song-wide generation settings (`Project.music`): key, tempo, groove and dynamics. Per-track
 /// ones (busyness, note length) travel separately.
 struct MusicSettings: Equatable {
@@ -295,6 +326,8 @@ struct SongSnapshot: Codable, Hashable {
 
     /// The tracks this song has, in display order (core ones first, then added ones).
     var trackIDs: [TrackID] { tracks.map(\.id) }
+    /// The beat to draw and snap to, when the song has a tempo.
+    var beatGrid: BeatGrid? { tempo.map { BeatGrid(bpm: $0, offset: beatOffset ?? 0) } }
     func hasTrack(_ id: TrackID) -> Bool { tracks.contains { $0.id == id } }
 
     func track(_ id: TrackID) -> Track {
