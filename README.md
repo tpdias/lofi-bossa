@@ -96,8 +96,10 @@ mix, edit and export, but can't write new music yet (see [Known limitations](#kn
   "Restart Generator" button), rather than expecting you to start it by hand. Because of how
   it locates the repo (see the comment in that file), this only works run straight from a
   checkout on the machine that built the app — exactly how this project is used.
-- **Audio.** The app plays the notes itself through `AVAudioEngine` using the General MIDI
-  sound bank that ships with macOS, so nothing has to be downloaded for sound.
+- **Audio.** The app plays the notes itself through `AVAudioEngine` with one sampler per
+  track. On the Mac it uses the General MIDI sound bank that ships with macOS; iOS has none, so
+  the iOS app bundles [GeneralUser GS](https://github.com/mrbumpy409/GeneralUser-GS)
+  (`app/SoundBank/`, about 31 MB). Nothing has to be downloaded for sound.
 
 Measured on an M1 Pro (16 GB): a 20 s song generates in well under a minute, and rewriting
 one track takes a few seconds.
@@ -385,8 +387,10 @@ xcodebuild -project app/LofiBossa.xcodeproj -scheme LofiBossa test   # unit + UI
   there's no tempo or bar grid. Key and note length can be set, but the model never writes a
   loudness: every note gets a fixed per-track velocity. The piano roll's Loudness lane does
   edit it for playback.
-- **On iOS every instrument sounds like the default tone.** iOS has no built-in General MIDI
-  sound bank, so picking a different instrument doesn't change the sound there.
+- **iOS instruments sound different from the Mac's.** iOS has no built-in General MIDI bank,
+  so the iOS app plays the same programs from the bundled GeneralUser GS bank instead of
+  Apple's. A song mixed on one platform won't sound identical on the other, and the bank adds
+  about 31 MB to the iOS app (about 28 MB compressed).
 - **Untested on real hardware.** The iOS layouts were checked in the Simulator only. The
   iPhone Duo's fold detection has never run (no Duo simulator with iOS 27.1 yet; the layouts
   were checked by forcing them), and Apple Pencil, Stage Manager sizes and a hardware keyboard
@@ -408,12 +412,20 @@ xcodebuild -project app/LofiBossa.xcodeproj -scheme LofiBossa test   # unit + UI
    Swift behind the existing `GeneratorClient`), first measuring real speed on a device. This
    is what makes generation work on iPhone and iPad.
 2. Swap the iPhone components into the Duo's left page; test on real devices.
-3. Sounds on iOS: ship a small sound bank so instruments differ.
-4. True zoom/scroll in the Mac piano roll; a proper `UndoManager` integration.
-5. Tempo-aware generation and a bar grid; an endless "radio" mode built on Extend.
+3. True zoom/scroll in the Mac piano roll; a proper `UndoManager` integration.
+4. Tempo-aware generation and a bar grid; an endless "radio" mode built on Extend.
 
 ## Licensing notes
 
 The pretrained model is Apache 2.0. Several candidate datasets are non-commercial
 (GigaMIDI is CC BY-NC), so a model fine-tuned on them is for personal, non-commercial use.
 This repository has no license file yet.
+
+The iOS app bundles the GeneralUser GS v2.0.3 SoundFont by S. Christian Collins
+(`app/SoundBank/GeneralUser-GS.sf2`, from
+[mrbumpy409/GeneralUser-GS](https://github.com/mrbumpy409/GeneralUser-GS) at commit
+`684543d`). Its license ([`app/SoundBank/LICENSE-GeneralUser-GS.txt`](app/SoundBank/LICENSE-GeneralUser-GS.txt))
+allows use without restriction in music, private or commercial, and invites use in software
+projects. It notes that the origin of a few samples can't be fully traced, which matters only
+for a commercial product. The Mac app doesn't include it; it uses the sound bank built into
+macOS.

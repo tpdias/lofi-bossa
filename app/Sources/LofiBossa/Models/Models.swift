@@ -57,7 +57,8 @@ enum TrackID: String, CaseIterable, Codable, Identifiable, Hashable {
     }
 
     /// Sampled instruments the player can swap in, each mapped to a General MIDI program
-    /// in the sound bank that ships with macOS (see AudioEngine.swift).
+    /// (drum kits: GS kit numbers in the percussion bank). macOS plays them from its system GS
+    /// bank, iOS from the bundled GeneralUser GS (see AudioEngine.swift).
     var instruments: [InstrumentOption] {
         switch self {
         case .piano:
