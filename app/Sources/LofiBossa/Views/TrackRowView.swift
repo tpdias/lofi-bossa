@@ -13,6 +13,8 @@ import SwiftUI
 struct TrackRowView: View {
     @Binding var track: Track
     let duration: Double
+    /// The stretch of the song the lane shows (the stage's timeline zoom).
+    var window = TimelineWindow()
     var isSelected = false
     var isDimmedBySolo = false
     var isRewriting = false
@@ -124,8 +126,8 @@ struct TrackRowView: View {
     /// Sweep and Stop over just the stretch being rewritten; the rest of the lane stays as it is.
     private func rangeRewriteOverlay(_ range: ClosedRange<Double>) -> some View {
         GeometryReader { geo in
-            let x = CGFloat(range.lowerBound / max(duration, 0.001)) * geo.size.width
-            let w = max(CGFloat((range.upperBound - range.lowerBound) / max(duration, 0.001)) * geo.size.width, 2)
+            let x = window.x(for: range.lowerBound, width: geo.size.width, duration: duration)
+            let w = max(window.width(of: range.upperBound - range.lowerBound, width: geo.size.width, duration: duration), 2)
             ZStack {
                 Color.lfbSurface.opacity(0.8)
                 SweepView(color: track.id.color)
@@ -144,7 +146,7 @@ struct TrackRowView: View {
         ZStack {
             Color.lfbSurface
             if isSelected { track.id.color.opacity(0.06) }
-            NoteLaneView(notes: track.notes, duration: duration,
+            NoteLaneView(notes: track.notes, duration: duration, window: window,
                          color: track.isMuted ? .lfbTextTertiary : track.id.color, onSeek: onSeek)
                 .opacity(isRewriting && rewritingRange == nil ? 0.2 : (track.isMuted ? 0.45 : (isDimmedBySolo ? 0.3 : 1)))
             if isRewriting {
@@ -157,12 +159,13 @@ struct TrackRowView: View {
             }
             if isEmpty { EmptyLane(trackName: track.id.rawValue, action: onRewrite) }
         }
+        .clipped()   // zoomed in, notes and selections past the edges stay inside the lane
         .contentShape(Rectangle())
         .onTapGesture(count: 2, perform: onSelect)   // double-click opens the piano-roll editor
         .modifier(SectionSelectable(
             track: track.id, duration: duration, selection: sectionSelection,
             isEnabled: sectionsEnabled && !compact, canPaste: canPasteSection,
-            grid: ProjectViewModel.sectionGrid,
+            grid: ProjectViewModel.sectionGrid, window: window,
             onSelect: onSelectSection, onMove: onMoveSection, onAction: onSectionAction))
     }
 }

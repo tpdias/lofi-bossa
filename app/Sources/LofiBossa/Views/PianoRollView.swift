@@ -163,6 +163,14 @@ struct PianoRollView: View {
         .onChange(of: model.position) { _, position in followIfPlaying(position) }
         .onChange(of: model.displayedSnapshot?.lengthSeconds) { clampZoom() }
         .sharesNoteUndo(with: model)
+        .onReceive(NotificationCenter.default.publisher(for: .lfbRollZoom)) { note in
+            switch note.object as? TimelineZoomCommand {
+            case .in: zoomBy(1.5)
+            case .out: zoomBy(1 / 1.5)
+            case .fit: setZoom(1)
+            case nil: break
+            }
+        }
     }
 
     // MARK: Header

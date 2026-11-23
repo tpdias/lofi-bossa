@@ -57,6 +57,9 @@ final class ProjectViewModel {
     /// Selections and pastes land on this grid, in seconds.
     static let sectionGrid = 0.25
 
+    // Stage timeline zoom (the track lanes; the piano roll zooms on its own)
+    private var timelineState = TimelineWindow()
+
     // Inspector
     var inspectorTab: InspectorTab = .sound
     /// Set while "listening" to a past version from the Versions tab, without restoring it.
@@ -873,6 +876,7 @@ final class ProjectViewModel {
 
     private func tick() {
         position = audio.position
+        if timelineState.isZoomed { timelineState.follow(position, duration: duration) }
         if isLoopEnabled, let range = loopRange, position >= range.upperBound {
             seek(to: range.lowerBound)
             return
@@ -881,6 +885,32 @@ final class ProjectViewModel {
             pause()
             seek(to: 0)
         }
+    }
+
+    // MARK: Timeline zoom (the stage's lanes)
+
+    /// What the lanes show, kept inside the song shown now.
+    var timeline: TimelineWindow { timelineState.clamped(duration: duration) }
+    var canZoomTimelineIn: Bool { displayedSnapshot != nil && timeline.zoom < TimelineWindow.maxZoom(duration: duration) - 0.001 }
+    var canZoomTimelineOut: Bool { displayedSnapshot != nil && timeline.isZoomed }
+
+    func zoomTimelineIn() { zoomTimeline(to: timeline.zoom * TimelineWindow.step) }
+    func zoomTimelineOut() { zoomTimeline(to: timeline.zoom / TimelineWindow.step) }
+    func zoomTimelineToFit() { timelineState = TimelineWindow() }
+
+    /// Zooms the lanes, keeping `anchor` (a time, e.g. under the pinch) in place; by default the
+    /// playhead when it is in view, otherwise the middle.
+    func zoomTimeline(to zoom: Double, anchor: Double? = nil) {
+        var w = timeline
+        let inView = position >= w.start && position <= w.end(duration: duration)
+        w.setZoom(zoom, anchor: anchor ?? (inView ? position : nil), duration: duration)
+        timelineState = w
+    }
+
+    func scrollTimeline(by seconds: Double) {
+        var w = timeline
+        w.scroll(by: seconds, duration: duration)
+        timelineState = w
     }
 
     // MARK: Export

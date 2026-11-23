@@ -1,11 +1,12 @@
 import SwiftUI
 
 /// Miniature piano-roll overview for one track. Pure drawing, one Canvas per lane.
-/// Click anywhere to seek. The time mapping is the same one the ruler uses, so a bar/beat grid
-/// can be added later by changing only the x(for:) function and the ruler ticks.
+/// Click anywhere to seek. Time maps to x through `window` (the stage's timeline zoom), the same
+/// mapping the ruler uses (`TimelineRuler`); only the notes in view are drawn.
 struct NoteLaneView: View {
     let notes: [Note]
     let duration: Double
+    var window = TimelineWindow()
     let color: Color
     var ghostNotes: [Note] = []
     var ghostColor: Color = .clear
@@ -22,7 +23,7 @@ struct NoteLaneView: View {
             }
             .contentShape(Rectangle())
             .gesture(SpatialTapGesture().onEnded { tap in
-                onSeek(Double(tap.location.x / geo.size.width) * duration)
+                onSeek(min(max(window.time(atX: tap.location.x, width: geo.size.width, duration: duration), 0), duration))
             })
         }
         .accessibilityLabel("Notes overview")
@@ -37,8 +38,9 @@ struct NoteLaneView: View {
         let pad: CGFloat = 10
         let noteH: CGFloat = 4
         for n in notes {
-            let x = n.start / duration * size.width
-            let w = max(n.duration / duration * size.width, 3)
+            let x = window.x(for: n.start, width: size.width, duration: duration)
+            let w = max(window.width(of: n.duration, width: size.width, duration: duration), 3)
+            guard x + w >= 0, x <= size.width else { continue }
             let t = 1 - Double(n.pitch - lo) / span
             let y = pad + CGFloat(t) * (size.height - pad * 2 - noteH)
             ctx.fill(Path(roundedRect: CGRect(x: x, y: y, width: w, height: noteH), cornerRadius: 2),
