@@ -1,21 +1,24 @@
 # Lo-Fi & Bossa
 
-A macOS app that writes background music for vlogs. It generates a four-track song
-(piano, guitar, bass, drums) with a symbolic music model running locally, keeps every
-take as a version you can go back to, and lets you mix each track, swap its instrument,
-rewrite just one part, or open a piano roll and edit the notes by hand. Three optional tracks
-(Keys & Pads, Lead, Vibes) can be added from the Track menu or the "Add Track" row; the model
-writes them zero-shot until a checkpoint trained on them is installed (see Fine-tuning), each add or remove is a
-version, and the four core tracks always stay.
+An app for Mac, iPad, iPhone and iPhone Duo that writes background music for vlogs. It
+generates a four-track song (piano, guitar, bass, drums) with a symbolic music model running
+locally, keeps every take as a version you can go back to, and lets you mix each track, swap
+its instrument, rewrite just one part, or open a piano roll and edit the notes by hand. Three
+optional tracks (Keys & Pads, Lead, Vibes) can be added from the Track menu or the "Add Track"
+row; each add or remove is a version, and the four core tracks always stay. You can lock tracks
+so the next take is written around them, extend a song from where it ends, and set its key,
+note length and busyness. Generating needs the Mac for now: the iPhone and iPad apps play,
+mix, edit and export, but can't write new music yet (see [Known limitations](#known-limitations)).
 
 ![The library: a project grid with a first-launch welcome screen, style cards and a length slider](docs/screenshots/first_launch.png)
 
-> **Status: working app, built to a design.** Projects, versions, generation, per-track
-> rewriting, the mixer, effects and export all work end to end, built to a design produced
-> with Claude Design (the handoff is kept in `docs/design/` and, locally, in
-> `LoFiBossa-handoff/`, gitignored). See [Known limitations](#known-limitations) for what is
-> simplified from that design, and [Roadmap](#roadmap) for what's next — starting with
-> actually fine-tuning the model, which hasn't been shown to change the sound yet.
+> **Status: working Mac app, iOS layouts built, model fine-tuned.** On the Mac, projects,
+> versions, generation, per-track rewriting, the mixer, effects and export all work end to
+> end, built to a design produced with Claude Design (the handoff is in `docs/design/`). The
+> iPhone, iPad and iPhone Duo layouts are built and run in the Simulator. Both styles have been
+> fine-tuned on all seven tracks; the checkpoints aren't in this repository (see
+> [Fine-tuning](#fine-tuning)). See [Known limitations](#known-limitations) and
+> [Roadmap](#roadmap): next is running the model on the device with Core AI.
 
 ## What it does
 
@@ -101,7 +104,8 @@ one track takes a few seconds.
 
 ## Run it
 
-Requirements: macOS 14+, Xcode command line tools (Swift 5.10+), Python 3.10–3.13.
+Requirements: macOS 14+, Xcode command line tools (Swift 5.10+), Python 3.10–3.13. The
+iPhone and iPad app needs iOS 27 and full Xcode.
 The first generation downloads the model weights (about 500 MB) from Hugging Face.
 
 1. Install the Python side:
@@ -121,7 +125,7 @@ The pill in the bottom-left reads "Generator starting…" for a few seconds, the
 to watch its log in a terminal), start `.venv/bin/python training/server.py` first; the app
 detects it's already running and uses it instead of starting its own.
 
-`⌘G` generates (or `⌘↩` in the recipe bar), `Space` plays and pauses, double-click a track
+`⌘↩` generates, `Space` plays and pauses, double-click a track
 opens its piano-roll editor, `⌘Z`/`⌘⇧Z` undo and redo, `⌘E` exports.
 
 ### In Xcode
@@ -130,7 +134,11 @@ Open `app/LofiBossa.xcodeproj` and press Run (`⌘R`). This builds a regular `Lo
 bundle, with its own icon. The project picks up every file under `app/Sources/LofiBossa/`
 automatically, so new Swift files added to that folder need no project changes.
 
-`app/Package.swift` builds the same sources from the command line (`swift run`).
+For iPhone, iPad and iPhone Duo, pick the `LofiBossaiOS` scheme and a simulator. It builds
+the same sources; the layout follows the window's size class and the Duo's fold
+(`Views/Phone/`, `Views/Pad/`, `Views/Duo/`, chosen in `Views/AdaptiveRootView.swift`).
+
+`app/Package.swift` builds the same sources from the command line (`swift run`, Mac only).
 
 ### Dev flags
 
@@ -146,7 +154,10 @@ through the real app and prints what happened; add `--stress` for forty edits in
 `--hit-sweep [delaySeconds]` hit-tests every point of the window and prints where it stops if
 SwiftUI's hit testing ever crashes. `--fx piano.warmth=1,drums.grit=0.8` (with `--render`) sets
 exactly those per-track effects, `--fx none` renders every track unprocessed, and
-`--render-fx-popover out.png` draws the effects popover to an image.
+`--render-fx-popover out.png` draws the effects popover to an image. `--fake-generator` swaps
+the model for an instant, deterministic one (no Python), with `--fake-delay SECONDS` to make it
+take time. On iOS, `--layout compact|regular|twoPage|tabletop` forces a layout on any
+simulator, and `--local-generator` uses a server already running on the Mac.
 
 Tests: `cd app && swift test` (decoding of projects saved by older versions, among others).
 
@@ -294,9 +305,13 @@ Useful options: `--tiers core` trains on the core tier only, `--epochs`, `--lr`,
 `--save-last` (also keep the final weights), and `--limit-files 40 --max-steps 30
 --batch-size 2` for a two-minute check on a Mac.
 
-**Not yet run at full scale.** The loop has only been checked on a Mac with 23–50 files,
-where training loss fell but validation loss did not improve. Whether fine-tuning gives an
-audible change in style is still to be shown.
+**Run at full scale** (one epoch per style, a 24 GB GPU, the defaults above): validation loss
+went from 0.919 to 0.891 for bossa and from 0.926 to 0.884 for lo-fi, with every track improving,
+and no overfitting (it kept improving to the end). A first run with three epochs and a higher
+learning rate overfit, which is what the current defaults guard against. The checkpoints live
+in `checkpoints/` and are not in git (they're large, and trained on non-commercial data); a
+fresh clone uses the pretrained model until you train or copy them in. How much better they
+sound is for your ears; the numbers say the gain is modest.
 
 ## Repository layout
 
@@ -344,7 +359,7 @@ piano-roll keys work when those have focus.
 ```bash
 cd app && swift test                                   # unit tests, ~20 s, no screen needed
 xcodebuild -project app/LofiBossa.xcodeproj -scheme LofiBossa test   # unit + UI tests
-.venv/bin/python -m unittest discover training/tests  # note clean-up (tidy.py)
+.venv/bin/python -m unittest discover training/tests  # clean-up, keys, training helpers
 ```
 
 - **Unit tests** (`app/LofiBossaTests`): note editing, project coding, the audio engine,
@@ -358,33 +373,44 @@ xcodebuild -project app/LofiBossa.xcodeproj -scheme LofiBossa test   # unit + UI
 
 ## Known limitations
 
-Built faithfully to the design handoff (`docs/design/HANDOFF.md`) with a few knowing
-simplifications, called out where they matter in code comments:
-
-- **Not fine-tuned.** Notes still come from the general pretrained model for both styles (or
-  the bossa checkpoint from an early, barely-different training run — see `training/`'s own
-  README section); output quality varies a lot from seed to seed. This is the main thing left
-  to actually finish.
-- **No tempo or key control; no dynamics from the model.** The model works in absolute time
-  with no note velocity. The piano roll's Loudness lane is real (it edits MIDI velocity for
-  playback) but the model never writes a non-default velocity itself.
+- **iPhone and iPad can't generate yet.** The Python server runs only on the Mac, so the iOS
+  apps show "Generator offline" and can play, mix, edit and export songs but not write new
+  ones. The model has been converted to Core AI and its output matches PyTorch
+  (`training/COREAI_SPIKE.md`), but the in-app engine isn't built and its speed on a real
+  device hasn't been measured.
+- **Fine-tuned checkpoints aren't in the repository.** A fresh clone uses the general
+  pretrained model until you train (`training/cloud/`) or copy the checkpoints in. Even
+  fine-tuned, the gain is modest and quality varies a lot from seed to seed.
+- **No tempo control, and no dynamics from the model.** The model works in absolute time, so
+  there's no tempo or bar grid. Key and note length can be set, but the model never writes a
+  loudness: every note gets a fixed per-track velocity. The piano roll's Loudness lane does
+  edit it for playback.
+- **On iOS every instrument sounds like the default tone.** iOS has no built-in General MIDI
+  sound bank, so picking a different instrument doesn't change the sound there.
+- **Untested on real hardware.** The iOS layouts were checked in the Simulator only. The
+  iPhone Duo's fold detection has never run (no Duo simulator with iOS 27.1 yet; the layouts
+  were checked by forcing them), and Apple Pencil, Stage Manager sizes and a hardware keyboard
+  on iPad are untested.
+- **The Duo's left page uses stand-in views** until the iPhone's track cards and recipe strip
+  are swapped in.
+- **Songs top out at 3:00**, including with Extend.
 - **Undo/Redo is a version pointer, not the system `UndoManager`.** It steps backward and
   forward through the version list rather than integrating with the Edit menu's undo stack.
-- **The write-head streaming animation isn't wired up** — the local server returns a finished
-  song, not a stream, so whole-song generation shows the per-track sweep (as the design
-  itself anticipates for a non-streaming generator) rather than notes appearing as they're written.
+- **The write-head streaming animation isn't wired up.** The server returns a finished song,
+  not a stream, so whole-song generation shows the per-track sweep rather than notes appearing
+  as they're written.
 - **Drums has no custom SF Symbol**; its track tile draws four small dots instead.
-- Regenerating a track on an extremely dense song can still come back nearly empty.
+- Rewriting a track on an extremely dense song can still come back nearly empty.
 
 ## Roadmap
 
-1. Actually fine-tune both styles on a GPU (see `training/`'s README section) and compare
-   against the pretrained model by ear — nothing above the model layer will sound different
-   until this happens.
-2. True zoom/scroll in the piano roll; a proper `UndoManager` integration.
-3. Tempo-aware generation and a bar grid.
-4. Run the model inside the app (Core ML or MLX) so no Python process is needed at all.
-5. Optional audio model for texture.
+1. Run the model inside the app with Core AI (port the sampler, tokenizer and clean-up to
+   Swift behind the existing `GeneratorClient`), first measuring real speed on a device. This
+   is what makes generation work on iPhone and iPad.
+2. Swap the iPhone components into the Duo's left page; test on real devices.
+3. Sounds on iOS: ship a small sound bank so instruments differ.
+4. True zoom/scroll in the Mac piano roll; a proper `UndoManager` integration.
+5. Tempo-aware generation and a bar grid; an endless "radio" mode built on Extend.
 
 ## Licensing notes
 
