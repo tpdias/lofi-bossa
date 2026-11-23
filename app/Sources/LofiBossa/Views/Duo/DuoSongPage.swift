@@ -12,13 +12,56 @@ struct DuoSongPage: View {
             DuoNavBar(model: model, onExport: onExport)
             DuoStatusBanner(model: model)
             if !model.isGenerating {
-                DuoRecipeStrip(model: model)          // seam: iPhone recipe strip (see DuoPhoneSeam.swift)
+                PhoneRecipeStrip(model: model)
             }
             if model.isListeningToPastVersion, let version = model.listeningVersion {
                 DuoListeningBanner(model: model, version: version)
             }
-            DuoTrackCards(model: model)               // seam: iPhone track cards (see DuoPhoneSeam.swift)
+            DuoTrackCards(model: model)
             DuoTransportBar(model: model)
+        }
+    }
+}
+
+// MARK: - Track cards
+
+/// The iPhone's track cards in their short variant (`.m-card` under `.m-short`, HANDOFF §6.2).
+/// Duo differences: tapping the name opens the iPhone track sheet as a popover on the card, its
+/// Edit notes opens the right page's Notes tab (`model.openEditor`) instead of pushing a roll,
+/// and the card being edited there stays outlined in its track colour.
+struct DuoTrackCards: View {
+    @Bindable var model: ProjectViewModel
+    @State private var openTrack: TrackID?
+
+    private var trackIDs: [TrackID] { model.displayedSnapshot?.trackIDs ?? TrackID.core }
+
+    var body: some View {
+        let list = VStack(spacing: 8) {
+            ForEach(trackIDs) { id in
+                PhoneTrackCard(model: model, id: id, isShort: true,
+                               isSelected: openTrack == id || (model.isPianoRollOpen && model.editingTrack == id),
+                               onOpenTrack: { openTrack = id })
+                    .frame(minHeight: 84)
+                    .popover(isPresented: Binding(get: { openTrack == id },
+                                                  set: { if !$0, openTrack == id { openTrack = nil } })) {
+                        PhoneTrackSheet(model: model, id: id, onEditNotes: {
+                            openTrack = nil
+                            model.openEditor(for: id)
+                        })
+                        .frame(width: 340, height: 460)
+                        .presentationBackground(Color.lfbRaised)
+                    }
+            }
+        }
+        .padding(.horizontal, LFBSpace.lg)
+        .padding(.top, 4)
+        .padding(.bottom, 10)
+
+        // Four cards share the height; with added tracks (up to seven) they scroll.
+        if trackIDs.count > 4 {
+            ScrollView { list }.scrollIndicators(.hidden)
+        } else {
+            list.frame(maxHeight: .infinity, alignment: .top)
         }
     }
 }
