@@ -149,6 +149,54 @@ class TidyTests(unittest.TestCase):
         self.assertEqual(out["guitar"], short, "a track missing from the note_length dict is untouched")
 
 
+    # ---- tempo and dynamics ----
+
+    def test_quantize_pulls_onsets_onto_the_sixteenth_grid(self):
+        tempo = (90.0, 0.1)                    # sixteenth = 1/6 s
+        notes = [note(0.1 + i / 6 + 0.04, 60) for i in range(8)]
+        exact = tidy.quantize(notes, tempo, 1.0)
+        for n in exact:
+            k = (n["start"] - 0.1) * 6
+            self.assertAlmostEqual(k, round(k), places=3)
+        half = tidy.quantize(notes, tempo, 0.5)
+        self.assertAlmostEqual(half[0]["start"] - 0.1, 0.02, places=3)
+        self.assertEqual(tidy.quantize(notes, tempo, 0.0), notes)
+
+    def test_quantize_keeps_lengths(self):
+        notes = [note(0.33, 60, 0.7)]
+        self.assertEqual(tidy.quantize(notes, (120.0, 0.0), 1.0)[0]["duration"], 0.7)
+
+    def test_dynamics_zero_is_flat_and_one_varies(self):
+        notes = [note(i * 0.25, 60 + i % 5) for i in range(32)]
+        flat = tidy.apply_dynamics("piano", notes, 0.0, random.Random(0), (120.0, 0.0))
+        self.assertEqual({n["velocity"] for n in flat}, {tracks.VELOCITY["piano"]})
+        loud = tidy.apply_dynamics("piano", notes, 1.0, random.Random(0), (120.0, 0.0))
+        vs = [n["velocity"] for n in loud]
+        self.assertGreater(max(vs) - min(vs), 15)
+        self.assertTrue(all(20 <= v <= 120 for v in vs))
+
+    def test_downbeats_are_louder_than_offbeats(self):
+        tempo = (120.0, 0.0)                   # beat 0.5 s, bar 2 s, sixteenth 0.125 s
+        notes = [note(t, 60) for t in (0.0, 2.0, 4.0, 6.0)] + [note(t, 62) for t in (0.125, 2.125, 4.125, 6.125)]
+        out = tidy.apply_dynamics("piano", notes, 1.0, random.Random(1), tempo)
+        down = [n["velocity"] for n in out if n["pitch"] == 60]
+        off = [n["velocity"] for n in out if n["pitch"] == 62]
+        self.assertGreater(sum(down) / 4, sum(off) / 4)
+
+    def test_drum_roles(self):
+        hits = [note(i * 0.5, 36) for i in range(8)] + [note(i * 0.5 + 0.25, 42) for i in range(8)]
+        out = tidy.apply_dynamics("drums", hits, 1.0, random.Random(2), None)
+        kick = [n["velocity"] for n in out if n["pitch"] == 36]
+        hat = [n["velocity"] for n in out if n["pitch"] == 42]
+        self.assertGreater(sum(kick) / 8, sum(hat) / 8)
+
+    def test_tempo_and_dynamics_apply_at_busyness_one_and_are_off_by_default(self):
+        notes = [note(0.03, 60), note(0.52, 62)]
+        self.assertEqual(run("piano", notes, 1.0), notes)
+        out = tidy.tidy_track("piano", notes, 1.0, random.Random(0), tempo=(120.0, 0.0), groove=1.0)
+        self.assertEqual([n["start"] for n in out], [0.0, 0.5])
+
+
 if __name__ == "__main__":
     unittest.main()
 

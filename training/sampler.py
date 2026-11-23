@@ -92,7 +92,7 @@ def generate(model, start_time, end_time, inputs=None, controls=None, instrument
              top_p=0.98, seed=None, progress=None, rest_penalty=0.0, max_notes_per_second=24,
              max_rests=2, key=None, key_strict=False, key_penalty=3.0,
              min_duration_ticks=0, duration_bias_ticks=200, duration_bias=1.5,
-             drum_min_gap_ticks=None):
+             drum_min_gap_ticks=None, grid=None, grid_bonus=0.0):
     """Generate events between start_time and end_time (seconds).
 
     inputs       events to continue from (those after start_time are kept fixed)
@@ -117,6 +117,9 @@ def generate(model, start_time, end_time, inputs=None, controls=None, instrument
                  version of the same idea, finished off afterwards by tidy.py's legato step.
     drum_min_gap_ticks  {GM drum pitch: minimum ticks since that pitch's last hit}; hits that
                  come sooner are forbidden. Only matters when instrument 128 (drums) is allowed.
+    grid, grid_bonus  (step, offset) in ticks of a tempo's sixteenth-note grid; onset times
+                 within a tick of it get `grid_bonus` added to their logit, so the model leans
+                 toward the beat without being forced onto it.
     Returns the new events merged with `inputs`; controls are not included.
     """
     inputs = inputs or []
@@ -200,6 +203,13 @@ def generate(model, start_time, end_time, inputs=None, controls=None, instrument
         # this cap the fine-tuned checkpoints sometimes leap many seconds ahead, or past the end
         # of the song, which ends generation early.
         logits[earliest - ctx.offset + MAX_STEP + 1:] = -math.inf
+        if grid is not None and grid_bonus > 0:
+            lo = max(earliest - ctx.offset, 0)
+            hi = min(earliest - ctx.offset + MAX_STEP + 1, len(logits))
+            absolute = torch.arange(lo, hi, dtype=torch.float32) + ctx.offset
+            phase = torch.remainder(absolute - grid[1], grid[0])
+            on_grid = torch.minimum(phase, grid[0] - phase) <= 1.0
+            logits[lo:hi] += on_grid.float() * grid_bonus
         rel_time = _sample(logits, top_p, rng)
         new_time = rel_time + ctx.offset
         if new_time >= end:
@@ -246,7 +256,7 @@ def generate(model, start_time, end_time, inputs=None, controls=None, instrument
 
 def accompany(model, fixed_events, seconds, instruments, top_p=0.98, seed=None, progress=None,
               min_notes_per_second=0.5, key=None, key_strict=False, min_duration_ticks=0,
-              drum_min_gap_ticks=None):
+              drum_min_gap_ticks=None, grid=None, grid_bonus=0.0):
     """Write new notes for `instruments` around fixed events. Returns only the new events.
 
     The model sometimes answers with silence (rests only). If the result is sparser than
@@ -257,7 +267,8 @@ def accompany(model, fixed_events, seconds, instruments, top_p=0.98, seed=None, 
         new = generate(model, 0, seconds, controls=controls, instruments=instruments,
                        top_p=top_p, seed=seed, progress=progress, rest_penalty=rest_penalty,
                        max_notes_per_second=12, max_rests=8, key=key, key_strict=key_strict,
-                       min_duration_ticks=min_duration_ticks, drum_min_gap_ticks=drum_min_gap_ticks)
+                       min_duration_ticks=min_duration_ticks, drum_min_gap_ticks=drum_min_gap_ticks,
+                       grid=grid, grid_bonus=grid_bonus)
         if len(new) // 3 >= min_notes_per_second * seconds:
             break
     return new
@@ -265,7 +276,7 @@ def accompany(model, fixed_events, seconds, instruments, top_p=0.98, seed=None, 
 
 def rewrite_range(model, events, instruments, start, end, top_p=0.98, seed=None, progress=None,
                   min_notes_per_second=0.5, key=None, key_strict=False, min_duration_ticks=0,
-                  drum_min_gap_ticks=None):
+                  drum_min_gap_ticks=None, grid=None, grid_bonus=0.0):
     """Rewrite one instrument group between `start` and `end` seconds; everything else is kept.
 
     events       the whole song as event triples
@@ -291,7 +302,8 @@ def rewrite_range(model, events, instruments, start, end, top_p=0.98, seed=None,
         merged = generate(model, start, end, inputs=kept, instruments=instruments, top_p=top_p,
                           seed=seed, progress=progress, rest_penalty=rest_penalty,
                           max_notes_per_second=12, max_rests=8, key=key, key_strict=key_strict,
-                          min_duration_ticks=min_duration_ticks, drum_min_gap_ticks=drum_min_gap_ticks)
+                          min_duration_ticks=min_duration_ticks, drum_min_gap_ticks=drum_min_gap_ticks,
+                       grid=grid, grid_bonus=grid_bonus)
         new = []
         for i in range(0, len(merged), 3):
             time = merged[i] - TIME_OFFSET

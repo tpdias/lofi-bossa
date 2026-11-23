@@ -134,3 +134,75 @@ DRUM_MIN_GAP = {"kick": 0.2, "snare": 0.2, "hihat": 0.08, "cymbal": 0.5, "tom": 
 
 def drum_category(pitch):
     return DRUM_CATEGORY.get(pitch, "perc")
+
+
+# ---- Tempo: the model has none, so it is estimated from the notes it wrote ----
+
+TEMPO_RANGE = (60, 140)   # BPM the app offers and the estimate searches
+
+
+def estimate_tempo(notes, lo=TEMPO_RANGE[0], hi=TEMPO_RANGE[1]):
+    """(bpm, beat offset in seconds) that best explains the note onsets, or None with too few
+    notes. Onset autocorrelation on the model's 10 ms grid picks the beat period: a beat should
+    repeat at one and two beats and also split cleanly in half (duple subdivisions), leaning toward
+    the faster of a tempo and its half. The period is then
+    refined to a fraction of a tick, and the offset is the phase whose beats meet most onsets."""
+    import numpy as np
+
+    starts = np.unique(np.round([float(n["start"]) * 100 for n in notes]).astype(int))
+    starts = starts[starts >= 0]
+    if len(starts) < 8:
+        return None
+    env = np.zeros(int(starts[-1]) + 1)
+    env[starts] = 1.0
+    env = np.convolve(env, [0.5, 1.0, 0.5], mode="same")   # forgive a tick either way
+
+    def ac(lag):
+        lag = int(round(lag))
+        if lag <= 0 or lag >= len(env):
+            return 0.0
+        return float(np.dot(env[:-lag], env[lag:])) / (len(env) - lag)
+
+    best_lag, best_score = None, -1.0
+    for lag in range(int(6000 / hi), int(6000 / lo) + 1):
+        if lag * 2 >= len(env):
+            break
+        # Between a tempo and its half, prefer the faster one: its sixteenth grid is finer, so
+        # quantizing to it can't move a note off a subdivision the slower grid would lack.
+        prior = np.exp(-0.5 * ((6000 / lag - 110) / 50) ** 2)
+        score = (ac(lag) + 0.5 * ac(2 * lag) + 0.5 * ac(lag / 2)) * (0.7 + 0.3 * prior)
+        if score > best_score:
+            best_lag, best_score = lag, score
+    if best_lag is None:
+        return None
+
+    def fit(period):
+        """(onsets within 2 ticks of a beat, best phase) for a fractional period in ticks."""
+        best = (-1, 0.0)
+        for o in np.arange(0, period, 0.5):
+            d = np.mod(starts - o, period)
+            hits = int(np.sum(np.minimum(d, period - d) <= 2))
+            if hits > best[0]:
+                best = (hits, float(o))
+        return best
+
+    period = max(np.arange(best_lag - 1, best_lag + 1.01, 0.1), key=lambda p: fit(p)[0])
+    offset = fit(period)[1]
+    return round(float(6000 / period), 1), round(float(offset) / 100, 3)
+
+
+def beat_phase(notes, bpm):
+    """Seconds: the beat offset at `bpm` whose beats meet the most onsets (0 with no notes)."""
+    import numpy as np
+
+    starts = np.array([float(n["start"]) * 100 for n in notes])
+    if len(starts) == 0:
+        return 0.0
+    period = 6000 / bpm
+    best = (-1, 0.0)
+    for o in np.arange(0, period, 0.5):
+        d = np.mod(starts - o, period)
+        hits = int(np.sum(np.minimum(d, period - d) <= 2))
+        if hits > best[0]:
+            best = (hits, float(o))
+    return round(best[1] / 100, 3)

@@ -21,6 +21,11 @@ notes in that key; "auto" detects it from the song (or picks nothing for a brand
 strict_key forbids out-of-key notes outright instead of just discouraging them. The response
 reports the key actually used as "key".
 
+tempo ("auto", "none" or a BPM, 60-140) gives the model a sixteenth-note grid to lean toward and
+groove (0 loose ... 1 tight) pulls the new notes' onsets onto it; "auto" estimates the tempo
+from the song. dynamics (0 flat ... 0.5 default ... 1 expressive) writes velocities: beat
+accents, phrase arcs, drum roles. The response reports "tempo" (BPM or null) and "beat_offset".
+
 "model" is auto (default), pretrained or finetuned. /health lists which styles have a
 fine-tuned checkpoint.
 
@@ -178,6 +183,36 @@ def drum_gap_ticks(instruments):
     return {p: DRUM_GAP_TICKS.get(p, DRUM_GAP_TICKS_DEFAULT) for p in range(27, 88)}
 
 
+def resolve_tempo(value, notes):
+    """(bpm, beat offset seconds) or None. "auto" estimates it from `notes` (None with too few);
+    a BPM keeps that tempo, phased to `notes` when there are any; "none" or "" turns it off."""
+    value = str(value or "").strip().lower()
+    if value in ("", "none"):
+        return None
+    if value == "auto":
+        return tracks.estimate_tempo(notes) if notes else None
+    try:
+        bpm = float(value)
+    except ValueError:
+        raise HTTPException(422, 'tempo must be "auto", "none" or a BPM')
+    lo, hi = tracks.TEMPO_RANGE
+    if not lo <= bpm <= hi:
+        raise HTTPException(422, f"tempo must be between {lo} and {hi} BPM")
+    return bpm, tracks.beat_phase(notes, bpm)
+
+
+def grid_args(tempo, groove):
+    """Sampler arguments for a tempo's sixteenth-note grid (nothing without a tempo)."""
+    if tempo is None or groove <= 0:
+        return {}
+    step = TIME_RESOLUTION * tidy.grid_step(tempo)
+    return {"grid": (step, tempo[1] * TIME_RESOLUTION), "grid_bonus": tidy.knob(groove, 0.0, 1.5, 3.0)}
+
+
+def tempo_fields(tempo):
+    return {"tempo": tempo[0] if tempo else None, "beat_offset": tempo[1] if tempo else None}
+
+
 class GenerateRequest(BaseModel):
     style: str = "lofi"
     model: str = "auto"
@@ -191,6 +226,9 @@ class GenerateRequest(BaseModel):
     note_length: float | dict[str, float] = 0.5
     key: str = "auto"
     strict_key: bool = False
+    tempo: str | float = "auto"
+    groove: float = Field(0.5, ge=0, le=1)
+    dynamics: float = Field(0.5, ge=0, le=1)
     # Keep part of the current song: its JSON (as /generate returns it) and the tracks to keep.
     song: dict | None = None
     locked: list[str] = Field(default_factory=list)
@@ -208,6 +246,9 @@ class ExtendRequest(BaseModel):
     note_length: float | dict[str, float] = 0.5
     key: str = "auto"
     strict_key: bool = False
+    tempo: str | float = "auto"
+    groove: float = Field(0.5, ge=0, le=1)
+    dynamics: float = Field(0.5, ge=0, le=1)
 
 
 @app.get("/health")
@@ -238,12 +279,14 @@ def generate(req: GenerateRequest):
     fixed_events = events_of_song({"tracks": {t: req.song["tracks"].get(t, []) for t in locked}}) \
         if locked_notes else []
     key_pcs, _ = resolve_key(req.key, locked_notes)
+    tempo = resolve_tempo(req.tempo, locked_notes)
+    grid = grid_args(tempo, req.groove)
     gap_ticks = drum_gap_ticks(instruments)
     with _lock:
         events = sampler.generate(model, 0, req.seconds, top_p=req.top_p, seed=seed,
                                   controls=[tok + CONTROL_OFFSET for tok in fixed_events],
                                   instruments=instruments, key=key_pcs, key_strict=req.strict_key,
-                                  drum_min_gap_ticks=gap_ticks)
+                                  drum_min_gap_ticks=gap_ticks, **grid)
         # the model often leaves an instrument out; write a part for any silent track
         by_track = tracks.split_events(events)
         for t in free:
@@ -251,18 +294,22 @@ def generate(req: GenerateRequest):
                 fixed = ops.sort(list(fixed_events) + [tok for o in free if o != t for tok in by_track[o]])
                 by_track[t] = sampler.accompany(model, fixed, req.seconds, tracks.instruments_for([t]),
                                                 top_p=req.top_p, seed=seed, key=key_pcs,
-                                                key_strict=req.strict_key, drum_min_gap_ticks=gap_ticks)
+                                                key_strict=req.strict_key, drum_min_gap_ticks=gap_ticks,
+                                                **grid)
         events = ops.sort([tok for t in free for tok in by_track[t]])
     song = song_json(tracks.events_to_midi(events), seed)
     # Re-resolve now there is something to detect "auto" from; a named key is unchanged.
     key_pcs, used_key = resolve_key(req.key, locked_notes + notes_of(song, free))
+    tempo = tempo or resolve_tempo(req.tempo, locked_notes + notes_of(song, free))
     song["tracks"] = tidy.tidy_song(song["tracks"], req.busyness, seed, only=set(free),
-                                    note_length=req.note_length, key=key_pcs, key_strict=req.strict_key)
+                                    note_length=req.note_length, key=key_pcs, key_strict=req.strict_key,
+                                    tempo=tempo, groove=req.groove, dynamics=req.dynamics)
     for t in locked:   # exactly as they were sent
         song["tracks"][t] = req.song["tracks"].get(t, [])
     song["seconds"] = round(max(song["seconds"], req.seconds,
                                 max((n["start"] + n["duration"] for n in locked_notes), default=0)), 3)
     song["key"] = used_key
+    song.update(tempo_fields(tempo))
     return song if req.format == "json" else midi_response(json_to_midi(song), seed)
 
 
@@ -284,16 +331,19 @@ def extend(req: ExtendRequest):
     seed = req.seed if req.seed is not None else random.randrange(2**31)
     instruments = tracks.instruments_for(wanted)
     key_pcs, used_key = resolve_key(req.key, old_notes)
+    tempo = resolve_tempo(req.tempo, old_notes)
     with _lock:
         merged = sampler.generate(model, start, end, inputs=events_of_song(req.song), top_p=req.top_p,
                                   seed=seed, instruments=instruments, key=key_pcs,
-                                  key_strict=req.strict_key, drum_min_gap_ticks=drum_gap_ticks(instruments))
+                                  key_strict=req.strict_key, drum_min_gap_ticks=drum_gap_ticks(instruments),
+                                  **grid_args(tempo, req.groove))
     start_tick = round(start * TIME_RESOLUTION)
     new = [tok for i in range(0, len(merged), 3) if merged[i] - TIME_OFFSET >= start_tick
            for tok in merged[i:i + 3]]
     added = song_json(tracks.events_to_midi(new), seed)["tracks"]
     added = tidy.tidy_song({t: added[t] for t in wanted}, req.busyness, seed,
-                           note_length=req.note_length, key=key_pcs, key_strict=req.strict_key)
+                           note_length=req.note_length, key=key_pcs, key_strict=req.strict_key,
+                           tempo=tempo, groove=req.groove, dynamics=req.dynamics)
     out = {**req.song, "tracks": {**req.song.get("tracks", {})}}
     for t in wanted:
         out["tracks"][t] = sorted(list(req.song.get("tracks", {}).get(t, [])) +
@@ -302,6 +352,7 @@ def extend(req: ExtendRequest):
     out["seconds"] = round(end, 3)
     out["seed"] = seed
     out["key"] = used_key
+    out.update(tempo_fields(tempo))
     return out
 
 
@@ -312,7 +363,9 @@ async def regenerate_track(request: Request, track: str = Query(...), style: str
                            start: float | None = Query(None, ge=0), end: float | None = Query(None, gt=0),
                            busyness: float = Query(0.5, ge=0, le=1),
                            note_length: float = Query(0.5, ge=0, le=1),
-                           key: str = "auto", strict_key: bool = False):
+                           key: str = "auto", strict_key: bool = False, tempo: str = "auto",
+                           groove: float = Query(0.5, ge=0, le=1),
+                           dynamics: float = Query(0.5, ge=0, le=1)):
     if track not in tracks.ALL_TRACKS:
         raise HTTPException(422, f"track must be one of {tracks.ALL_TRACKS}")
     if (start is None) != (end is None):
@@ -355,6 +408,8 @@ async def regenerate_track(request: Request, track: str = Query(...), style: str
     existing_notes = [n for notes in song_json(tracks.events_to_midi(events), seed)["tracks"].values()
                       for n in notes]
     key_pcs, used_key = resolve_key(key, existing_notes)
+    song_tempo = resolve_tempo(tempo, existing_notes)
+    grid = grid_args(song_tempo, groove)
     instruments = tracks.instruments_for([track])
     gap_ticks = drum_gap_ticks(instruments)
     min_dur_ticks = 0 if track == "drums" else round(tidy.min_duration(track, note_length) * TIME_RESOLUTION)
@@ -364,10 +419,11 @@ async def regenerate_track(request: Request, track: str = Query(...), style: str
             if ranged:
                 return sampler.rewrite_range(model, ops.sort(events), instruments, start, end,
                                              top_p=top_p, seed=seed, key=key_pcs, key_strict=strict_key,
-                                             min_duration_ticks=min_dur_ticks, drum_min_gap_ticks=gap_ticks)
+                                             min_duration_ticks=min_dur_ticks, drum_min_gap_ticks=gap_ticks,
+                                             **grid)
             return sampler.accompany(model, fixed, seconds, instruments, top_p=top_p, seed=seed,
                                      key=key_pcs, key_strict=strict_key, min_duration_ticks=min_dur_ticks,
-                                     drum_min_gap_ticks=gap_ticks)
+                                     drum_min_gap_ticks=gap_ticks, **grid)
 
     from starlette.concurrency import run_in_threadpool
     new_events = await run_in_threadpool(run)
@@ -378,7 +434,8 @@ async def regenerate_track(request: Request, track: str = Query(...), style: str
     fresh = tidy.tidy_track(track, [{"start": n.start, "duration": n.end - n.start, "pitch": n.pitch,
                                      "velocity": n.velocity} for n in new_notes],
                             busyness, random.Random(f"{seed}-{track}"), note_length=note_length,
-                            key=key_pcs, key_strict=strict_key)
+                            key=key_pcs, key_strict=strict_key, tempo=song_tempo, groove=groove,
+                            dynamics=dynamics)
     new_notes = [pretty_midi.Note(int(n["velocity"]), int(n["pitch"]), n["start"], n["start"] + n["duration"])
                  for n in fresh]
     if ranged:
@@ -404,6 +461,7 @@ async def regenerate_track(request: Request, track: str = Query(...), style: str
                                       "pitch": n["pitch"], "velocity": n["velocity"]} for n in merged]
             sent["seed"] = seed
             sent["key"] = used_key
+            sent.update(tempo_fields(song_tempo))
             return sent
         new_notes = [pretty_midi.Note(int(n["velocity"]), int(n["pitch"]), n["start"], n["start"] + n["duration"])
                      for n in merged]
@@ -414,6 +472,7 @@ async def regenerate_track(request: Request, track: str = Query(...), style: str
         sent["seconds"] = round(max(float(sent.get("seconds", 0)), last), 3)
         sent["seed"] = seed
         sent["key"] = used_key
+        sent.update(tempo_fields(song_tempo))
         return sent
     song.instruments = [i for i in song.instruments
                         if tracks.all_track_of(i.program, i.is_drum) != track]

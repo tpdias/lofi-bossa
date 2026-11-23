@@ -11,11 +11,16 @@ struct NoteLaneView: View {
     var ghostNotes: [Note] = []
     var ghostColor: Color = .clear
     var onSeek: (Double) -> Void = { _ in }
+    /// Bar and beat lines behind the notes, when the song has a tempo.
+    var grid: BeatGrid? = nil
 
     var body: some View {
         GeometryReader { geo in
             Canvas { ctx, size in
                 guard duration > 0 else { return }
+                if let grid {
+                    TimelineRuler.drawLaneGrid(&ctx, size: size, duration: duration, window: window, grid: grid)
+                }
                 if !ghostNotes.isEmpty {
                     draw(ghostNotes, in: &ctx, size: size, color: ghostColor.opacity(0.35))
                 }

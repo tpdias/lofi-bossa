@@ -159,7 +159,7 @@ final class ProjectViewModel {
                     seed: project.pinnedSeed, tracks: tracksToGenerate,
                     busyness: Dictionary(uniqueKeysWithValues: tracksToGenerate.map { ($0, busyness(for: $0)) }),
                     noteLength: Dictionary(uniqueKeysWithValues: tracksToGenerate.map { ($0, noteLength(for: $0)) }),
-                    key: project.key, strictKey: project.isStrictKey,
+                    music: project.music,
                     keeping: locked.isEmpty ? nil : project.currentSnapshot, locked: locked
                 ) {
                     guard case .finished(var snapshot) = event else { continue }
@@ -201,7 +201,7 @@ final class ProjectViewModel {
                     snapshot, by: seconds, model: activeModel, seed: seed,
                     busyness: Dictionary(uniqueKeysWithValues: ids.map { ($0, busyness(for: $0)) }),
                     noteLength: Dictionary(uniqueKeysWithValues: ids.map { ($0, noteLength(for: $0)) }),
-                    key: project.key, strictKey: project.isStrictKey)
+                    music: project.music)
                 appendVersion(kind: .extend(to: longer.lengthSeconds), changed: Set(ids), snapshot: longer)
                 phase = .idle
             } catch is CancellationError {
@@ -239,7 +239,7 @@ final class ProjectViewModel {
                 let (notes, detectedKey) = try await generator.rewrite(
                     track: track, model: activeModel, in: snapshot, seed: seed, range: range,
                     busyness: busyness(for: track), noteLength: noteLength(for: track),
-                    key: project.key, strictKey: project.isStrictKey)
+                    music: project.music)
                 var newSnapshot = snapshot
                 newSnapshot.detectedKey = detectedKey
                 if let i = newSnapshot.tracks.firstIndex(where: { $0.id == track }) {
@@ -542,6 +542,16 @@ final class ProjectViewModel {
     /// `nil` (Auto) detects the key from the song; a name from `MusicKey.names` pins it.
     func setKey(_ name: String?) { project.key = name; persist() }
     func setStrictKey(_ strict: Bool) { project.strictKey = strict; persist() }
+    /// nil (Auto) lets the server detect the tempo; a BPM in `Project.tempoRange` pins it.
+    func setTempo(_ bpm: Double?) {
+        project.tempo = bpm.map { min(max($0.rounded(), Project.tempoRange.lowerBound), Project.tempoRange.upperBound) }
+        persist()
+    }
+    func setGroove(_ value: Double) { project.groove = min(max(value, 0), 1); persist() }
+    func setDynamics(_ value: Double) { project.dynamics = min(max(value, 0), 1); persist() }
+
+    /// The tempo to show: the chosen one, or on Auto the one detected for the current song.
+    var displayedTempo: Double? { project.tempo ?? project.currentSnapshot?.tempo }
 
     /// What to show next to the Key menu: the detected key when Auto and there is a current
     /// song to have detected one from, otherwise nothing.

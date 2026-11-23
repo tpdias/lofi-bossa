@@ -145,6 +145,89 @@ def snap_to_key(notes, key):
     return out
 
 
+# ---- Tempo and dynamics: the model writes neither; both are applied to its notes here ----
+
+STEPS_PER_BEAT = 4          # the grid is sixteenth notes
+
+
+def grid_step(tempo):
+    """Seconds between sixteenth notes for (bpm, beat offset)."""
+    return 60.0 / tempo[0] / STEPS_PER_BEAT
+
+
+def quantize(notes, tempo, strength):
+    """Pull every onset toward the nearest sixteenth of `tempo` = (bpm, beat offset seconds) by
+    `strength` (0 untouched, 1 exactly on the grid); each note keeps its length."""
+    if not notes or strength <= 0:
+        return [dict(n) for n in notes]
+    step, offset = grid_step(tempo), tempo[1]
+    out = []
+    for n in notes:
+        n = dict(n)
+        target = offset + round((n["start"] - offset) / step) * step
+        n["start"] = max(round(n["start"] + (target - n["start"]) * min(strength, 1.0), 4), 0.0)
+        out.append(n)
+    return out
+
+
+# Loudness range around each track's base velocity (tracks.VELOCITY) at dynamics 1: steady
+# parts (bass, pads) move less.
+DYNAMIC_RANGE = {"piano": 26, "guitar": 24, "bass": 14, "drums": 30, "keys": 14, "lead": 24, "vibes": 22}
+
+
+def apply_dynamics(track, notes, dynamics, rng, tempo=None, base=None):
+    """Write velocities instead of the model's flat default. `dynamics` 0 keeps every note at the
+    track's base; up to 1 adds beat accents (with a tempo: downbeats and, for drums, backbeats
+    louder, off-beat sixteenths softer), a rise and fall over each phrase, the top note of a
+    chord a little louder, drum roles (kick and snare up, hi-hats down), and a little jitter."""
+    if not notes or dynamics is None:
+        return [dict(n) for n in notes]
+    import tracks as track_info
+    base = base if base is not None else track_info.VELOCITY.get(track, 72)
+    spread = DYNAMIC_RANGE.get(track, 20) * min(max(dynamics, 0.0), 1.0)
+    notes = sorted((dict(n) for n in notes), key=lambda n: (n["start"], n["pitch"]))
+    if spread <= 0:
+        for n in notes:
+            n["velocity"] = base
+        return notes
+
+    # phrases: split where the track goes quiet for PHRASE_GAP
+    phrase_of, phrases, last_end = [], [[]], None
+    for i, n in enumerate(notes):
+        if last_end is not None and n["start"] - last_end >= PHRASE_GAP:
+            phrases.append([])
+        phrases[-1].append(i)
+        last_end = max(last_end or 0.0, _end(n))
+    position = [0.0] * len(notes)
+    for ph in phrases:
+        a, b = notes[ph[0]]["start"], notes[ph[-1]]["start"]
+        for i in ph:
+            position[i] = (notes[i]["start"] - a) / (b - a) if b > a else 0.5
+    tops = {id(g[-1]) for g in groups_of(notes) if len(g) > 1}
+
+    for i, n in enumerate(notes):
+        v = 0.35 * spread * math.sin(math.pi * position[i]) - 0.1 * spread   # phrase arc
+        if tempo is not None:
+            beats = (n["start"] - tempo[1]) * tempo[0] / 60.0
+            sixteenth = round(beats * STEPS_PER_BEAT) % (4 * STEPS_PER_BEAT)   # position in a 4/4 bar
+            if sixteenth == 0:
+                v += 0.45 * spread                       # downbeat
+            elif sixteenth % STEPS_PER_BEAT == 0:
+                v += 0.2 * spread                        # other beats
+                if track == "drums" and sixteenth in (4, 12):
+                    v += 0.2 * spread                    # backbeat
+            elif sixteenth % 2 == 1:
+                v -= 0.3 * spread                        # off-beat sixteenths
+        if track == "drums":
+            role = track_info.drum_category(n["pitch"])
+            v += {"kick": 0.3, "snare": 0.25, "hihat": -0.3, "cymbal": 0.1, "tom": 0.0}.get(role, -0.2) * spread
+        elif id(n) in tops:
+            v += 0.2 * spread                            # melody on top of a chord
+        v += rng.gauss(0, 0.12 * spread)
+        n["velocity"] = int(min(max(round(base + v), 20), 120))
+    return notes
+
+
 def groups_of(notes):
     """Notes sorted and grouped by onset."""
     out = []
@@ -176,13 +259,16 @@ def _cut(n, at):
     n["duration"] = max(at - n["start"], MIN_LENGTH)
 
 
-def tidy_track(track, notes, busyness, rng, note_length=None, key=None, key_strict=False):
+def tidy_track(track, notes, busyness, rng, note_length=None, key=None, key_strict=False,
+               tempo=None, groove=0.0, dynamics=None):
     """Cleaned copy of one track's notes.
 
     busyness >= 1 skips the busyness-driven thinning below (steps 1-6: the model's raw notes).
     note_length and key are independent of busyness and of each other, and still apply even
     then: note_length (0 short .. 1 long, None = off) runs legato/clamp_drums/pitch_cooldown;
     key (a set of pitch classes, None = off) runs snap_to_key when key_strict.
+    tempo = (bpm, beat offset seconds) with groove > 0 pulls onsets toward its sixteenths;
+    dynamics (0 flat .. 1 expressive, None = off) writes the velocities, last.
     """
     notes = [dict(n) for n in notes]
     if not notes:
@@ -196,6 +282,10 @@ def tidy_track(track, notes, busyness, rng, note_length=None, key=None, key_stri
             notes = pitch_cooldown(track, legato(track, notes, min_duration(track, note_length)))
     if key is not None and key_strict and track != "drums":
         notes = snap_to_key(notes, key)
+    if tempo is not None and groove > 0:
+        notes = quantize(notes, tempo, groove)
+    if dynamics is not None:
+        notes = apply_dynamics(track, notes, dynamics, rng, tempo)
     return sorted(notes, key=lambda n: (n["start"], n["pitch"]))
 
 
@@ -289,7 +379,8 @@ def _per_track(value, track, default):
     return value.get(track, default) if isinstance(value, dict) else value
 
 
-def tidy_song(tracks, busyness, seed=0, only=None, note_length=None, key=None, key_strict=False):
+def tidy_song(tracks, busyness, seed=0, only=None, note_length=None, key=None, key_strict=False,
+              tempo=None, groove=0.0, dynamics=None):
     """Cleaned copy of {track: notes}. `busyness` and `note_length` are each one value or
     {track: value} (missing tracks use 0.5 for busyness, are skipped for note_length). `key`
     is one set of pitch classes for the whole song, or None. `only` limits the clean-up to
@@ -302,7 +393,8 @@ def tidy_song(tracks, busyness, seed=0, only=None, note_length=None, key=None, k
         b = _per_track(busyness, track, 0.5)
         nl = _per_track(note_length, track, None)
         rng = random.Random(f"{seed}-{track}")
-        out[track] = tidy_track(track, notes, b, rng, note_length=nl, key=key, key_strict=key_strict)
+        out[track] = tidy_track(track, notes, b, rng, note_length=nl, key=key, key_strict=key_strict,
+                                tempo=tempo, groove=groove, dynamics=dynamics)
     return out
 
 

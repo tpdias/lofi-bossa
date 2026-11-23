@@ -204,6 +204,16 @@ override in each track's effects popover, same shape as Busyness.
 `.venv/bin/python training/tidy.py --report song.json --note-length 0.8 --key auto` shows both
 on a song.
 
+**Tempo, groove and dynamics.** The model has no tempo and writes no loudness, so both are
+added around it. `tempo` ("auto", "none" or 60–140 BPM) gives the sampler a sixteenth-note grid
+to lean toward; `groove` (0 loose … 1 tight) then pulls the new notes' onsets onto it; on Auto
+the tempo is estimated from the song (`tracks.estimate_tempo`) and reported back as `tempo` and
+`beat_offset`. `dynamics` (0 flat … 0.5 default … 1 expressive) writes velocities: downbeat and
+backbeat accents, a rise and fall over each phrase, the top of a chord a little louder, kick and
+snare over hi-hats. In the app they're in the song settings with Key and Note length; a song
+with a tempo shows bar and beat lines on the timeline, and the piano roll snaps to 1/16, 1/8,
+beats or bars.
+
 **Building on the current song.** Lock a track (the lock key next to M and S, or ⌥⌘L) and the
 next Generate keeps it exactly as it is and writes the other tracks around it (`/generate` with the
 current `song` and a `locked` list). Extend (⇧⌘↩) continues the whole song for 30 more seconds,
@@ -383,10 +393,11 @@ xcodebuild -project app/LofiBossa.xcodeproj -scheme LofiBossa test   # unit + UI
 - **Fine-tuned checkpoints aren't in the repository.** A fresh clone uses the general
   pretrained model until you train (`training/cloud/`) or copy the checkpoints in. Even
   fine-tuned, the gain is modest and quality varies a lot from seed to seed.
-- **No tempo control, and no dynamics from the model.** The model works in absolute time, so
-  there's no tempo or bar grid. Key and note length can be set, but the model never writes a
-  loudness: every note gets a fixed per-track velocity. The piano roll's Loudness lane does
-  edit it for playback.
+- **Tempo and dynamics are added around the model, not learned by it.** The model works in
+  absolute time and never writes a loudness, so the server leans its onsets toward a tempo's
+  grid, pulls them onto it (Groove), estimates the tempo on Auto, and writes velocities from
+  rules (Dynamics: accents, phrase arcs, drum roles). Only 4/4 is drawn and snapped to, and a
+  tempo can't change inside a song.
 - **iOS instruments sound different from the Mac's.** iOS has no built-in General MIDI bank,
   so the iOS app plays the same programs from the bundled GeneralUser GS bank instead of
   Apple's. A song mixed on one platform won't sound identical on the other, and the bank adds
@@ -395,11 +406,9 @@ xcodebuild -project app/LofiBossa.xcodeproj -scheme LofiBossa test   # unit + UI
   iPhone Duo's fold detection has never run (no Duo simulator with iOS 27.1 yet; the layouts
   were checked by forcing them), and Apple Pencil, Stage Manager sizes and a hardware keyboard
   on iPad are untested.
-- **The Duo's left page uses stand-in views** until the iPhone's track cards and recipe strip
-  are swapped in.
 - **Songs top out at 3:00**, including with Extend.
-- **Undo/Redo is a version pointer, not the system `UndoManager`.** It steps backward and
-  forward through the version list rather than integrating with the Edit menu's undo stack.
+- **Undo outside the piano roll steps through versions.** While a roll is open, ⌘Z undoes
+  single note edits (through the system undo manager); otherwise it moves between versions.
 - **The write-head streaming animation isn't wired up.** The server returns a finished song,
   not a stream, so whole-song generation shows the per-track sweep rather than notes appearing
   as they're written.
@@ -411,9 +420,9 @@ xcodebuild -project app/LofiBossa.xcodeproj -scheme LofiBossa test   # unit + UI
 1. Run the model inside the app with Core AI (port the sampler, tokenizer and clean-up to
    Swift behind the existing `GeneratorClient`), first measuring real speed on a device. This
    is what makes generation work on iPhone and iPad.
-2. Swap the iPhone components into the Duo's left page; test on real devices.
-3. True zoom/scroll in the Mac piano roll; a proper `UndoManager` integration.
-4. Tempo-aware generation and a bar grid; an endless "radio" mode built on Extend.
+2. Test on real devices: iPhone, iPad (Pencil, Stage Manager, keyboard) and an iPhone Duo.
+3. An endless "radio" mode built on Extend.
+4. Time signatures other than 4/4; tempo changes within a song.
 
 ## Licensing notes
 

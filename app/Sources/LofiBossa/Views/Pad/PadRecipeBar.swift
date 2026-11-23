@@ -76,7 +76,7 @@ struct PadRecipeBar: View {
 
     private var songSettingsControl: some View {
         Button { showSongSettings.toggle() } label: {
-            Label(model.displayedKey ?? "Auto", systemImage: "tuningfork").lineLimit(1)
+            Label(model.musicSummary, systemImage: "tuningfork").lineLimit(1)
         }
         .buttonStyle(.bordered).fixedSize()
         .popover(isPresented: $showSongSettings, arrowEdge: .bottom) { PadSongSettings(model: model) }
@@ -125,7 +125,7 @@ private struct PadSongSettings: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: LFBSpace.md) {
-            Text("Key & note length").font(.lfbTitle)
+            Text("Key, tempo & feel").font(.lfbTitle)
             HStack {
                 Text("Key")
                 Spacer()
@@ -154,6 +154,8 @@ private struct PadSongSettings: View {
                     .font(.footnote).foregroundStyle(Color.lfbTextSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            Divider()
+            MusicSettingsSection(model: model)
         }
         .padding(LFBSpace.lg)
         .frame(width: 320)
