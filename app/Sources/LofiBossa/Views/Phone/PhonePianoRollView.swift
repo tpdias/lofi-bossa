@@ -13,6 +13,8 @@ import SwiftUI
 ///   empty space scrolls time and pitch, pinch zooms time, long press then drag draws a marquee.
 ///   Drag a stem in the loudness lane to change that note's loudness.
 /// - The other parts keep playing. Done adds one version for the session (as on the Mac).
+/// - Undo walks the session's note edits on `ProjectViewModel`'s stack, the same one shake /
+///   three-finger undo reach through the window's undo manager.
 struct PhonePianoRollView: View {
     @Bindable var model: ProjectViewModel
     let track: TrackID
@@ -29,8 +31,6 @@ struct PhonePianoRollView: View {
     @State private var topPitch: Double = 76
     @State private var gridSize: CGSize = CGSize(width: 320, height: 400)
     @State private var didPlace = false
-    /// Note arrays before each edit, for the in-editor Undo.
-    @State private var undoStack: [[Note]] = []
 
     // gesture state
     @State private var dragKind: DragKind?
@@ -82,6 +82,7 @@ struct PhonePianoRollView: View {
             clampView()
         }
         .onChange(of: model.position) { _, p in followPlayhead(p) }
+        .sharesNoteUndo(with: model)
     }
 
     // MARK: Bars
@@ -165,17 +166,20 @@ struct PhonePianoRollView: View {
     }
 
     private var undoButton: some View {
-        Button(action: undo) { Image(systemName: "arrow.uturn.backward").font(.system(size: 19)).frame(width: 44, height: 44) }
-            .disabled(undoStack.isEmpty)
-            .foregroundStyle(undoStack.isEmpty ? Color.lfbTextTertiary : Color.lfbAccentText)
-            .accessibilityLabel("Undo note edit")
+        Button(action: model.undoNoteEdit) { Image(systemName: "arrow.uturn.backward").font(.system(size: 19)).frame(width: 44, height: 44) }
+            .disabled(!model.canUndoNoteEdit)
+            .foregroundStyle(model.canUndoNoteEdit ? Color.lfbAccentText : Color.lfbTextTertiary)
+            .accessibilityLabel(model.noteUndoTitle.map { "Undo \($0)" } ?? "Undo note edit")
+            .accessibilityIdentifier("roll-undo")
     }
 
     @ViewBuilder private var selectionControls: some View {
         Text(selected.isEmpty ? (isLandscape ? "" : "Tap a note to select it") : "\(selected.count) selected\(isLandscape ? "" : " · Loudness")")
             .font(.system(size: 13)).foregroundStyle(Color.lfbTextSecondary).lineLimit(1).fixedSize()
         if !selected.isEmpty {
-            Slider(value: loudnessBinding, in: 1...127)
+            Slider(value: loudnessBinding, in: 1...127) { editing in
+                editing ? model.beginNoteGesture() : model.endNoteGesture()
+            }
                 .frame(minWidth: 80, maxWidth: isLandscape ? 110 : .infinity)
                 .accessibilityLabel("Loudness of the selected notes")
         } else if !isLandscape {
@@ -214,7 +218,6 @@ struct PhonePianoRollView: View {
         Binding(
             get: { Double(selected.map(\.velocity).reduce(0, +)) / Double(max(selected.count, 1)) },
             set: { v in
-                if dragKind == nil && stemID == nil { pushUndoOnce() }
                 var updated = notes
                 for i in updated.indices where model.selectedNoteIDs.contains(updated[i].id) { updated[i].velocity = Int(v.rounded()) }
                 model.updateEditingNotes(updated, for: track)
@@ -444,6 +447,7 @@ struct PhonePianoRollView: View {
                 }
                 dragKind = nil; dragOriginals = [:]; dragAnchor = nil; marquee = nil; longPressArmed = false
                 lastAuditioned = nil; touchStart = nil
+                model.endNoteGesture()
             }
     }
 
@@ -467,7 +471,7 @@ struct PhonePianoRollView: View {
     private func beginDrag(at point: CGPoint) {
         if longPressArmed, hit(point) == nil { dragKind = .marquee; return }
         if let h = hit(point), model.selectedNoteIDs.contains(h.note.id) {
-            pushUndo()
+            model.beginNoteGesture()   // the whole move / resize is one undo step
             dragOriginals = Dictionary(uniqueKeysWithValues: selected.map { ($0.id, $0) })
             dragAnchor = h.note.id
             dragKind = h.onHandle ? .resize : .move
@@ -531,7 +535,7 @@ struct PhonePianoRollView: View {
                         let target = notes.min { abs(x($0.start) - g.startLocation.x) < abs(x($1.start) - g.startLocation.x) }
                         guard let target, abs(x(target.start) + 2 - g.startLocation.x) <= 16 else { return }
                         stemID = target.id
-                        pushUndo()
+                        model.beginNoteGesture()
                         if !model.selectedNoteIDs.contains(target.id) { model.selectedNoteIDs = [target.id] }
                     }
                     guard let id = stemID else { return }
@@ -546,6 +550,7 @@ struct PhonePianoRollView: View {
                 .onEnded { _ in
                     if let id = stemID, let n = notes.first(where: { $0.id == id }) { audition(n.pitch, n.velocity) }
                     stemID = nil
+                    model.endNoteGesture()
                 })
         .accessibilityLabel("Loudness")
         .accessibilityHint("Drag a stem up or down to change how hard that note is played")
@@ -553,25 +558,7 @@ struct PhonePianoRollView: View {
 
     // MARK: Edits
 
-    private func pushUndo() {
-        undoStack.append(notes)
-        if undoStack.count > 100 { undoStack.removeFirst() }
-    }
-    @State private var lastUndoPush = Date.distantPast
-    /// Slider drags would push on every step; one entry per second is enough.
-    private func pushUndoOnce() {
-        if Date().timeIntervalSince(lastUndoPush) > 1 { pushUndo() }
-        lastUndoPush = Date()
-    }
-
-    private func undo() {
-        guard let previous = undoStack.popLast() else { return }
-        model.updateEditingNotes(previous, for: track)
-        model.selectedNoteIDs = model.selectedNoteIDs.intersection(Set(previous.map(\.id)))
-    }
-
     private func addNote(at point: CGPoint) {
-        pushUndo()
         let start = min(snapped(time(point.x)), max(duration - 0.05, 0))
         let note = Note(pitch: pitch(point.y), start: start, duration: max(snap, 0.25), velocity: 90)
         model.updateEditingNotes(NoteEditing.sorted(notes + [note]), for: track)
@@ -581,7 +568,6 @@ struct PhonePianoRollView: View {
 
     private func deleteSelection() {
         guard !selected.isEmpty else { return }
-        pushUndo()
         model.updateEditingNotes(notes.filter { !model.selectedNoteIDs.contains($0.id) }, for: track)
         model.selectedNoteIDs = []
     }
@@ -589,7 +575,6 @@ struct PhonePianoRollView: View {
     private func duplicateSelection() {
         let chosen = selected
         guard let first = chosen.map(\.start).min(), let last = chosen.map({ $0.start + $0.duration }).max() else { return }
-        pushUndo()
         let shift = max(last - first, snap > 0 ? snap : 0.25)
         let copies: [Note] = chosen.compactMap { n in
             var c = n; c.id = UUID(); c.start += shift
@@ -602,7 +587,6 @@ struct PhonePianoRollView: View {
 
     private func transposeSelection(by semitones: Int) {
         guard !selected.isEmpty else { return }
-        pushUndo()
         var updated = notes
         for i in updated.indices where model.selectedNoteIDs.contains(updated[i].id) {
             updated[i].pitch = min(max(updated[i].pitch + semitones, Self.lowPitch), Self.highPitch)

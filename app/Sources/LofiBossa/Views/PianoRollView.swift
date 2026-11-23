@@ -162,6 +162,7 @@ struct PianoRollView: View {
         }
         .onChange(of: model.position) { _, position in followIfPlaying(position) }
         .onChange(of: model.displayedSnapshot?.lengthSeconds) { clampZoom() }
+        .sharesNoteUndo(with: model)
     }
 
     // MARK: Header
@@ -229,7 +230,10 @@ struct PianoRollView: View {
                 Text("\(selectedNotes.count) selected").font(.lfbCaption).foregroundStyle(Color.lfbTextSecondary)
                 HStack(spacing: 6) {
                     Image(systemName: "speaker.wave.1").font(.caption)
-                    Slider(value: loudnessBinding, in: 1...127).frame(width: 90)
+                    Slider(value: loudnessBinding, in: 1...127) { editing in
+                        editing ? model.beginNoteGesture() : model.endNoteGesture()
+                    }
+                    .frame(width: 90)
                 }
                 Button(role: .destructive, action: deleteSelection) { Image(systemName: "trash") }
                     .buttonStyle(.plain)
@@ -530,10 +534,13 @@ struct PianoRollView: View {
             .onEnded { _ in
                 dragOriginals = [:]; dragMode = nil; dragAnchorID = nil; lastAuditionPitch = nil
                 marqueeStart = nil; marqueeRect = nil
+                model.endNoteGesture()
             }
     }
 
+    /// The whole drag (and an ⌥-drag's copies) is one undo step, closed when the drag ends.
     private func beginNoteDrag(on hit: Note, resize: Bool) {
+        model.beginNoteGesture()
         if !model.selectedNoteIDs.contains(hit.id) { model.selectedNoteIDs = [hit.id] }
         var anchor = hit.id
         if optionHeld && !resize {
@@ -745,7 +752,10 @@ struct PianoRollView: View {
             DragGesture(minimumDistance: 0)
                 .onChanged { g in
                     focused = true
-                    if stemID == nil { stemID = nearestStem(to: g.startLocation.x + scroll.x) }
+                    if stemID == nil {
+                        stemID = nearestStem(to: g.startLocation.x + scroll.x)
+                        if stemID != nil { model.beginNoteGesture() }
+                    }
                     guard let id = stemID else { return }
                     let v = Int((1 - g.location.y / Self.loudnessHeight) * 127 + 1).clamped(to: 1...127)
                     var updated = notes
@@ -758,6 +768,7 @@ struct PianoRollView: View {
                 .onEnded { _ in
                     if let id = stemID, let n = notes.first(where: { $0.id == id }) { audition(n.pitch, n.velocity) }
                     stemID = nil
+                    model.endNoteGesture()
                 }
         )
         .help("Drag a stem up or down to change how hard that note is played")
@@ -918,7 +929,8 @@ extension PianoRollView {
             if let hit = touchHitTest(start) {
                 beginNoteDrag(on: hit.note, resize: hit.nearRightEdge)
             } else {
-                // Draw: a new note at the snapped start, as long as the stroke.
+                // Draw: a new note at the snapped start, as long as the stroke (one undo step).
+                model.beginNoteGesture()
                 let begin = snapTime(xToTime(start.x))
                 let pitch = yToPitch(start.y)
                 let note = Note(pitch: pitch, start: min(begin, max(duration - 0.05, 0)), duration: max(effectiveSnap, 0.05), velocity: 90)
@@ -980,6 +992,7 @@ extension PianoRollView {
     }
 
     private func endTouch() {
+        model.endNoteGesture()
         touchMode = nil
         dragOriginals = [:]; dragMode = nil; dragAnchorID = nil; lastAuditionPitch = nil
         marqueeStart = nil; marqueeRect = nil

@@ -22,8 +22,9 @@ struct AppCommands: Commands {
             Button("New Project") { post(.lfbNewProject) }.keyboardShortcut("n")
         }
 
-        // Undo/Redo step through versions. Inside a text field (rename, seed) they must still undo
-        // typing, so they pass the key on to the text system there.
+        // Undo/Redo step through note edits while a piano roll is open (the model routes them
+        // through the window's UndoManager), and through versions otherwise. Inside a text field
+        // (rename, seed) they must still undo typing, so they pass the key on to the text system there.
         CommandGroup(replacing: .undoRedo) {
             Button(model?.undoTitle.map { "Undo \($0)" } ?? "Undo") { undo() }
                 .keyboardShortcut("z")
@@ -129,7 +130,7 @@ enum KeyboardShortcuts {
             Item(keys: "⇧⌘↩", what: "Extend the song by 30 seconds"),
             Item(keys: "⇧⌘C", what: "Copy the seed"),
             Item(keys: "⌘E", what: "Export"),
-            Item(keys: "⌘Z / ⇧⌘Z", what: "Undo / redo (steps through versions)"),
+            Item(keys: "⌘Z / ⇧⌘Z", what: "Undo / redo (note edits in the piano roll, else versions)"),
         ]),
         Group(title: "Transport", items: [
             Item(keys: "Space", what: "Play / pause"),
