@@ -18,8 +18,24 @@ final class AudioEngine {
     /// replaced) left the real one silent in live playback while offline renders still worked.
     private var sequencer: AVAudioSequencer?
 
-    private static let soundBank = URL(
+    /// The General MIDI bank every sampler loads its program from. macOS ships one (Apple's GS
+    /// DLS); iOS has none, so the iOS app bundles GeneralUser GS (app/SoundBank, added only to
+    /// the LofiBossaiOS target). Without a bank, a sampler plays its default sine-like tone.
+    private let soundBank: URL?
+
+    #if os(macOS)
+    static let defaultSoundBank: URL? = URL(
         fileURLWithPath: "/System/Library/Components/CoreAudio.component/Contents/Resources/gs_instruments.dls")
+    #else
+    static let defaultSoundBank: URL? = bundledSoundBank(in: .main)
+    #endif
+
+    /// GeneralUser GS inside an app bundle. Its programs follow General MIDI and its drum kits
+    /// sit in the percussion bank (128) at the GS kit numbers, so `TrackID.instruments` maps
+    /// onto it unchanged.
+    static func bundledSoundBank(in bundle: Bundle) -> URL? {
+        bundle.url(forResource: "GeneralUser-GS", withExtension: "sf2")
+    }
     /// The sequencer runs at 120 BPM, so one second is two beats.
     private static let beatsPerSecond = 2.0
     private(set) var seconds: Double = 0
@@ -54,7 +70,8 @@ final class AudioEngine {
         }
     }
 
-    init() {
+    init(soundBank: URL? = AudioEngine.defaultSoundBank) {
+        self.soundBank = soundBank
         let format = AVAudioFormat(standardFormatWithSampleRate: 44100, channels: 2)!
         for node in [trackMix, lowPass, reverb, vinyl.node] as [AVAudioNode] { engine.attach(node) }
         for id in TrackID.allCases {
@@ -101,11 +118,11 @@ final class AudioEngine {
     /// sampler whose engine is running (which every version switch used to do) left the new
     /// sequencer's notes silent and playback dead until the app was restarted.
     func setInstrument(_ program: UInt8, for id: TrackID) {
-        guard loadedPrograms[id] != program else { return }
+        guard loadedPrograms[id] != program, let soundBank else { return }
         loadedPrograms[id] = program
         let bank = id == .drums ? kAUSampler_DefaultPercussionBankMSB : kAUSampler_DefaultMelodicBankMSB
         try? samplers[id]?.loadSoundBankInstrument(
-            at: Self.soundBank, program: program, bankMSB: UInt8(bank), bankLSB: 0)
+            at: soundBank, program: program, bankMSB: UInt8(bank), bankLSB: 0)
     }
 
     func setVolume(_ volume: Double, for id: TrackID) {
