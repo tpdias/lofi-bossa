@@ -33,20 +33,20 @@ final class OnDeviceGeneratorClient: GeneratorClient {
 
     func generate(style: MusicStyle, model: NoteModel, length: Double, seed: UInt32?,
                   tracks: [TrackID], busyness: [TrackID: Double], noteLength: [TrackID: Double],
-                  key: String?, strictKey: Bool, keeping song: SongSnapshot?,
+                  music: MusicSettings, keeping song: SongSnapshot?,
                   locked: Set<TrackID>) -> AsyncThrowingStream<GenerationEvent, Error> {
         AsyncThrowingStream { $0.finish(throwing: NotReady()) }
     }
 
     func extend(_ song: SongSnapshot, by seconds: Double, model: NoteModel, seed: UInt32?,
-                busyness: [TrackID: Double], noteLength: [TrackID: Double], key: String?,
-                strictKey: Bool) async throws -> SongSnapshot {
+                busyness: [TrackID: Double], noteLength: [TrackID: Double],
+                music: MusicSettings) async throws -> SongSnapshot {
         throw NotReady()
     }
 
     func rewrite(track: TrackID, model: NoteModel, in song: SongSnapshot, seed: UInt32,
-                 range: ClosedRange<Double>?, busyness: Double, noteLength: Double, key: String?,
-                 strictKey: Bool) async throws -> (notes: [Note], detectedKey: String?) {
+                 range: ClosedRange<Double>?, busyness: Double, noteLength: Double,
+                 music: MusicSettings) async throws -> (notes: [Note], detectedKey: String?) {
         throw NotReady()
     }
 }

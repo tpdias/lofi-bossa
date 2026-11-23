@@ -302,7 +302,7 @@ struct PhoneRecipeStrip: View {
                     Button { showSettings = true } label: {
                         HStack(spacing: 5) {
                             Image(systemName: "tuningfork")
-                            Text(model.displayedKey ?? "Auto")
+                            Text(model.musicSummary)
                         }
                     }
                     .buttonStyle(PhoneChipStyle())
@@ -431,6 +431,8 @@ struct PhoneSongSettings: View {
                    value: Binding(get: { model.project.songBusyness }, set: { model.setBusyness($0) }), id: "busyness")
             slider("Note length", low: "Short", high: "Long",
                    value: Binding(get: { model.project.songNoteLength }, set: { model.setNoteLength($0) }), id: "noteLength")
+            Divider()
+            MusicSettingsSection(model: model)
             Text("Applies to the next take or rewrite. Your own edits are never limited. Each track can override these in its sheet.")
                 .font(.system(size: 12)).foregroundStyle(Color.lfbTextSecondary)
                 .fixedSize(horizontal: false, vertical: true)

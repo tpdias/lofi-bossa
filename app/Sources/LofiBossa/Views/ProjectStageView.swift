@@ -218,7 +218,7 @@ private struct RecipeBar: View {
         Button { showSongSettings.toggle() } label: {
             HStack(spacing: 4) {
                 Image(systemName: "tuningfork")
-                Text(model.displayedKey ?? "Auto").lineLimit(1)
+                Text(model.musicSummary).lineLimit(1)
             }
         }
         .buttonStyle(.bordered).controlSize(.small).fixedSize()
@@ -272,7 +272,7 @@ private struct SongSettingsPopover: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: LFBSpace.md) {
-            Text("Key & note length").font(.lfbHeadline)
+            Text("Key, tempo & feel").font(.lfbHeadline)
 
             VStack(alignment: .leading, spacing: LFBSpace.xs) {
                 HStack {
@@ -308,9 +308,11 @@ private struct SongSettingsPopover: View {
                     .font(.lfbCaption).foregroundStyle(Color.lfbTextSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            Divider()
+            MusicSettingsSection(model: model)
         }
         .padding(LFBSpace.md)
-        .frame(width: 260)
+        .frame(width: 280)
     }
 }
 

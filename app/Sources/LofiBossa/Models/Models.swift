@@ -148,6 +148,16 @@ enum NoteModel: String, CaseIterable, Codable, Identifiable {
     var apiValue: String { self == .pretrained ? "pretrained" : "finetuned" }
 }
 
+/// Song-wide generation settings (`Project.music`): key, tempo, groove and dynamics. Per-track
+/// ones (busyness, note length) travel separately.
+struct MusicSettings: Equatable {
+    var key: String? = nil          // nil = Auto
+    var strictKey = false
+    var tempo: Double? = nil        // nil = Auto
+    var groove = Project.defaultGroove
+    var dynamics = Project.defaultDynamics
+}
+
 /// The 24 major/minor keys the server can keep new notes in (training/tracks.py `KEYS`, same
 /// names and order); `Project.key == nil` means "Auto" (detect it instead of naming one).
 enum MusicKey {
@@ -278,6 +288,10 @@ struct SongSnapshot: Codable, Hashable {
     /// or /regenerate_track's "key"), e.g. "A minor"; nil if it was never asked to keep one.
     /// Shown next to the Key menu when the project's own `key` is Auto.
     var detectedKey: String? = nil
+    /// The tempo (BPM) and beat offset (seconds) the server used or detected for this song;
+    /// nil when it had none. Drives the bar grid.
+    var tempo: Double? = nil
+    var beatOffset: Double? = nil
 
     /// The tracks this song has, in display order (core ones first, then added ones).
     var trackIDs: [TrackID] { tracks.map(\.id) }
@@ -340,6 +354,23 @@ struct Project: Identifiable, Codable, Hashable {
     /// Forbid out-of-key notes outright instead of just discouraging them.
     var strictKey: Bool? = nil
     var isStrictKey: Bool { strictKey ?? false }
+    /// Beats per minute to keep new notes on (a sixteenth-note grid); nil = Auto (the server
+    /// detects it from the song). The model itself has no tempo; see training/tidy.py.
+    var tempo: Double? = nil
+    /// How tightly new notes are pulled onto the tempo's grid: 0 loose, 1 exactly on it.
+    var groove: Double? = nil
+    var songGroove: Double { groove ?? Self.defaultGroove }
+    static let defaultGroove = 0.5
+    /// How much new notes' loudness varies (accents, phrase arcs): 0 flat, 1 expressive.
+    var dynamics: Double? = nil
+    var songDynamics: Double { dynamics ?? Self.defaultDynamics }
+    static let defaultDynamics = 0.5
+    static let tempoRange: ClosedRange<Double> = 60...140
+
+    /// The song-wide settings sent with every generate, rewrite and extend.
+    var music: MusicSettings {
+        MusicSettings(key: key, strictKey: isStrictKey, tempo: tempo, groove: songGroove, dynamics: songDynamics)
+    }
 
     var current: Version? { versions.first { $0.id == currentVersionID } }
     var currentSnapshot: SongSnapshot? { current?.snapshot }

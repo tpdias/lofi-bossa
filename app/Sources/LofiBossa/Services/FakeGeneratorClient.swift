@@ -20,6 +20,9 @@ final class FakeGeneratorClient: GeneratorClient {
     private(set) var lastGenerateNoteLength: [TrackID: Double] = [:]
     private(set) var lastGenerateKey: String? = nil
     private(set) var lastGenerateStrictKey = false
+    private(set) var lastGenerateMusic = MusicSettings()
+    /// The tempo a generate/extend reports when the request left it on Auto.
+    var detectedTempo: Double? = 90
     private(set) var lastGenerateLocked: Set<TrackID> = []
     private(set) var extendCalls: [Double] = []
     /// What `rewrite`/`generate` hand back as the key actually used; "auto" (default) echoes
@@ -32,14 +35,15 @@ final class FakeGeneratorClient: GeneratorClient {
 
     func generate(style: MusicStyle, model: NoteModel, length: Double, seed: UInt32?,
                   tracks: [TrackID], busyness: [TrackID: Double], noteLength: [TrackID: Double],
-                  key: String?, strictKey: Bool, keeping song: SongSnapshot?,
+                  music: MusicSettings, keeping song: SongSnapshot?,
                   locked: Set<TrackID>) -> AsyncThrowingStream<GenerationEvent, Error> {
         generateCalls += 1
         lastGenerateLocked = locked
         lastGenerateBusyness = busyness
         lastGenerateNoteLength = noteLength
-        lastGenerateKey = key
-        lastGenerateStrictKey = strictKey
+        lastGenerateKey = music.key
+        lastGenerateStrictKey = music.strictKey
+        lastGenerateMusic = music
         let seed = seed ?? UInt32.random(in: 0...UInt32.max)
         let failure = failure, delay = delay
         let detectedKey = detectedKey
@@ -49,7 +53,9 @@ final class FakeGeneratorClient: GeneratorClient {
                     if delay > .zero { try await Task.sleep(for: delay) }
                     if let failure { throw failure }
                     var result = Self.song(style: style, length: length, seed: seed, tracks: tracks, busyness: busyness)
-                    result.detectedKey = key ?? detectedKey
+                    result.detectedKey = music.key ?? detectedKey
+                    result.tempo = music.tempo ?? detectedTempo
+                    result.beatOffset = result.tempo == nil ? nil : 0
                     if let song {   // like the server: locked tracks come back exactly as sent
                         for i in result.tracks.indices where locked.contains(result.tracks[i].id) {
                             result.tracks[i].notes = song.track(result.tracks[i].id).notes
@@ -66,8 +72,8 @@ final class FakeGeneratorClient: GeneratorClient {
     }
 
     func extend(_ song: SongSnapshot, by seconds: Double, model: NoteModel, seed: UInt32?,
-                busyness: [TrackID: Double], noteLength: [TrackID: Double], key: String?,
-                strictKey: Bool) async throws -> SongSnapshot {
+                busyness: [TrackID: Double], noteLength: [TrackID: Double],
+                music: MusicSettings) async throws -> SongSnapshot {
         extendCalls.append(seconds)
         if delay > .zero { try await Task.sleep(for: delay) }
         if let failure { throw failure }
@@ -80,14 +86,15 @@ final class FakeGeneratorClient: GeneratorClient {
             result.tracks[i].notes += more
         }
         result.lengthSeconds = end
-        result.detectedKey = key ?? detectedKey
+        result.detectedKey = music.key ?? detectedKey
+        result.tempo = music.tempo ?? song.tempo ?? detectedTempo
         return result
     }
 
     func rewrite(track: TrackID, model: NoteModel, in song: SongSnapshot, seed: UInt32,
-                 range: ClosedRange<Double>?, busyness: Double, noteLength: Double, key: String?,
-                 strictKey: Bool) async throws -> (notes: [Note], detectedKey: String?) {
-        rewriteCalls.append((track, range, busyness, noteLength, key))
+                 range: ClosedRange<Double>?, busyness: Double, noteLength: Double,
+                 music: MusicSettings) async throws -> (notes: [Note], detectedKey: String?) {
+        rewriteCalls.append((track, range, busyness, noteLength, music.key))
         if delay > .zero { try await Task.sleep(for: delay) }
         if let failure { throw failure }
         // A rewrite never gives back the very same notes (a real one almost never does): the
@@ -96,7 +103,7 @@ final class FakeGeneratorClient: GeneratorClient {
         let fresh = Self.thinned(Self.notes(for: track, length: song.lengthSeconds, seed: seed ^ 0x9E37), busyness)
             .map { n in current.contains("\(n.start)-\(n.pitch)")
                 ? Note(pitch: n.pitch + 1, start: n.start, duration: n.duration, velocity: n.velocity) : n }
-        let usedKey = key ?? detectedKey
+        let usedKey = music.key ?? detectedKey
         guard let range else { return (fresh, usedKey) }
         // Like the real server: only the range is new, everything outside it is untouched.
         let outside = song.track(track).notes.filter { $0.start < range.lowerBound || $0.start >= range.upperBound }

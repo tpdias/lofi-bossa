@@ -754,6 +754,52 @@ final class ProjectViewModelTests: XCTestCase {
         XCTAssertFalse(model.canExtend)
     }
 
+    // MARK: Tempo and dynamics
+
+    func testGenerateSendsTempoGrooveAndDynamics() async {
+        model.setTempo(92.4)
+        model.setGroove(0.9)
+        model.setDynamics(0.2)
+        await generate(seed: 1)
+        XCTAssertEqual(generator.lastGenerateMusic.tempo, 92)
+        XCTAssertEqual(generator.lastGenerateMusic.groove, 0.9)
+        XCTAssertEqual(generator.lastGenerateMusic.dynamics, 0.2)
+    }
+
+    func testTempoIsClampedToTheRange() {
+        model.setTempo(300)
+        XCTAssertEqual(model.project.tempo, Project.tempoRange.upperBound)
+        model.setTempo(nil)
+        XCTAssertNil(model.project.tempo)
+    }
+
+    func testAutoTempoShowsTheDetectedOne() async {
+        generator.detectedTempo = 84
+        await generate(seed: 1)
+        XCTAssertNil(generator.lastGenerateMusic.tempo, "Auto sends no tempo")
+        XCTAssertEqual(model.displayedTempo, 84)
+        XCTAssertEqual(model.project.currentSnapshot?.tempo, 84)
+        model.setTempo(100)
+        XCTAssertEqual(model.displayedTempo, 100, "a chosen tempo wins over the detected one")
+    }
+
+    func testMusicSettingsBodyUsesTheServerNames() {
+        let body = MusicSettings(key: "A minor", strictKey: true, tempo: 88, groove: 0.7, dynamics: 0.3).body
+        XCTAssertEqual(body["key"] as? String, "A minor")
+        XCTAssertEqual(body["tempo"] as? String, "88")
+        XCTAssertEqual(body["groove"] as? Double, 0.7)
+        XCTAssertEqual(body["dynamics"] as? Double, 0.3)
+        XCTAssertEqual(MusicSettings().body["tempo"] as? String, "auto")
+    }
+
+    func testWireSongReadsTempoAndBeatOffset() throws {
+        let json = Data(#"{"seed":1,"seconds":10,"tracks":{},"key":"C major","tempo":96.5,"beat_offset":0.25}"#.utf8)
+        let wire = try JSONDecoder().decode(WireSong.self, from: json)
+        let song = wire.snapshot(style: .lofi, instruments: [:])
+        XCTAssertEqual(song.tempo, 96.5)
+        XCTAssertEqual(song.beatOffset, 0.25)
+    }
+
     func testOldProjectsWithoutNoteLengthOrKeyDecodeToDefaults() throws {
         // Everything busyness/noteLength/key/strictKey existed before: a project saved before
         // today has exactly these keys and no others.
@@ -767,5 +813,8 @@ final class ProjectViewModelTests: XCTestCase {
         XCTAssertEqual(project.songNoteLength, Project.defaultNoteLength)
         XCTAssertNil(project.key)
         XCTAssertFalse(project.isStrictKey)
+        XCTAssertNil(project.tempo)
+        XCTAssertEqual(project.songGroove, Project.defaultGroove)
+        XCTAssertEqual(project.songDynamics, Project.defaultDynamics)
     }
 }
