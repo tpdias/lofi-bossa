@@ -228,6 +228,167 @@ final class ProjectViewModelTests: XCTestCase {
         if case .noteEdit(.piano) = versions[1].kind {} else { XCTFail("expected noteEdit(piano)") }
     }
 
+    // MARK: note-level undo inside a piano-roll session
+
+    private func movedUp(_ notes: [Note], _ index: Int, by semitones: Int = 2) -> [Note] {
+        var n = notes; n[index].pitch += semitones; return n
+    }
+
+    func testNoteEditsUndoAndRedoOneAtATimeWhileTheRollIsOpen() async {
+        await generate(seed: 1)
+        let original = notes(.piano)
+        model.openEditor(for: .piano)
+        XCTAssertFalse(model.canUndo, "nothing edited yet, and versions are off while the roll is open")
+
+        let first = movedUp(original, 0)
+        model.updateEditingNotes(first, for: .piano)
+        let second = movedUp(first, 1)
+        model.updateEditingNotes(second, for: .piano)
+        XCTAssertEqual(model.undoTitle, "Move Note")
+
+        model.undo()
+        XCTAssertEqual(notes(.piano), first)
+        model.undo()
+        XCTAssertEqual(notes(.piano), original)
+        XCTAssertFalse(model.canUndo)
+        XCTAssertEqual(versions.count, 1, "undoing inside the roll never moves the version pointer")
+
+        model.redo()
+        XCTAssertEqual(notes(.piano), first)
+        XCTAssertEqual(model.redoTitle, "Move Note")
+        model.redo()
+        XCTAssertEqual(notes(.piano), second)
+        XCTAssertFalse(model.canRedo)
+    }
+
+    func testANewEditClearsRedoAndSelectionComesBackWithUndo() async {
+        await generate(seed: 1)
+        model.openEditor(for: .piano)
+        let original = notes(.piano)
+        model.selectedNoteIDs = [original[0].id]
+        model.updateEditingNotes(original.filter { $0.id != original[0].id }, for: .piano)
+        model.selectedNoteIDs = []
+        XCTAssertEqual(model.undoTitle, "Delete Note")
+        model.undo()
+        XCTAssertEqual(notes(.piano), original)
+        XCTAssertEqual(model.selectedNoteIDs, [original[0].id])
+        XCTAssertTrue(model.canRedo)
+        model.updateEditingNotes(movedUp(original, 2), for: .piano)
+        XCTAssertFalse(model.canRedo, "a new edit drops what was undone")
+    }
+
+    func testADragIsOneUndoStep() async {
+        await generate(seed: 1)
+        let original = notes(.piano)
+        model.openEditor(for: .piano)
+        model.beginNoteGesture()
+        for step in 1...5 { model.updateEditingNotes(movedUp(original, 0, by: step), for: .piano) }
+        model.endNoteGesture()
+        XCTAssertEqual(model.noteUndoStack.count, 1)
+        model.undo()
+        XCTAssertEqual(notes(.piano), original)
+    }
+
+    func testClosingTheRollMakesOneVersionWhateverWasUndone() async {
+        await generate(seed: 1)
+        let original = notes(.piano)
+        model.openEditor(for: .piano)
+        model.updateEditingNotes(movedUp(original, 0), for: .piano)
+        model.updateEditingNotes(movedUp(movedUp(original, 0), 1), for: .piano)
+        model.undo()
+        model.closeEditor()
+        XCTAssertEqual(versions.count, 2)
+        XCTAssertEqual(versions[1].snapshot.track(.piano).notes, movedUp(original, 0))
+
+        // Everything undone: the session changed nothing, so no version.
+        model.openEditor(for: .piano)
+        model.updateEditingNotes(movedUp(notes(.piano), 3), for: .piano)
+        model.undo()
+        model.closeEditor()
+        XCTAssertEqual(versions.count, 2)
+    }
+
+    func testUndoAfterClosingTheRollStepsThroughVersionsAgain() async {
+        await generate(seed: 1)
+        let original = notes(.piano)
+        model.openEditor(for: .piano)
+        model.updateEditingNotes(movedUp(original, 0), for: .piano)
+        model.updateEditingNotes(movedUp(movedUp(original, 0), 1), for: .piano)
+        model.closeEditor()
+        XCTAssertEqual(versions.count, 2)
+        XCTAssertEqual(model.undoTitle, versions[1].kind.title)
+        model.undo()
+        XCTAssertEqual(model.project.currentVersionID, versions[0].id, "one step back is the whole session")
+        XCTAssertEqual(notes(.piano), original)
+        model.redo()
+        XCTAssertEqual(model.project.currentVersionID, versions[1].id)
+    }
+
+    func testReopeningTheSameRollKeepsItsSessionAndStack() async {
+        await generate(seed: 1)
+        model.openEditor(for: .piano)
+        model.updateEditingNotes(movedUp(notes(.piano), 0), for: .piano)
+        model.openEditor(for: .piano)
+        XCTAssertTrue(model.canUndoNoteEdit)
+        model.openEditor(for: .bass)
+        XCTAssertEqual(versions.count, 2, "switching tracks commits the piano session")
+        XCTAssertFalse(model.canUndoNoteEdit)
+        model.closeEditor()
+    }
+
+    /// The iPhone roll's Undo button calls `undoNoteEdit()` and shake / three-finger undo go
+    /// through the window's UndoManager; both must walk the one stack on the model.
+    func testTheWindowUndoManagerAndTheRollButtonShareOneStack() async {
+        await generate(seed: 1)
+        checkUndoManagerSharesTheStack()
+    }
+
+    private func checkUndoManagerSharesTheStack() {
+        let original = notes(.piano)
+        let manager = UndoManager()
+        manager.groupsByEvent = false
+        model.openEditor(for: .piano)
+        model.attachUndoManager(manager)
+
+        let a = movedUp(original, 0)
+        let b = movedUp(a, 1)
+        manager.beginUndoGrouping(); model.updateEditingNotes(a, for: .piano); manager.endUndoGrouping()
+        manager.beginUndoGrouping(); model.updateEditingNotes(b, for: .piano); manager.endUndoGrouping()
+        XCTAssertTrue(manager.canUndo)
+        XCTAssertEqual(manager.undoActionName, "Move Note")
+
+        manager.undo()                       // shake to undo
+        XCTAssertEqual(notes(.piano), a)
+        XCTAssertEqual(model.noteUndoStack.count, 1)
+        model.undoNoteEdit()                 // the roll's Undo button
+        XCTAssertEqual(notes(.piano), original)
+        XCTAssertFalse(manager.canUndo)
+        XCTAssertTrue(manager.canRedo)
+
+        model.redoNoteEdit()
+        XCTAssertEqual(notes(.piano), a)
+        manager.redo()
+        XCTAssertEqual(notes(.piano), b)
+        XCTAssertFalse(model.canRedoNoteEdit)
+
+        model.closeEditor()
+        XCTAssertFalse(manager.canUndo, "closing the roll takes its steps off the window's undo manager")
+        XCTAssertEqual(versions.count, 2)
+    }
+
+    func testEditMenuNamesWhatANoteEditDid() {
+        let a = Note(pitch: 60, start: 0, duration: 1, velocity: 90)
+        var louder = a; louder.velocity = 120
+        var longer = a; longer.duration = 2
+        var moved = a; moved.start = 1
+        let b = Note(pitch: 62, start: 1, duration: 1, velocity: 90)
+        XCTAssertEqual(ProjectViewModel.describeNoteChange(from: [a], to: [a, b]), "Add Note")
+        XCTAssertEqual(ProjectViewModel.describeNoteChange(from: [a, b], to: []), "Delete Notes")
+        XCTAssertEqual(ProjectViewModel.describeNoteChange(from: [a], to: [louder]), "Change Loudness")
+        XCTAssertEqual(ProjectViewModel.describeNoteChange(from: [a], to: [longer]), "Resize Note")
+        XCTAssertEqual(ProjectViewModel.describeNoteChange(from: [a], to: [moved]), "Move Note")
+    }
+
     // MARK: transport
 
     func testPlayAndPauseTogglesAndSeekClamps() async {

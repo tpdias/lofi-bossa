@@ -18,6 +18,8 @@ struct SectionSelectable: ViewModifier {
     let isEnabled: Bool
     let canPaste: Bool
     let grid: Double
+    /// The stretch of the song the lane shows, for mapping x to time when zoomed in.
+    var window = TimelineWindow()
     var onSelect: (Double, Double) -> Void
     var onMove: (Double) -> Void
     var onAction: (SectionAction) -> Void
@@ -47,8 +49,8 @@ struct SectionSelectable: ViewModifier {
         DragGesture(minimumDistance: 4)
             .onChanged { g in
                 guard isEnabled else { return }
-                let start = Double(g.startLocation.x / width) * duration
-                let now = Double(g.location.x / width) * duration
+                let start = window.time(atX: g.startLocation.x, width: width, duration: duration)
+                let now = window.time(atX: g.location.x, width: width, duration: duration)
                 if dragKind == nil {
                     dragKind = (selection.map { $0.contains(start) } ?? false) ? .move : .select
                 }
@@ -75,8 +77,8 @@ struct SectionSelectable: ViewModifier {
                 let shift = dragKind == .move ? snapped(moveOffset) : 0
                 let length = selection.upperBound - selection.lowerBound
                 let lo = min(max(selection.lowerBound + shift, 0), max(duration - length, 0))
-                let x = CGFloat(lo / duration) * geo.size.width
-                let w = max(CGFloat(length / duration) * geo.size.width, 2)
+                let x = window.x(for: lo, width: geo.size.width, duration: duration)
+                let w = max(window.width(of: length, width: geo.size.width, duration: duration), 2)
                 ZStack(alignment: .topLeading) {
                     Rectangle().fill(track.color.opacity(0.22))
                         .overlay(Rectangle().stroke(track.ink.opacity(0.9), lineWidth: 1.5))

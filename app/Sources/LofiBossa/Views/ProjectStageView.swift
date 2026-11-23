@@ -440,16 +440,20 @@ private struct RulerAndTracks: View {
 
     private var duration: Double { max(snapshot.lengthSeconds, 1) }
     private var laneX: CGFloat { LFBSize.trackHeaderWidth + 1 }
+    /// The stage's timeline zoom; ruler, lanes, loop range and playhead all map time through it.
+    private var window: TimelineWindow { model.timeline }
 
     var body: some View {
         ZStack(alignment: .topLeading) {
             VStack(spacing: 0) {
                 ruler
+                    .timelineZoomGestures(model: model, laneX: laneX)
                 Divider()
                 if model.isPianoRollOpen {
                     VStack(spacing: 0) {
                         ForEach(snapshot.trackIDs) { id in compactRow(id) }
                     }
+                    .timelineZoomGestures(model: model, laneX: laneX)
                     Divider()
                     if let track = model.editingTrack {
                         PianoRollView(model: model, track: track)
@@ -457,11 +461,14 @@ private struct RulerAndTracks: View {
                 } else {
                     // Up to four tracks share the height; with more, the rows keep their minimum
                     // height and the stage scrolls.
-                    if snapshot.tracks.count > 4 {
-                        ScrollView(.vertical) { trackRows }
-                    } else {
-                        trackRows
+                    Group {
+                        if snapshot.tracks.count > 4 {
+                            ScrollView(.vertical) { trackRows }
+                        } else {
+                            trackRows
+                        }
                     }
+                    .timelineZoomGestures(model: model, laneX: laneX)
                 }
             }
             overlay
@@ -480,6 +487,7 @@ private struct RulerAndTracks: View {
         .onChange(of: model.sectionSelection) { _, selection in
             if selection != nil { stageFocused = true }
         }
+        .onAppear { model.applyLaunchStageZoom() }
     }
 
     private var trackRows: some View {
@@ -526,7 +534,7 @@ private struct RulerAndTracks: View {
 
     private func fullRow(_ id: TrackID) -> some View {
         TrackRowView(
-            track: trackBinding(id), duration: duration,
+            track: trackBinding(id), duration: duration, window: window,
             isSelected: model.selectedTrack == id,
             isDimmedBySolo: model.isDimmedBySolo(id),
             isRewriting: model.rewritingTrack == id,
@@ -561,7 +569,7 @@ private struct RulerAndTracks: View {
 
     private func compactRow(_ id: TrackID) -> some View {
         TrackRowView(
-            track: trackBinding(id), duration: duration,
+            track: trackBinding(id), duration: duration, window: window,
             isSelected: model.editingTrack == id,
             isRewriting: model.rewritingTrack == id,
             isGeneratorBusy: model.isGeneratorBusy,
@@ -592,18 +600,7 @@ private struct RulerAndTracks: View {
             Color.clear.frame(width: laneX)
             GeometryReader { geo in
                 Canvas { ctx, size in
-                    let step = labelStep
-                    var t = 0.0
-                    while t <= duration {
-                        let x = CGFloat(t / duration) * size.width
-                        var tick = Path()
-                        tick.move(to: CGPoint(x: x, y: size.height - 6))
-                        tick.addLine(to: CGPoint(x: x, y: size.height))
-                        ctx.stroke(tick, with: .color(.lfbTextTertiary))
-                        ctx.draw(Text(formatTimecode(t)).font(.lfbCaption).foregroundStyle(.secondary),
-                                 at: CGPoint(x: x + 3, y: size.height - 14), anchor: .leading)
-                        t += step
-                    }
+                    TimelineRuler.drawTicks(&ctx, size: size, duration: duration, window: window, style: TimelineRuler.mac)
                 }
                 .contentShape(Rectangle())
                 .gesture(rangeDrag(width: geo.size.width))
@@ -613,36 +610,41 @@ private struct RulerAndTracks: View {
         .background(Color.lfbSurface)
     }
 
-    private var labelStep: Double {
-        duration <= 30 ? 5 : (duration <= 90 ? 15 : 30)
+    private func time(atX x: CGFloat, width: CGFloat) -> Double {
+        min(max(window.time(atX: x, width: width, duration: duration), 0), duration)
     }
 
     private func rangeDrag(width: CGFloat) -> some Gesture {
         DragGesture(minimumDistance: 2)
             .onChanged { g in
-                if dragStart == nil { dragStart = Double(g.startLocation.x / width) * duration }
+                if dragStart == nil { dragStart = time(atX: g.startLocation.x, width: width) }
                 let a = dragStart ?? 0
-                let b = Double(g.location.x / width) * duration
+                let b = time(atX: g.location.x, width: width)
                 model.setLoopRange(min(a, b)...max(a, b, min(a,b) + 0.5))
             }
             .onEnded { _ in dragStart = nil }
             .exclusively(before: SpatialTapGesture().onEnded { tap in
-                model.tapRuler(at: Double(tap.location.x / width) * duration)
+                model.tapRuler(at: time(atX: tap.location.x, width: width))
             })
     }
 
+    /// Loop range and playhead over the ruler and lanes, mapped through the zoom and kept inside
+    /// the lanes (they slide off past the edges when zoomed in).
     private var overlay: some View {
         GeometryReader { geo in
             let laneW = max(geo.size.width - laneX, 1)
             ZStack(alignment: .topLeading) {
                 if model.isLoopEnabled, let range = model.loopRange {
                     Color.lfbAccentWash
-                        .frame(width: CGFloat((range.upperBound - range.lowerBound) / duration) * laneW)
-                        .offset(x: laneX + CGFloat(range.lowerBound / duration) * laneW)
+                        .frame(width: max(window.width(of: range.upperBound - range.lowerBound, width: laneW, duration: duration), 0))
+                        .offset(x: window.x(for: range.lowerBound, width: laneW, duration: duration))
                 }
                 Rectangle().fill(Color.lfbText.opacity(0.7)).frame(width: 1.5)
-                    .offset(x: laneX + CGFloat(min(model.position / duration, 1)) * laneW - 0.75)
+                    .offset(x: window.x(for: min(model.position, duration), width: laneW, duration: duration) - 0.75)
             }
+            .frame(width: laneW + 1, alignment: .topLeading)
+            .clipped()
+            .offset(x: laneX)
         }
         .allowsHitTesting(false)
     }

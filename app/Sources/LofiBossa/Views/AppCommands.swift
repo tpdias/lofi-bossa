@@ -22,8 +22,9 @@ struct AppCommands: Commands {
             Button("New Project") { post(.lfbNewProject) }.keyboardShortcut("n")
         }
 
-        // Undo/Redo step through versions. Inside a text field (rename, seed) they must still undo
-        // typing, so they pass the key on to the text system there.
+        // Undo/Redo step through note edits while a piano roll is open (the model routes them
+        // through the window's UndoManager), and through versions otherwise. Inside a text field
+        // (rename, seed) they must still undo typing, so they pass the key on to the text system there.
         CommandGroup(replacing: .undoRedo) {
             Button(model?.undoTitle.map { "Undo \($0)" } ?? "Undo") { undo() }
                 .keyboardShortcut("z")
@@ -93,11 +94,40 @@ struct AppCommands: Commands {
 
         CommandGroup(after: .sidebar) {
             Button("Toggle Inspector") { post(.lfbToggleInspector) }.keyboardShortcut("i", modifiers: [.command, .option])
+            Divider()
+            // The track lanes' timeline, or the piano roll's while it is open (it has its own zoom).
+            Button("Zoom In") { zoom(.in) }
+                .keyboardShortcut("=", modifiers: .command)
+                .disabled(!canZoom(.in))
+            Button("Zoom Out") { zoom(.out) }
+                .keyboardShortcut("-", modifiers: .command)
+                .disabled(!canZoom(.out))
+            Button(model?.isPianoRollOpen == true ? "Show Whole Song in Roll" : "Show Whole Song") { zoom(.fit) }
+                .keyboardShortcut("0", modifiers: .command)
+                .disabled(!canZoom(.fit))
         }
 
         CommandGroup(replacing: .help) {
             Button("Keyboard Shortcuts") { post(.lfbShowShortcuts) }.keyboardShortcut("/", modifiers: .command)
         }
+    }
+
+    private func zoom(_ command: TimelineZoomCommand) {
+        guard let model else { return }
+        if model.isPianoRollOpen {
+            NotificationCenter.default.post(name: .lfbRollZoom, object: command)
+            return
+        }
+        switch command {
+        case .in: model.zoomTimelineIn()
+        case .out: model.zoomTimelineOut()
+        case .fit: model.zoomTimelineToFit()
+        }
+    }
+    private func canZoom(_ command: TimelineZoomCommand) -> Bool {
+        guard let model, model.displayedSnapshot != nil else { return false }
+        if model.isPianoRollOpen { return true }
+        return command == .in ? model.canZoomTimelineIn : model.canZoomTimelineOut
     }
 
     #if os(macOS)
@@ -129,7 +159,7 @@ enum KeyboardShortcuts {
             Item(keys: "⇧⌘↩", what: "Extend the song by 30 seconds"),
             Item(keys: "⇧⌘C", what: "Copy the seed"),
             Item(keys: "⌘E", what: "Export"),
-            Item(keys: "⌘Z / ⇧⌘Z", what: "Undo / redo (steps through versions)"),
+            Item(keys: "⌘Z / ⇧⌘Z", what: "Undo / redo (note edits in the piano roll, else versions)"),
         ]),
         Group(title: "Transport", items: [
             Item(keys: "Space", what: "Play / pause"),
@@ -145,6 +175,11 @@ enum KeyboardShortcuts {
             Item(keys: "⌥⌘P", what: "Open the piano roll for the selected track"),
             Item(keys: "⌘R", what: "Rewrite the selected track with the model"),
             Item(keys: "⌥⌘I", what: "Show / hide the inspector"),
+        ]),
+        Group(title: "Timeline", items: [
+            Item(keys: "⌘+ / ⌘− / ⌘0", what: "Zoom the track lanes in / out / show the whole song"),
+            Item(keys: "Pinch", what: "Zoom the lanes around the pointer"),
+            Item(keys: "Swipe sideways", what: "Scroll along the song when zoomed (two fingers on iPad)"),
         ]),
         Group(title: "Sections (after dragging on a track)", items: [
             Item(keys: "⌘X ⌘C ⌘V", what: "Cut, copy, paste at the playhead"),

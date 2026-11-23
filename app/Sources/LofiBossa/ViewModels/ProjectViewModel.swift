@@ -57,6 +57,9 @@ final class ProjectViewModel {
     /// Selections and pastes land on this grid, in seconds.
     static let sectionGrid = 0.25
 
+    // Stage timeline zoom (the track lanes; the piano roll zooms on its own)
+    private var timelineState = TimelineWindow()
+
     // Inspector
     var inspectorTab: InspectorTab = .sound
     /// Set while "listening" to a past version from the Versions tab, without restoring it.
@@ -89,8 +92,12 @@ final class ProjectViewModel {
     var listeningVersion: Version? { project.versions.first { $0.id == listeningVersionID } }
 
     private var currentIndex: Int? { project.versions.firstIndex { $0.id == project.currentVersionID } }
-    var canUndo: Bool { (currentIndex ?? 0) > 0 }
-    var canRedo: Bool { (currentIndex ?? -1) < project.versions.count - 1 }
+    /// While a piano roll is open, Undo / Redo step through that session's note edits (the
+    /// version list stays put until the roll closes); otherwise they move the version pointer.
+    var canUndo: Bool { isPianoRollOpen ? canUndoNoteEdit : canUndoVersion }
+    var canRedo: Bool { isPianoRollOpen ? canRedoNoteEdit : canRedoVersion }
+    var canUndoVersion: Bool { (currentIndex ?? 0) > 0 }
+    var canRedoVersion: Bool { (currentIndex ?? -1) < project.versions.count - 1 }
     var isGeneratorBusy: Bool { if case .idle = phase { false } else { if case .failed = phase { false } else { true } } }
     var isGenerating: Bool { if case .generating = phase { true } else { false } }
     var rewritingTrack: TrackID? { if case .rewriting(let t, _) = phase { t } else { nil } }
@@ -296,8 +303,13 @@ final class ProjectViewModel {
 
     // MARK: Versions (history)
 
-    func undo() {
-        guard let i = currentIndex, i > 0 else { return }
+    /// ⌘Z, the toolbar Undo buttons and the iPhone roll's Undo: a note edit while a roll is
+    /// open, otherwise the previous version.
+    func undo() { isPianoRollOpen ? undoNoteEdit() : undoVersion() }
+    func redo() { isPianoRollOpen ? redoNoteEdit() : redoVersion() }
+
+    func undoVersion() {
+        guard !isPianoRollOpen, let i = currentIndex, i > 0 else { return }
         project.currentVersionID = project.versions[i - 1].id
         listeningVersionID = nil
         sectionSelection = nil
@@ -305,8 +317,8 @@ final class ProjectViewModel {
         if let s = project.currentSnapshot { loadIntoAudio(s, resumeIfPlaying: isPlaying) }
     }
 
-    func redo() {
-        guard let i = currentIndex, i < project.versions.count - 1 else { return }
+    func redoVersion() {
+        guard !isPianoRollOpen, let i = currentIndex, i < project.versions.count - 1 else { return }
         project.currentVersionID = project.versions[i + 1].id
         listeningVersionID = nil
         sectionSelection = nil
@@ -558,30 +570,221 @@ final class ProjectViewModel {
     }
 
     func openEditor(for track: TrackID) {
+        if isPianoRollOpen {
+            if editingTrack == track { return }   // already editing it: keep the session and its undo steps
+            closeEditor()                         // another track: that session becomes its version first
+        }
         editingTrack = track
         editingSnapshotBeforeSession = project.currentSnapshot
         isPianoRollOpen = true
         selectedTrack = track
         selectedNoteIDs = []
+        resetNoteUndo()
     }
 
     func closeEditor() {
-        defer { isPianoRollOpen = false; editingTrack = nil; selectedNoteIDs = []; editingSnapshotBeforeSession = nil }
+        defer {
+            isPianoRollOpen = false; editingTrack = nil; selectedNoteIDs = []; editingSnapshotBeforeSession = nil
+            resetNoteUndo()
+        }
         guard let track = editingTrack, let before = editingSnapshotBeforeSession,
               let after = project.currentSnapshot, before.track(track).notes != after.track(track).notes else { return }
-        // The notes already live in the current version's snapshot (edited in place as the
-        // user works); committing here only records that a note-editing version happened.
+        // The notes were edited in place on the current version's snapshot as the user worked;
+        // put that version back as it was, and add the edited song as one new version on top,
+        // so Undo after closing steps back to the notes from before the session.
+        if let vi = currentIndex, let ti = project.versions[vi].snapshot.tracks.firstIndex(where: { $0.id == track }) {
+            project.versions[vi].snapshot.tracks[ti].notes = before.track(track).notes
+        }
         appendVersion(kind: .noteEdit(track), changed: [track], snapshot: after)
     }
 
     /// Replaces one track's notes during an editing session, without creating a version yet
-    /// (that happens once, in `closeEditor()`).
+    /// (that happens once, in `closeEditor()`). Each call is one step on the session's undo
+    /// stack, unless it falls inside `beginNoteGesture()` … `endNoteGesture()`.
     func updateEditingNotes(_ notes: [Note], for track: TrackID) {
         guard let vi = currentIndex else { return }
         guard let ti = project.versions[vi].snapshot.tracks.firstIndex(where: { $0.id == track }) else { return }
+        let before = project.versions[vi].snapshot.tracks[ti].notes
+        guard before != notes else { return }
+        if isPianoRollOpen, track == editingTrack, !(isInNoteGesture && gestureRecorded) {
+            recordNoteUndo(NoteEditStep(notes: before, selection: selectedNoteIDs))
+            gestureRecorded = isInNoteGesture
+        }
+        setEditingNotes(notes, vi: vi, ti: ti)
+        if isPianoRollOpen, track == editingTrack { nameUndoAction() }
+    }
+
+    private func setEditingNotes(_ notes: [Note], vi: Int, ti: Int) {
         project.versions[vi].snapshot.tracks[ti].notes = notes
         persist()
         loadIntoAudio(project.versions[vi].snapshot, resumeIfPlaying: isPlaying)
+    }
+
+    // MARK: Note-level undo (inside one piano-roll session)
+
+    /// The notes of the track being edited, and which were selected, at one point in the session.
+    struct NoteEditStep: Equatable {
+        var notes: [Note]
+        var selection: Set<Note.ID>
+    }
+
+    /// Before-states of the edits made since the roll opened (most recent last), and the ones
+    /// undone since the last edit. Both are cleared when the roll opens or closes: once closed,
+    /// the whole session is one version and Undo steps through versions again.
+    private(set) var noteUndoStack: [NoteEditStep] = []
+    private(set) var noteRedoStack: [NoteEditStep] = []
+    private var isInNoteGesture = false
+    private var gestureRecorded = false
+    static let maxNoteUndoSteps = 200
+
+    /// The window's undo manager, while a roll is open, so the Edit menu, the iPad hardware
+    /// keyboard and the iPhone's shake / three-finger undo walk this same stack.
+    @ObservationIgnored private weak var undoManager: UndoManager?
+
+    var canUndoNoteEdit: Bool { isPianoRollOpen && !noteUndoStack.isEmpty }
+    var canRedoNoteEdit: Bool { isPianoRollOpen && !noteRedoStack.isEmpty }
+    var noteUndoTitle: String? {
+        guard canUndoNoteEdit, let step = noteUndoStack.last else { return nil }
+        return Self.describeNoteChange(from: step.notes, to: editingNotes)
+    }
+    var noteRedoTitle: String? {
+        guard canRedoNoteEdit, let step = noteRedoStack.last else { return nil }
+        return Self.describeNoteChange(from: editingNotes, to: step.notes)
+    }
+
+    private var editingNotes: [Note] {
+        guard let track = editingTrack else { return [] }
+        return project.currentSnapshot?.track(track).notes ?? []
+    }
+
+    /// Edits until `endNoteGesture()` (one drag, one slider pull) undo as a single step.
+    /// Calling it again inside the same gesture (a drawn note that is then stretched) keeps it one step.
+    func beginNoteGesture() {
+        guard !isInNoteGesture else { return }
+        isInNoteGesture = true; gestureRecorded = false
+    }
+    func endNoteGesture() { isInNoteGesture = false; gestureRecorded = false }
+
+    /// Hands the window's undo manager to the open roll's undo stack (the roll views call this
+    /// when they appear). Steps already made are registered with it, so the menu can undo them.
+    func attachUndoManager(_ manager: UndoManager?) {
+        guard manager !== undoManager else { return }
+        undoManager?.removeAllActions(withTarget: undoTarget)
+        undoManager = manager
+        guard let manager, isPianoRollOpen else { return }
+        for _ in noteUndoStack { registerUndoAction(with: manager) }
+        nameUndoAction()
+    }
+
+    func undoNoteEdit() {
+        guard canUndoNoteEdit else { return }
+        // Through the undo manager when there is one, so it stays in step for the Edit menu and
+        // shake-to-undo; it calls back into `applyNoteUndo()`.
+        if let undoManager, undoManager.canUndo, !undoManager.isUndoing, !undoManager.isRedoing {
+            undoManager.undo()
+        } else {
+            applyNoteUndo()
+        }
+    }
+
+    func redoNoteEdit() {
+        guard canRedoNoteEdit else { return }
+        if let undoManager, undoManager.canRedo, !undoManager.isUndoing, !undoManager.isRedoing {
+            undoManager.redo()
+        } else {
+            applyNoteRedo()
+        }
+    }
+
+    private func recordNoteUndo(_ step: NoteEditStep) {
+        noteUndoStack.append(step)
+        if noteUndoStack.count > Self.maxNoteUndoSteps { noteUndoStack.removeFirst() }
+        noteRedoStack.removeAll()
+        if let undoManager { registerUndoAction(with: undoManager) }
+    }
+
+    /// The undo manager's target (it calls back by selector and doesn't retain it, so the model does).
+    @ObservationIgnored private lazy var undoTarget = NoteUndoTarget(model: self)
+
+    /// Names the top undo step for the Edit menu ("Undo Move Notes"). Only when the manager has
+    /// one: naming with nothing to undo raises an Objective-C exception.
+    private func nameUndoAction() {
+        guard let undoManager, undoManager.canUndo, !undoManager.isUndoing, !undoManager.isRedoing,
+              let title = noteUndoTitle else { return }
+        undoManager.setActionName(title)
+    }
+
+    private func registerUndoAction(with manager: UndoManager) {
+        manager.registerUndo(withTarget: undoTarget, selector: #selector(NoteUndoTarget.undoNoteEdit), object: nil)
+    }
+    private func registerRedoAction(with manager: UndoManager) {
+        manager.registerUndo(withTarget: undoTarget, selector: #selector(NoteUndoTarget.redoNoteEdit), object: nil)
+    }
+
+    fileprivate func performNoteUndoFromManager() { applyNoteUndo() }
+    fileprivate func performNoteRedoFromManager() { applyNoteRedo() }
+
+    private func applyNoteUndo() {
+        guard isPianoRollOpen, let step = noteUndoStack.popLast() else { return }
+        endNoteGesture()
+        let title = Self.describeNoteChange(from: step.notes, to: editingNotes)
+        noteRedoStack.append(NoteEditStep(notes: editingNotes, selection: selectedNoteIDs))
+        restore(step)
+        if let undoManager {   // registered while undoing, so it lands on the redo stack
+            registerRedoAction(with: undoManager)
+            undoManager.setActionName(title)
+        }
+    }
+
+    private func applyNoteRedo() {
+        guard isPianoRollOpen, let step = noteRedoStack.popLast() else { return }
+        endNoteGesture()
+        let title = Self.describeNoteChange(from: editingNotes, to: step.notes)
+        noteUndoStack.append(NoteEditStep(notes: editingNotes, selection: selectedNoteIDs))
+        restore(step)
+        if let undoManager {   // registered while redoing, so it lands on the undo stack
+            registerUndoAction(with: undoManager)
+            undoManager.setActionName(title)
+        }
+    }
+
+    private func restore(_ step: NoteEditStep) {
+        guard let track = editingTrack, let vi = currentIndex,
+              let ti = project.versions[vi].snapshot.tracks.firstIndex(where: { $0.id == track }) else { return }
+        setEditingNotes(step.notes, vi: vi, ti: ti)
+        let ids = Set(step.notes.map(\.id))
+        selectedNoteIDs = step.selection.intersection(ids)
+    }
+
+    private func resetNoteUndo() {
+        noteUndoStack.removeAll()
+        noteRedoStack.removeAll()
+        endNoteGesture()
+        undoManager?.removeAllActions(withTarget: undoTarget)
+    }
+
+    /// What an edit did, for the Edit menu ("Undo Move Notes").
+    nonisolated static func describeNoteChange(from before: [Note], to after: [Note]) -> String {
+        let old = Dictionary(before.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        let new = Dictionary(after.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        let added = after.filter { old[$0.id] == nil }.count
+        let removed = before.filter { new[$0.id] == nil }.count
+        func plural(_ n: Int) -> String { n == 1 ? "Note" : "Notes" }
+        if added > 0 && removed == 0 { return "Add \(plural(added))" }
+        if removed > 0 && added == 0 { return "Delete \(plural(removed))" }
+        if added > 0 || removed > 0 { return "Note Edit" }
+        let changed = after.compactMap { n in old[n.id].flatMap { $0 != n ? ($0, n) : nil } }
+        guard !changed.isEmpty else { return "Note Edit" }
+        if changed.allSatisfy({ $0.0.velocity != $0.1.velocity && $0.0.start == $0.1.start && $0.0.pitch == $0.1.pitch && $0.0.duration == $0.1.duration }) {
+            return "Change Loudness"
+        }
+        if changed.allSatisfy({ $0.0.duration != $0.1.duration && $0.0.start == $0.1.start && $0.0.pitch == $0.1.pitch }) {
+            return "Resize \(plural(changed.count))"
+        }
+        if changed.allSatisfy({ $0.0.duration == $0.1.duration && $0.0.velocity == $0.1.velocity }) {
+            return "Move \(plural(changed.count))"
+        }
+        return "Note Edit"
     }
 
     // MARK: Transport
@@ -635,10 +838,17 @@ final class ProjectViewModel {
 
     // MARK: Menu commands (Edit / Transport / Track menus)
 
-    /// "New take · seed 5", the version Undo would step back from; nil when there is nothing to undo.
-    var undoTitle: String? { canUndo ? currentIndex.map { project.versions[$0].kind.title } : nil }
-    /// The version Redo would step forward to.
-    var redoTitle: String? { canRedo ? currentIndex.map { project.versions[$0 + 1].kind.title } : nil }
+    /// "New take · seed 5", the version Undo would step back from, or "Move Notes" while a roll
+    /// is open; nil when there is nothing to undo.
+    var undoTitle: String? {
+        if isPianoRollOpen { return noteUndoTitle }
+        return canUndoVersion ? currentIndex.map { project.versions[$0].kind.title } : nil
+    }
+    /// The version Redo would step forward to, or the note edit it would bring back.
+    var redoTitle: String? {
+        if isPianoRollOpen { return noteRedoTitle }
+        return canRedoVersion ? currentIndex.map { project.versions[$0 + 1].kind.title } : nil
+    }
 
     func nudgePlayhead(by seconds: Double) { seek(to: min(max(position + seconds, 0), duration)) }
 
@@ -666,6 +876,7 @@ final class ProjectViewModel {
 
     private func tick() {
         position = audio.position
+        if timelineState.isZoomed { timelineState.follow(position, duration: duration) }
         if isLoopEnabled, let range = loopRange, position >= range.upperBound {
             seek(to: range.lowerBound)
             return
@@ -674,6 +885,32 @@ final class ProjectViewModel {
             pause()
             seek(to: 0)
         }
+    }
+
+    // MARK: Timeline zoom (the stage's lanes)
+
+    /// What the lanes show, kept inside the song shown now.
+    var timeline: TimelineWindow { timelineState.clamped(duration: duration) }
+    var canZoomTimelineIn: Bool { displayedSnapshot != nil && timeline.zoom < TimelineWindow.maxZoom(duration: duration) - 0.001 }
+    var canZoomTimelineOut: Bool { displayedSnapshot != nil && timeline.isZoomed }
+
+    func zoomTimelineIn() { zoomTimeline(to: timeline.zoom * TimelineWindow.step) }
+    func zoomTimelineOut() { zoomTimeline(to: timeline.zoom / TimelineWindow.step) }
+    func zoomTimelineToFit() { timelineState = TimelineWindow() }
+
+    /// Zooms the lanes, keeping `anchor` (a time, e.g. under the pinch) in place; by default the
+    /// playhead when it is in view, otherwise the middle.
+    func zoomTimeline(to zoom: Double, anchor: Double? = nil) {
+        var w = timeline
+        let inView = position >= w.start && position <= w.end(duration: duration)
+        w.setZoom(zoom, anchor: anchor ?? (inView ? position : nil), duration: duration)
+        timelineState = w
+    }
+
+    func scrollTimeline(by seconds: Double) {
+        var w = timeline
+        w.scroll(by: seconds, duration: duration)
+        timelineState = w
     }
 
     // MARK: Export
@@ -748,4 +985,13 @@ final class ProjectViewModel {
         exportProgress = 1
         loadIntoAudio(snapshot, resumeIfPlaying: wasPlaying)
     }
+}
+
+/// What the window's `UndoManager` calls for a note edit; it forwards to the open roll's stack.
+@MainActor
+final class NoteUndoTarget: NSObject {
+    private weak var model: ProjectViewModel?
+    init(model: ProjectViewModel) { self.model = model }
+    @objc func undoNoteEdit() { model?.performNoteUndoFromManager() }
+    @objc func redoNoteEdit() { model?.performNoteRedoFromManager() }
 }
