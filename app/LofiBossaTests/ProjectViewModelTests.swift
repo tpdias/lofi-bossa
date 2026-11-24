@@ -501,6 +501,40 @@ final class ProjectViewModelTests: XCTestCase {
         XCTAssertGreaterThan(level, 0.01)
     }
 
+    /// Adding a track while the song plays must not change how the other tracks sound: the
+    /// reload restarted the engine and the piano came back as a loud sine until a restart.
+    func testAddingATrackWhilePlayingKeepsThePianoSound() async {
+        model.setStyle(.lofi)
+        await generate(seed: 1)
+        var mix = model.project.currentSnapshot!.effects
+        mix.vinyl = 0                                   // its random pops would skew the levels
+        model.setEffects(mix)
+        model.setSoloed(true, for: .piano)
+        model.play()
+        try? await Task.sleep(for: .milliseconds(300))
+        let before = await rms(during: 2.0)
+        model.addTrack(.keys)
+        await waitUntilIdle()
+        try? await Task.sleep(for: .milliseconds(300))
+        let after = await rms(during: 2.0)
+        model.pause()
+        XCTAssertGreaterThan(before, 0.003, "piano silent before")
+        XCTAssertLessThan(after, before * 1.5, "the piano got louder after adding a track")
+    }
+
+    private func rms(during seconds: Double) async -> Float {
+        var level: Float = 0
+        model.audioOutput.installTap(onBus: 0, bufferSize: 2048, format: nil) { buffer, _ in
+            guard let data = buffer.floatChannelData?[0], buffer.frameLength > 0 else { return }
+            var sum: Float = 0
+            for i in 0..<Int(buffer.frameLength) { sum += data[i] * data[i] }
+            level = max(level, (sum / Float(buffer.frameLength)).squareRoot())
+        }
+        try? await Task.sleep(for: .seconds(seconds))
+        model.audioOutput.removeTap(onBus: 0)
+        return level
+    }
+
     func testPlayingAfterListeningToAPastVersionIsAudible() async {
         await generate(seed: 1)
         await generate(seed: 2)

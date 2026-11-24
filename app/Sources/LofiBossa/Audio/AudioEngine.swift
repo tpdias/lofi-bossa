@@ -125,6 +125,18 @@ final class AudioEngine {
             at: soundBank, program: program, bankMSB: UInt8(bank), bankLSB: 0)
     }
 
+    /// Stopping the engine resets every sampler to its built-in default tone (a loud, plain
+    /// sine), and `setInstrument` skips programs it believes are loaded. Without this, adding a
+    /// track, rewriting, undoing or switching versions while playing (each reloads the song,
+    /// which stops and restarts the engine) and any export after the first turned every track
+    /// into that sine, about 3x louder, until the app restarted. Call it while the engine is
+    /// stopped: loading a bank into a running sampler leaves playback silent (see above).
+    private func reloadInstruments() {
+        let programs = loadedPrograms
+        loadedPrograms = [:]
+        for (id, program) in programs { setInstrument(program, for: id) }
+    }
+
     func setVolume(_ volume: Double, for id: TrackID) {
         samplers[id]?.volume = Float(volume)
     }
@@ -186,7 +198,10 @@ final class AudioEngine {
         }
         seconds = snapshot.lengthSeconds
         sequencer.currentPositionInSeconds = 0
-        if wasRunning { try? engine.start() }
+        if wasRunning {
+            reloadInstruments()
+            try? engine.start()
+        }
     }
 
     var isPlaying: Bool { sequencer?.isPlaying ?? false }
@@ -221,12 +236,14 @@ final class AudioEngine {
         engine.stop()
         let renderFormat = AVAudioFormat(standardFormatWithSampleRate: 44100, channels: 2)!
         try engine.enableManualRenderingMode(.offline, format: renderFormat, maximumFrameCount: 4096)
+        reloadInstruments()
         defer {
             vinylGate = false
             sequencer.stop()
             engine.stop()
             engine.disableManualRenderingMode()
             sequencer.currentPositionInSeconds = 0
+            reloadInstruments()
             try? engine.start()
         }
         try engine.start()
