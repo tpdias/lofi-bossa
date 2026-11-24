@@ -194,6 +194,43 @@ def benchmark(stateful, prefill_len=512, decode_steps=32, repeats=3):
     }
 
 
+def conv1d_to_linear(stateful):
+    """Hugging Face's GPT-2 uses its own `Conv1D` (y = x @ W + b, W stored as (in, out)) for
+    all 48 projection layers. coreai-opt only quantizes nn.Linear / nn.Embedding, so left as is
+    those 85M parameters stay fp32 and the "int8" asset is 384 MB instead of ~128 MB. Swap each
+    for the equivalent nn.Linear (same weights, transposed)."""
+    for block in stateful.blocks:
+        for owner, name in ((block.attn, "c_attn"), (block.attn, "c_proj"), (block.mlp, "c_fc"), (block.mlp, "c_proj")):
+            conv = getattr(owner, name)
+            if isinstance(conv, nn.Linear):
+                continue
+            w = conv.weight.data                       # (in, out)
+            linear = nn.Linear(w.shape[0], w.shape[1], bias=conv.bias is not None)
+            linear.weight.data.copy_(w.t())
+            if conv.bias is not None:
+                linear.bias.data.copy_(conv.bias.data)
+            setattr(owner, name, linear)
+    return stateful
+
+
+def quantize_int8(stateful):
+    """Weight-only int8, per-channel symmetric (coreai-opt's w8 preset, eager mode so the same
+    module can still be exported at both entrypoint shapes). No calibration is needed for
+    weight-only PTQ; the spike measured int8 at +0.0003 validation loss."""
+    import warnings
+    warnings.filterwarnings("ignore")
+    from coreai_opt.quantization import ExecutionMode, Quantizer, QuantizerConfig
+
+    config = QuantizerConfig.presets.w8(execution_mode=ExecutionMode.EAGER)
+    conv1d_to_linear(stateful)
+    quantizer = Quantizer(stateful, config)
+    stateful.reset_cache()
+    ids = torch.randint(0, 55000, (1, PREFILL_LEN))
+    pos = torch.arange(PREFILL_LEN).unsqueeze(0)
+    quantizer.prepare((ids, pos))
+    return quantizer.finalize()
+
+
 def export_aimodel(stateful, out_path):
     """Converts to .aimodel with two static-shape entrypoints, "prefill" (PREFILL_LEN
     tokens at once) and "decode" (1 token), sharing the same k_cache/v_cache state.
@@ -343,6 +380,10 @@ def main():
     parser.add_argument("--n-sequences", type=int, default=100)
     parser.add_argument("--out-dir", default="exports")
     parser.add_argument("--skip-export", action="store_true", help="skip the slow .aimodel conversion")
+    parser.add_argument("--quantize", choices=("none", "int8"), default="none",
+                        help="weight-only quantization of the exported asset")
+    parser.add_argument("--export-only", action="store_true",
+                        help="skip the numerics, PyTorch benchmark and validation-loss checks")
     parser.add_argument("--runtime-benchmark", action="store_true",
                          help="also load the converted asset with coreai.runtime and time it "
                               "(first-run specialization/compile can take minutes)")
@@ -357,6 +398,17 @@ def main():
     hf_model.eval()
     stateful = StatefulGPT2(hf_model)
     stateful.eval()
+
+    if args.export_only:
+        if args.quantize == "int8":
+            print("Quantizing weights to int8 (coreai-opt w8)...", flush=True)
+            stateful = quantize_int8(stateful)
+        suffix = "" if args.quantize == "none" else f"-{args.quantize}"
+        asset_path = out_dir / f"{name}{suffix}.aimodel"
+        print(f"Exporting to {asset_path}...", flush=True)
+        export_aimodel(stateful, asset_path)
+        print(f"  wrote {asset_path} ({dir_size(asset_path) / 1e6:.1f} MB)", flush=True)
+        return
 
     print(f"Loading {args.n_sequences} validation sequences...", flush=True)
     sequences = load_val_sequences(args.n_sequences)
