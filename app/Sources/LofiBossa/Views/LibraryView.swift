@@ -188,6 +188,17 @@ private struct ProjectCard: View {
         .contentShape(Rectangle())
         .onTapGesture(count: LFBSize.isTouch ? 1 : 2, perform: onOpen)   // a tap opens on touch
         .contextMenu { contextMenuItems }
+        .accessibilityElement(children: isRenaming ? .contain : .ignore)
+        .accessibilityLabel(project.name)
+        .accessibilityValue(project.subtitle)
+        .accessibilityAddTraits(isRenaming ? [] : .isButton)
+        .accessibilityHint(isTrash ? "Opens the actions for this deleted project" : "Opens the project")
+        .accessibilityAction { if !isTrash { onOpen() } }
+        .accessibilityAction(named: "Put back") { if isTrash { onRestore() } }
+        .accessibilityAction(named: "Rename") { if !isTrash { onRename() } }
+        .accessibilityAction(named: "Duplicate") { if !isTrash { onDuplicate() } }
+        .accessibilityAction(named: "Copy seed") { if !isTrash { onCopySeed() } }
+        .accessibilityAction(named: "Delete") { if isTrash { onPermanentlyDelete() } else { onDelete() } }
     }
 
     private var thumbnail: some View {
@@ -200,6 +211,7 @@ private struct ProjectCard: View {
             }
         }
         .padding(LFBSpace.sm)
+        .accessibilityHidden(true)
     }
 
     @ViewBuilder private var contextMenuItems: some View {
@@ -259,6 +271,8 @@ struct FirstLaunchView: View {
                     Text(formatTimecode(length)).monospacedDigit()
                 }
                 Slider(value: $length, in: 15...180, step: 15)
+                    .accessibilityLabel("Length")
+                    .accessibilityValue(formatTimecode(length))
             }
             .frame(width: 280)
             Button {
@@ -270,6 +284,8 @@ struct FirstLaunchView: View {
                 Label("Generate", systemImage: "sparkles").frame(minWidth: 140)
             }
             .buttonStyle(.borderedProminent).controlSize(.large)
+            .accessibilityHint("Creates the project and writes the first take")
+            .accessibilityInputLabels(["Generate", "Make music"])
             GeneratorStatusPill(status: status)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -298,5 +314,7 @@ private struct StyleCard: View {
                 .strokeBorder(isSelected ? Color.lfbAccent : Color.lfbControlHairline, lineWidth: isSelected ? 2 : 1))
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(style.title)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }

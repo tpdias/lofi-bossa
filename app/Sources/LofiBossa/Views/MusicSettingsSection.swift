@@ -26,12 +26,14 @@ struct MusicSettingsSection: View {
                     set: { model.setTempo($0 ? nil : (model.displayedTempo ?? 90)) }))
                     .checkboxToggleStyle().font(.lfbCaption)
                     .accessibilityIdentifier("tempoAuto")
+                    .accessibilityHint("When on, the tempo is detected from the song")
             }
             if let bpm = model.project.tempo {
                 HStack(spacing: LFBSpace.sm) {
                     Slider(value: Binding(get: { bpm }, set: { model.setTempo($0) }),
                            in: Project.tempoRange, step: 1)
                         .accessibilityLabel("Tempo").accessibilityIdentifier("tempo")
+                        .accessibilityValue("\(Int(bpm)) beats per minute")
                     Text("\(Int(bpm)) BPM").monospacedDigit().frame(minWidth: 64, alignment: .trailing)
                 }
             } else {
@@ -54,6 +56,7 @@ struct MusicSettingsSection: View {
             HStack(spacing: LFBSpace.sm) {
                 Text(low).font(.lfbCaption).foregroundStyle(Color.lfbTextTertiary)
                 Slider(value: value, in: 0...1).accessibilityLabel(title).accessibilityIdentifier(id)
+                    .accessibilityValue("\(Int(value.wrappedValue * 100)) percent, \(low) to \(high)")
                 Text(high).font(.lfbCaption).foregroundStyle(Color.lfbTextTertiary)
             }
         }

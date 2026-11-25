@@ -103,6 +103,7 @@ struct TrackRowView: View {
                     if isRewriting {
                         Button(action: onCancelRewrite) { Image(systemName: "stop.fill") }
                             .help("Stop rewriting")
+                            .accessibilityLabel("Stop rewriting \(track.id.title)")
                     } else {
                         Button(action: onRewrite) { Image(systemName: "arrow.triangle.2.circlepath") }
                             .disabled(isGeneratorBusy)
@@ -114,6 +115,8 @@ struct TrackRowView: View {
                 HStack(spacing: 6) {
                     Image(systemName: "speaker.wave.2").font(.system(size: 11)).foregroundStyle(Color.lfbTextTertiary)
                     Slider(value: $track.volume, in: 0...1).controlSize(.small).tint(track.id.color)
+                        .accessibilityLabel("\(track.id.title) volume")
+                        .accessibilityValue("\(Int(track.volume * 100)) percent")
                     Text("\(Int(track.volume * 100))").font(.lfbCaption).monospacedDigit()
                         .foregroundStyle(Color.lfbTextTertiary).frame(width: 22, alignment: .trailing)
                 }
@@ -150,6 +153,7 @@ struct TrackRowView: View {
             NoteLaneView(notes: track.notes, duration: duration, window: window,
                          color: track.isMuted ? .lfbTextTertiary : track.id.color, onSeek: onSeek, grid: grid)
                 .opacity(isRewriting && rewritingRange == nil ? 0.2 : (track.isMuted ? 0.45 : (isDimmedBySolo ? 0.3 : 1)))
+                .accessibilityChartDescriptor(NoteContourDescriptor(title: track.id.title, notes: track.notes, duration: duration))
             if isRewriting {
                 if let range = rewritingRange {
                     rangeRewriteOverlay(range)
@@ -202,13 +206,28 @@ struct KeyToggleStyle: ButtonStyle {
     var onFill: Color
     var onText: Color
     func makeBody(configuration: Configuration) -> some View {
+        KeyToggleBody(configuration: configuration, isOn: isOn, onFill: onFill, onText: onText)
+    }
+}
+
+/// The toggle's look. Split out so it can read Differentiate Without Color: when it is on, an
+/// "on" key also gets a heavy outline, so state is not carried by fill color alone.
+private struct KeyToggleBody: View {
+    @Environment(\.accessibilityDifferentiateWithoutColor) private var differentiate
+    let configuration: ButtonStyleConfiguration
+    let isOn: Bool
+    let onFill: Color
+    let onText: Color
+
+    var body: some View {
         configuration.label
             .font(.system(size: 11, weight: .bold))
             .foregroundStyle(isOn ? onText : Color.lfbTextSecondary)
             .frame(width: 24, height: 22)
             .background(isOn ? onFill : Color.lfbControl, in: RoundedRectangle(cornerRadius: LFBRadius.key))
             .overlay(RoundedRectangle(cornerRadius: LFBRadius.key)
-                .strokeBorder(isOn ? .clear : Color.lfbControlHairline, lineWidth: 1))
+                .strokeBorder(isOn ? (differentiate ? Color.lfbText : .clear) : Color.lfbControlHairline,
+                              lineWidth: isOn && differentiate ? 2 : 1))
             .opacity(configuration.isPressed ? 0.7 : 1)
     }
 }

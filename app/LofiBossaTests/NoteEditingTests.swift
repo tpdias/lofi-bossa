@@ -129,3 +129,34 @@ final class NoteEditingTests: XCTestCase {
         XCTAssertEqual(starts(moved.notes), [1.5, 2.0])
     }
 }
+
+final class NoteAccessibilityTests: XCTestCase {
+    private let grid = BeatGrid(bpm: 120)   // a beat is 0.5 s, a bar 2 s
+
+    func testDescriptionReadsPitchPositionLengthAndLoudness() {
+        let note = Note(pitch: 64, start: 4.5, duration: 0.25, velocity: 80)    // bar 3, beat 2
+        XCTAssertEqual(NoteDescription.text(note, grid: grid), "E 4, bar 3 beat 2, eighth note, medium loud")
+    }
+
+    func testDescriptionWithoutATempoUsesSeconds() {
+        let note = Note(pitch: 61, start: 3, duration: 1, velocity: 20)
+        XCTAssertEqual(NoteDescription.text(note, grid: nil), "C sharp 4, at 0:03, 1.0 seconds, very soft")
+    }
+
+    func testTransposeStaysInThePianoRange() {
+        let n = Note(pitch: 108, start: 0, duration: 1, velocity: 90)
+        XCTAssertEqual(NoteEditing.transposing([n], id: n.id, by: 1)[0].pitch, 108)
+        XCTAssertEqual(NoteEditing.transposing([n], id: n.id, by: -12)[0].pitch, 96)
+    }
+
+    func testResizeIsClampedToTheSongAndAMinimum() {
+        let n = Note(pitch: 60, start: 9, duration: 0.5, velocity: 90)
+        XCTAssertEqual(NoteEditing.resizing([n], id: n.id, by: 5, songLength: 10)[0].duration, 1, accuracy: 1e-9)
+        XCTAssertGreaterThanOrEqual(NoteEditing.resizing([n], id: n.id, by: -5, songLength: 10)[0].duration, 0.02)
+    }
+
+    func testRemovingOneNote() {
+        let a = Note(pitch: 60, start: 0, duration: 1, velocity: 90), b = Note(pitch: 62, start: 1, duration: 1, velocity: 90)
+        XCTAssertEqual(NoteEditing.removing([a, b], id: a.id), [b])
+    }
+}

@@ -90,6 +90,35 @@ final class LofiBossaUITests: XCTestCase {
         XCTAssertFalse(done.exists)
     }
 
+    // MARK: accessibility audits
+
+    /// Apple's automated audit: unlabeled elements, wrong traits, clipped text, tiny hit areas.
+    /// Contrast is left to the Increase Contrast tokens (the audit's contrast check flags the
+    /// intentionally quiet secondary text).
+    private func audit(_ screen: String) throws {
+        try app.performAccessibilityAudit(for: .all.subtracting(.contrast)) { issue in
+            // The piano-roll's canvases are drawn, not controls; their notes are exposed by
+            // `NoteAccessibilityLayer`, which can sit partly outside the visible roll.
+            issue.auditType == .elementDetection
+        }
+    }
+
+    func testAccessibilityAuditOfTheLibrary() throws {
+        try audit("library")
+    }
+
+    func testAccessibilityAuditOfTheProject() throws {
+        makeProjectWithSong()
+        try audit("project")
+    }
+
+    func testAccessibilityAuditOfThePianoRoll() throws {
+        makeProjectWithSong()
+        trackRow("Guitar").doubleClick()
+        XCTAssertTrue(app.buttons["roll-done"].waitForExistence(timeout: 5), "piano roll did not open")
+        try audit("piano roll")
+    }
+
     func testSelectingASectionAndDeletingItMakesAVersion() {
         makeProjectWithSong()
         let row = trackRow("Bass")

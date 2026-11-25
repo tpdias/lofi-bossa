@@ -26,6 +26,7 @@ struct PhoneProjectView: View {
     @Environment(\.verticalSizeClass) private var verticalSizeClass
 
     @State private var sheet: PhoneSheet?
+    @AppStorage("lfb.hapticBeat") private var hapticBeat = false
     @State private var renaming = false
     @State private var draftName = ""
     @State private var height: CGFloat = LFBDevice.iphone.height
@@ -204,6 +205,9 @@ struct PhoneProjectView: View {
                         }
                     }
                 }
+            }
+            if HapticSupport.isAvailable {
+                Toggle("Haptic Beat", systemImage: "hand.tap", isOn: $hapticBeat)
             }
             Divider()
             Button("Delete", systemImage: "trash", role: .destructive) {

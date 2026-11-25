@@ -35,6 +35,7 @@ struct ExportSheetView: View {
                     ForEach(ProjectViewModel.ExportFormat.allCases) { Text($0.rawValue).tag($0) }
                 }
                 .pickerStyle(.segmented).labelsHidden()
+                .accessibilityLabel("Format")
                 Text(format.note).font(.lfbCaption).foregroundStyle(Color.lfbTextSecondary)
             }
 
@@ -46,6 +47,7 @@ struct ExportSheetView: View {
                     }
                 }
                 .pickerStyle(.segmented).labelsHidden()
+                .accessibilityLabel("Range")
             }
 
             ExportOptionsSection(model: model, format: format)
@@ -59,6 +61,7 @@ struct ExportSheetView: View {
                     Task { await model.export(format: format, range: range, to: url) }
                 }
                 .buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
+                .accessibilityHint("Chooses where to save, then renders the audio")
             }
         }
     }
@@ -67,6 +70,8 @@ struct ExportSheetView: View {
         VStack(alignment: .leading, spacing: LFBSpace.md) {
             Text("Rendering audio…").font(.lfbTitle)
             ProgressView(value: model.exportProgress)
+                .accessibilityLabel("Export progress")
+                .accessibilityValue("\(Int(model.exportProgress * 100)) percent")
             HStack {
                 Spacer()
                 Button("Cancel") { dismiss() }

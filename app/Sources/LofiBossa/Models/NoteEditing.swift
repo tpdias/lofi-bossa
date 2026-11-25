@@ -92,3 +92,74 @@ enum NoteEditing {
         notes.sorted { ($0.start, $0.pitch) < ($1.start, $1.pitch) }
     }
 }
+
+// MARK: - Single-note edits and spoken descriptions (VoiceOver rotor and custom actions)
+
+extension NoteEditing {
+    static let lowestPitch = 21, highestPitch = 108      // A0...C8, the range of the piano roll
+
+    /// The note with `id` moved by `semitones`, kept inside the piano's range.
+    static func transposing(_ notes: [Note], id: Note.ID, by semitones: Int) -> [Note] {
+        notes.map { n in
+            guard n.id == id else { return n }
+            var m = n
+            m.pitch = min(max(n.pitch + semitones, lowestPitch), highestPitch)
+            return m
+        }
+    }
+
+    /// The note with `id` made longer or shorter by `delta` seconds: never shorter than
+    /// `minimumDuration`, never past the end of the song.
+    static func resizing(_ notes: [Note], id: Note.ID, by delta: Double, songLength: Double) -> [Note] {
+        notes.map { n in
+            guard n.id == id else { return n }
+            var m = n
+            let room = max(songLength - n.start, minimumDuration)
+            m.duration = min(max(n.duration + delta, max(minimumDuration, 0.05)), room)
+            return m
+        }
+    }
+
+    static func removing(_ notes: [Note], id: Note.ID) -> [Note] { notes.filter { $0.id != id } }
+}
+
+/// How a note is read out: "E4, bar 3 beat 2, eighth note, medium loud".
+enum NoteDescription {
+    private static let names = ["C", "C sharp", "D", "D sharp", "E", "F", "F sharp", "G", "G sharp", "A", "A sharp", "B"]
+
+    /// "E4", "F sharp 3": spoken names, since VoiceOver reads "F#" as "F number".
+    static func pitchName(_ pitch: Int) -> String { "\(names[((pitch % 12) + 12) % 12]) \(pitch / 12 - 1)" }
+
+    static func loudness(_ velocity: Int) -> String {
+        switch velocity {
+        case ..<40: return "very soft"
+        case ..<70: return "soft"
+        case ..<95: return "medium loud"
+        case ..<115: return "loud"
+        default: return "very loud"
+        }
+    }
+
+    /// "bar 3 beat 2" with a tempo; a time in seconds without one.
+    static func position(_ start: Double, grid: BeatGrid?) -> String {
+        guard let grid, grid.beat > 0 else { return "at \(formatTimecode(start))" }
+        let beats = max((start - grid.offset) / grid.beat, 0) + 0.001
+        let bar = Int(beats) / grid.beatsPerBar + 1
+        let beat = Int(beats) % grid.beatsPerBar + 1
+        return "bar \(bar) beat \(beat)"
+    }
+
+    /// The nearest plain note value ("eighth note") with a tempo; seconds without one.
+    static func length(_ duration: Double, grid: BeatGrid?) -> String {
+        guard let grid, grid.beat > 0 else { return String(format: "%.1f seconds", duration) }
+        let beats = duration / grid.beat
+        let values: [(Double, String)] = [(0.25, "sixteenth note"), (0.5, "eighth note"), (1, "quarter note"),
+                                          (2, "half note"), (4, "whole note")]
+        if let match = values.first(where: { abs($0.0 - beats) / $0.0 < 0.2 }) { return match.1 }
+        return beats < 0.25 ? "very short" : String(format: "%.1f beats", beats)
+    }
+
+    static func text(_ note: Note, grid: BeatGrid?) -> String {
+        "\(pitchName(note.pitch)), \(position(note.start, grid: grid)), \(length(note.duration, grid: grid)), \(loudness(note.velocity))"
+    }
+}

@@ -35,7 +35,8 @@ struct EffectCard: View {
         .frame(height: LFBSize.isTouch ? LFBTouchSize.effectCardHeight : LFBSize.effectCardHeight)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(title)
-        .accessibilityValue("\(Int(amount * 100))")
+        .accessibilityValue("\(Int(amount * 100)) percent")
+        .accessibilityHint("\(caption). Swipe up or down to adjust.")
         .accessibilityAdjustableAction { direction in
             switch direction {
             case .increment: amount = min(amount + 0.05, 1)
