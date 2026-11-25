@@ -223,3 +223,74 @@ enum LFBMotion {
     static let writeHeadPulseSeconds: Double = 1.2
     static let spinnerSeconds: Double = 0.8
 }
+
+// MARK: - Elevation (tokens.json `elevation`)
+
+/// Two stacked shadows per level: a tight dark one for contact and a wide warm one for lift.
+/// Shared by the Mac, iPad, iPhone and Duo layouts through `ButtonStyles.swift`.
+struct LFBElevation: Equatable {
+    var tightRadius: CGFloat, tightY: CGFloat, tightOpacity: Double
+    var wideRadius: CGFloat, wideY: CGFloat, wideOpacity: Double
+
+    static let none = LFBElevation(tightRadius: 0, tightY: 0, tightOpacity: 0, wideRadius: 0, wideY: 0, wideOpacity: 0)
+    static let low = LFBElevation(tightRadius: 1, tightY: 1, tightOpacity: 0.14, wideRadius: 4, wideY: 2, wideOpacity: 0.08)
+    static let mid = LFBElevation(tightRadius: 1.5, tightY: 1.5, tightOpacity: 0.18, wideRadius: 10, wideY: 5, wideOpacity: 0.14)
+    static let high = LFBElevation(tightRadius: 2, tightY: 2, tightOpacity: 0.22, wideRadius: 20, wideY: 10, wideOpacity: 0.2)
+
+    /// Pressed buttons sit closer to the surface.
+    var pressed: LFBElevation {
+        LFBElevation(tightRadius: tightRadius * 0.5, tightY: tightY * 0.4, tightOpacity: tightOpacity * 0.8,
+                     wideRadius: wideRadius * 0.4, wideY: wideY * 0.3, wideOpacity: wideOpacity * 0.5)
+    }
+}
+
+/// Note glow (tokens.json `glow`).
+enum LFBGlow {
+    static let haloRadius: CGFloat = 8
+    static let haloPadding: CGFloat = 3.5
+    static let releaseSeconds: Double = 0.18
+    static let particleLifeSeconds: Double = 0.6
+    static let maxParticles = 300
+}
+
+// MARK: - Style themes (tokens.json `themes`)
+
+/// Per-style colors: Lo-Fi is dusk purple and amber, Bossa is sea teal and sand. The theme tints
+/// the primary button, the Generate glow, and the note glow and sparks of the open project.
+struct LFBTheme: Equatable {
+    var accent: Color
+    var onAccent: Color
+    var glow: Color
+    var wash: Color
+
+    static let standard = LFBTheme(accent: .lfbAccent, onAccent: .lfbOnAccent, glow: .lfbAccent, wash: .lfbAccentWash)
+    static let lofi = LFBTheme(
+        accent: Color(light: hex("#6B46B8"), dark: hex("#B9A1F2")),
+        onAccent: Color(light: hex("#FFFFFF"), dark: hex("#1E1233")),
+        glow: Color(light: hex("#E08A12"), dark: hex("#FFB547")),
+        wash: Color(light: hex("#6B46B8", 0.14), dark: hex("#B9A1F2", 0.18)))
+    static let bossa = LFBTheme(
+        accent: Color(light: hex("#0B7A78"), dark: hex("#5CCBC4")),
+        onAccent: Color(light: hex("#FFFFFF"), dark: hex("#06201F")),
+        glow: Color(light: hex("#C9A15A"), dark: hex("#EBD6A4")),
+        wash: Color(light: hex("#0B7A78", 0.14), dark: hex("#5CCBC4", 0.18)))
+
+    init(accent: Color, onAccent: Color, glow: Color, wash: Color) {
+        self.accent = accent; self.onAccent = onAccent; self.glow = glow; self.wash = wash
+    }
+    init(_ style: MusicStyle?) {
+        switch style {
+        case .lofi: self = .lofi
+        case .bossa: self = .bossa
+        case nil: self = .standard
+        }
+    }
+}
+
+private struct LFBThemeKey: EnvironmentKey { static let defaultValue = LFBTheme.standard }
+extension EnvironmentValues {
+    var lfbTheme: LFBTheme {
+        get { self[LFBThemeKey.self] }
+        set { self[LFBThemeKey.self] = newValue }
+    }
+}

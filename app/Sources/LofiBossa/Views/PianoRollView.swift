@@ -264,7 +264,7 @@ struct PianoRollView: View {
                     .buttonStyle(.plain)
             }
 
-            Button("Done") { model.closeEditor() }.buttonStyle(.borderedProminent).controlSize(.small)
+            Button("Done") { model.closeEditor() }.buttonStyle(LFBPrimaryButtonStyle()).controlSize(.small)
                 .accessibilityIdentifier("roll-done")
         }
         .padding(.horizontal, LFBSpace.md).padding(.vertical, LFBSpace.sm)
@@ -369,6 +369,11 @@ struct PianoRollView: View {
         ZStack(alignment: .topLeading) {
             Canvas { ctx, size in drawRoll(&ctx, size: size) }
                 .allowsHitTesting(false)
+            NoteGlowLayer(notes: notes, color: track.color, isDrums: track == .drums) { n, size in
+                let r = CGRect(x: timeToX(n.start) - scroll.x, y: pitchToY(n.pitch) - scroll.y + 1,
+                               width: max(CGFloat(n.duration) * pps, 3), height: Self.rowHeight - 2)
+                return r.maxX >= 0 && r.minX <= size.width && r.maxY >= 0 && r.minY <= size.height ? r : nil
+            }
             // Takes the clicks and drags. Points are in the window's coordinates; the surface
             // they mean is that plus the scroll offset.
             #if os(macOS)

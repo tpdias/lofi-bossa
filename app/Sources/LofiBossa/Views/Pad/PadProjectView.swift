@@ -183,7 +183,7 @@ struct PadListeningBanner: View {
             Button("Back to Current", action: onBack)
                 .buttonStyle(.bordered)
             Button("Restore This Version", action: onRestore)
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(LFBPrimaryButtonStyle())
         }
     }
 }

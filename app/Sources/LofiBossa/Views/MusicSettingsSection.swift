@@ -32,6 +32,7 @@ struct MusicSettingsSection: View {
                     value: Binding(get: { model.project.songGroove }, set: { model.setGroove($0) }))
             labeled("Dynamics", low: "Flat", high: "Expressive", id: "dynamics",
                     value: Binding(get: { model.project.songDynamics }, set: { model.setDynamics($0) }))
+            NoteEffectsPicker()
             Text("Groove pulls new notes onto the beat; dynamics adds accents and swells.")
                 .font(.lfbCaption).foregroundStyle(Color.lfbTextSecondary)
                 .fixedSize(horizontal: false, vertical: true)

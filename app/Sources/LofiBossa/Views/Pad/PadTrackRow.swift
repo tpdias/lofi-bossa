@@ -175,7 +175,8 @@ struct PadTrackRow: View {
             Color.lfbSurface
             if isSelected { track.id.color.opacity(0.06) }
             NoteLaneView(notes: track.notes, duration: duration, window: window,
-                         color: track.isMuted ? .lfbTextTertiary : track.id.color, onSeek: onSeek, grid: grid)
+                         color: track.isMuted ? .lfbTextTertiary : track.id.color, onSeek: onSeek, grid: grid,
+                         glows: !track.isMuted, isDrums: track.id == .drums)
                 .opacity(isRewriting && rewritingRange == nil ? 0.2 : (track.isMuted ? 0.45 : (isDimmedBySolo ? 0.3 : 1)))
             if isRewriting {
                 if let range = rewritingRange {
@@ -229,10 +230,10 @@ struct PadKeyStyle: ButtonStyle {
             .font(.system(size: 13, weight: .bold))
             .foregroundStyle(isOn ? onText : Color.lfbTextSecondary)
             .frame(width: LFBTouchSize.keyMS.width, height: LFBTouchSize.keyMS.height)
-            .background(isOn ? onFill : Color.lfbControl, in: RoundedRectangle(cornerRadius: 8))
+            .lfbDepth(RoundedRectangle(cornerRadius: 8), fill: isOn ? onFill : Color.lfbControl,
+                      elevation: isOn ? .none : .low, pressed: configuration.isPressed, highlight: !isOn)
             .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(isOn ? .clear : Color.lfbControlHairline, lineWidth: 1))
             .contentShape(Rectangle().inset(by: -4))   // a little more than drawn, toward 44
-            .opacity(configuration.isPressed ? 0.7 : 1)
     }
 }
 

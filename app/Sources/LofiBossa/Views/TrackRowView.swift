@@ -148,7 +148,8 @@ struct TrackRowView: View {
             Color.lfbSurface
             if isSelected { track.id.color.opacity(0.06) }
             NoteLaneView(notes: track.notes, duration: duration, window: window,
-                         color: track.isMuted ? .lfbTextTertiary : track.id.color, onSeek: onSeek, grid: grid)
+                         color: track.isMuted ? .lfbTextTertiary : track.id.color, onSeek: onSeek, grid: grid,
+                         glows: !track.isMuted, isDrums: track.id == .drums)
                 .opacity(isRewriting && rewritingRange == nil ? 0.2 : (track.isMuted ? 0.45 : (isDimmedBySolo ? 0.3 : 1)))
             if isRewriting {
                 if let range = rewritingRange {

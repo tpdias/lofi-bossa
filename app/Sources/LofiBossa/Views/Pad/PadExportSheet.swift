@@ -76,7 +76,7 @@ struct PadExportSheet: View {
             } label: {
                 Text("Export").frame(maxWidth: .infinity, minHeight: 36)
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(LFBPrimaryButtonStyle())
             .keyboardShortcut(.defaultAction)
             .accessibilityIdentifier("export-confirm")
         }
@@ -103,7 +103,7 @@ struct PadExportSheet: View {
                 ShareLink(item: result.url) {
                     Label("Share…", systemImage: "square.and.arrow.up").frame(maxWidth: .infinity, minHeight: 36)
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(LFBPrimaryButtonStyle())
                 Button { saveCopy = copyForFiles(result.url) } label: {
                     Label("Save to Files", systemImage: "folder").frame(maxWidth: .infinity, minHeight: 36)
                 }

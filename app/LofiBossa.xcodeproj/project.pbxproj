@@ -340,7 +340,7 @@
 				DEVELOPMENT_TEAM = DFJUFQ6A3N;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Info-iOS.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = "Lo-Fi & Bossa";
+				INFOPLIST_KEY_CFBundleDisplayName = "Saudade — Lo-Fi & Bossa";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.music";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -374,7 +374,7 @@
 				DEVELOPMENT_TEAM = DFJUFQ6A3N;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Info-iOS.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = "Lo-Fi & Bossa";
+				INFOPLIST_KEY_CFBundleDisplayName = "Saudade — Lo-Fi & Bossa";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.music";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -442,7 +442,7 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Lo-Fi & Bossa";
+				INFOPLIST_KEY_CFBundleDisplayName = "Saudade — Lo-Fi & Bossa";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.music";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -469,7 +469,7 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Lo-Fi & Bossa";
+				INFOPLIST_KEY_CFBundleDisplayName = "Saudade — Lo-Fi & Bossa";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.music";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
