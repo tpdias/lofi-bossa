@@ -260,7 +260,7 @@ struct PadEmptyProjectView: View {
                     Button { model.generate() } label: {
                         Label("Generate", systemImage: "sparkles").frame(minWidth: 160, minHeight: 32)
                     }
-                    .buttonStyle(.borderedProminent).controlSize(.large)
+                    .buttonStyle(LFBPrimaryButtonStyle()).controlSize(.large)
                     .disabled(model.isGeneratorBusy || !isReady)
                 }
                 .padding(LFBSpace.xl)

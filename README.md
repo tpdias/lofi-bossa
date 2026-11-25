@@ -1,4 +1,4 @@
-# Lo-Fi & Bossa
+# Saudade — Lo-Fi & Bossa
 
 An app for Mac, iPad, iPhone and iPhone Duo that writes background music for vlogs. It
 generates a four-track song (piano, guitar, bass, drums) with a symbolic music model running

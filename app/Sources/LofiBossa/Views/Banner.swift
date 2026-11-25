@@ -100,7 +100,7 @@ struct OfflineBanner: View {
                         .lineLimit(2)
                 }
                 HStack(spacing: 12) {
-                    Button("Restart Generator", action: onRestart).buttonStyle(.borderedProminent).controlSize(.small)
+                    Button("Restart Generator", action: onRestart).buttonStyle(LFBPrimaryButtonStyle()).controlSize(.small)
                     if reason != nil {
                         Button("Show Log", action: onShowLog).buttonStyle(.plain).controlSize(.small)
                             .font(.lfbCaption).foregroundStyle(Color.lfbAccentText)
@@ -129,7 +129,7 @@ struct GenerationErrorBanner: View {
                         .textSelection(.enabled)
                 }
                 HStack(spacing: 12) {
-                    Button("Try Again", action: onRetry).buttonStyle(.borderedProminent).controlSize(.small)
+                    Button("Try Again", action: onRetry).buttonStyle(LFBPrimaryButtonStyle()).controlSize(.small)
                     if detail != nil {
                         Button(showDetail ? "Hide Details" : "Details") { showDetail.toggle() }
                             .buttonStyle(.plain).controlSize(.small)

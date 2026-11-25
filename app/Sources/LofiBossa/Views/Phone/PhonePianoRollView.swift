@@ -349,6 +349,12 @@ struct PhonePianoRollView: View {
                 ctx.stroke(Path(m), with: .color(Color.lfbAccent), lineWidth: 1)
             }
         }
+        .overlay {
+            NoteGlowLayer(notes: notes, color: track.color, isDrums: track == .drums) { n, size in
+                let r = noteRect(n).insetBy(dx: 0, dy: 1)
+                return r.maxX >= 0 && r.minX <= size.width && r.maxY >= 0 && r.minY <= size.height ? r : nil
+            }
+        }
         .clipped()
         .contentShape(Rectangle())
         .onGeometryChange(for: CGSize.self, of: { $0.size }) { size in

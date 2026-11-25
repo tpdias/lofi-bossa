@@ -29,6 +29,10 @@ struct AdaptiveRootView: View {
             #endif
             }
         }
+        .environment(\.lfbTheme, LFBTheme(session.activeModel?.project.style))
+        .environment(\.noteClock, NoteClock { [weak session] in
+            (session?.activeModel?.position ?? 0, session?.activeModel?.isPlaying ?? false)
+        })
         .onAppear { session.syncActiveModel(); DevTools.runDemoIfAsked(session) }
         .announcesProgress(of: session.activeModel)
         .hapticBeat(of: session.activeModel)

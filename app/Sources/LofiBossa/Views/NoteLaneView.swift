@@ -13,6 +13,9 @@ struct NoteLaneView: View {
     var onSeek: (Double) -> Void = { _ in }
     /// Bar and beat lines behind the notes, when the song has a tempo.
     var grid: BeatGrid? = nil
+    /// Notes light up while they sound (see `NoteGlowLayer`). Off for thumbnails.
+    var glows = false
+    var isDrums = false
 
     var body: some View {
         GeometryReader { geo in
@@ -31,8 +34,22 @@ struct NoteLaneView: View {
                 onSeek(min(max(window.time(atX: tap.location.x, width: geo.size.width, duration: duration), 0), duration))
             })
         }
+        .overlay {
+            if glows { NoteGlowLayer(notes: notes, color: color, isDrums: isDrums, rect: glowRect) }
+        }
         .accessibilityLabel("Notes overview")
         .accessibilityHint("Click to move the playhead")
+    }
+
+    /// Where `draw` puts a note, for the glow layer.
+    private func glowRect(_ n: Note, _ size: CGSize) -> CGRect? {
+        guard duration > 0, let lo = notes.map(\.pitch).min(), let hi = notes.map(\.pitch).max() else { return nil }
+        let span = Double(max(hi - lo, 11))
+        let x = window.x(for: n.start, width: size.width, duration: duration)
+        let w = max(window.width(of: n.duration, width: size.width, duration: duration), 3)
+        guard x + w >= 0, x <= size.width else { return nil }
+        let t = 1 - Double(n.pitch - lo) / span
+        return CGRect(x: x, y: 10 + CGFloat(t) * (size.height - 24), width: w, height: 4)
     }
 
     private func draw(_ notes: [Note], in ctx: inout GraphicsContext, size: CGSize, color: Color) {

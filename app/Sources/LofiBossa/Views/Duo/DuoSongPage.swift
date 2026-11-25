@@ -163,9 +163,10 @@ struct DuoIconButtonStyle: ButtonStyle {
             .font(.system(size: 18, weight: .medium))
             .foregroundStyle(Color.lfbAccentText)
             .frame(width: LFBPhoneSize.minHitTarget, height: LFBPhoneSize.minHitTarget)
-            .background(solid ? Color.lfbAccentWash : .clear, in: Circle())
+            .lfbDepth(Circle(), fill: solid ? AnyShapeStyle(Color.lfbAccentWash) : AnyShapeStyle(Color.clear),
+                      elevation: solid ? .low : .none, pressed: configuration.isPressed, highlight: solid)
             .contentShape(Circle())
-            .opacity(isEnabled ? (configuration.isPressed ? 0.6 : 1) : 0.35)
+            .opacity(isEnabled ? 1 : 0.35)
     }
 }
 
@@ -276,16 +277,18 @@ struct DuoListeningBanner: View {
 struct DuoPillButtonStyle: ButtonStyle {
     var primary = false
     @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.lfbTheme) private var theme
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 14, weight: .semibold))
             .lineLimit(1)
-            .foregroundStyle(primary ? Color.lfbOnAccent : Color.lfbText)
+            .foregroundStyle(primary ? theme.onAccent : Color.lfbText)
             .padding(.horizontal, 14).frame(minHeight: 36)
-            .background(primary ? Color.lfbAccent : Color.lfbControl, in: Capsule())
+            .lfbDepth(Capsule(), fill: primary ? theme.accent : Color.lfbControl, elevation: primary ? .mid : .low,
+                      pressed: configuration.isPressed)
             .overlay(Capsule().strokeBorder(primary ? .clear : Color.lfbControlHairline, lineWidth: 1))
             .contentShape(Capsule())
-            .opacity(isEnabled ? (configuration.isPressed ? 0.7 : 1) : 0.4)
+            .opacity(isEnabled ? 1 : 0.4)
     }
 }
 

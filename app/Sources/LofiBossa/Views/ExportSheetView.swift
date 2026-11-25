@@ -60,7 +60,7 @@ struct ExportSheetView: View {
                     guard let url = model.chooseExportDestination(format: format) else { return }
                     Task { await model.export(format: format, range: range, to: url) }
                 }
-                .buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
+                .buttonStyle(LFBPrimaryButtonStyle()).keyboardShortcut(.defaultAction)
                 .accessibilityHint("Chooses where to save, then renders the audio")
             }
         }
@@ -91,7 +91,7 @@ struct ExportSheetView: View {
                 #else
                 ShareLink("Share…", item: result.url)
                 #endif
-                Button("Done") { dismiss() }.buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
+                Button("Done") { dismiss() }.buttonStyle(LFBPrimaryButtonStyle()).keyboardShortcut(.defaultAction)
             }
         }
     }

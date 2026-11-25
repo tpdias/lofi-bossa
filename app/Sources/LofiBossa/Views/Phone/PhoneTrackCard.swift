@@ -131,7 +131,8 @@ struct PhoneTrackCard: View {
                         .offset(x: CGFloat(range.lowerBound / duration) * w)
                 }
                 NoteLaneView(notes: track.notes, duration: duration,
-                             color: track.isMuted ? .lfbTextTertiary : id.color)
+                             color: track.isMuted ? .lfbTextTertiary : id.color,
+                             glows: !track.isMuted, isDrums: id == .drums)
                     .padding(.vertical, -3)   // NoteLaneView pads 10; the card lane wants 7
                     .opacity(isRewriting && model.rewritingRange == nil ? 0.2 : (track.isMuted ? 0.45 : 1))
                     .allowsHitTesting(false)

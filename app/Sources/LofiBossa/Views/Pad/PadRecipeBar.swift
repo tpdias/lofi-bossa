@@ -101,7 +101,7 @@ struct PadRecipeBar: View {
             }
             .frame(minWidth: 150)
         }
-        .buttonStyle(.borderedProminent)
+        .buttonStyle(LFBPrimaryButtonStyle(isBusy: model.isGenerating))
         .keyboardShortcut(.return, modifiers: .command)
         .disabled(model.isGeneratorBusy || isWaitingForGenerator || !model.canGenerate)
         .accessibilityHint(model.lockedTracks.isEmpty ? "Write a new take of every track"

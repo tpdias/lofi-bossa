@@ -42,7 +42,7 @@ struct DuoTabletopView: View {
                             if let track = model.displayedSnapshot?.track(id) {
                                 NoteLaneView(notes: track.notes, duration: model.duration,
                                              color: model.isAudible(id) ? id.color : Color.lfbTextTertiary.opacity(0.45),
-                                             onSeek: model.seek(to:))
+                                             onSeek: model.seek(to:), glows: model.isAudible(id), isDrums: id == .drums)
                             }
                             DuoLaneOverlay(model: model, track: id)
                         }

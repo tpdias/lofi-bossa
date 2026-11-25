@@ -137,7 +137,7 @@ private struct ListeningBanner: View {
             }
             Spacer()
             Button("Back to Current", action: onBack).buttonStyle(.plain).font(.lfbCaption).foregroundStyle(Color.lfbAccentText)
-            Button("Restore This Version", action: onRestore).buttonStyle(.borderedProminent).controlSize(.small)
+            Button("Restore This Version", action: onRestore).buttonStyle(LFBPrimaryButtonStyle()).controlSize(.small)
         }
     }
 }
@@ -266,7 +266,7 @@ private struct RecipeBar: View {
             }
             .frame(minWidth: 130)
         }
-        .buttonStyle(.borderedProminent)
+        .buttonStyle(LFBPrimaryButtonStyle(isBusy: model.isGenerating))
         .keyboardShortcut(.return, modifiers: .command)
         .disabled(model.isGeneratorBusy || isWaitingForGenerator || !model.canGenerate)
         .help(model.lockedTracks.isEmpty ? "Write a new take of every track"
@@ -423,7 +423,7 @@ private struct EmptyProjectView: View {
                     Text("Press Generate to write piano, guitar, bass and drums.")
                         .font(.lfbBody).foregroundStyle(Color.lfbTextSecondary)
                     Button { model.generate() } label: { Label("Generate", systemImage: "sparkles") }
-                        .buttonStyle(.borderedProminent).controlSize(.large)
+                        .buttonStyle(LFBPrimaryButtonStyle()).controlSize(.large)
                         .disabled(model.isGeneratorBusy)
                 }
                 .padding(LFBSpace.xl)

@@ -194,6 +194,8 @@ struct PhoneFirstLaunchView: View {
                 }
                 .frame(height: 48)
                 .accessibilityHidden(true)
+                SaudadeMark(size: 56)
+                SaudadeWordmark(size: 34)
                 Text("Make your first track").font(.system(size: 28, weight: .bold, design: .rounded))
                     .multilineTextAlignment(.center)
                 Text("Pick a feel. Lo-Fi & Bossa writes a short four-part song that you can mix, rework and export.")

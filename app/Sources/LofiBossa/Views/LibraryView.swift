@@ -40,7 +40,7 @@ struct SidebarView: View {
             } label: {
                 Label("New Project", systemImage: "plus").frame(maxWidth: .infinity)
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(LFBPrimaryButtonStyle())
             .controlSize(.regular)
             .padding(LFBSpace.sm)
         }
@@ -249,11 +249,8 @@ struct FirstLaunchView: View {
 
     var body: some View {
         VStack(spacing: LFBSpace.xl) {
-            HStack(spacing: 3) {
-                ForEach(TrackID.core) { id in
-                    RoundedRectangle(cornerRadius: 2).fill(id.color).frame(width: 36, height: 10)
-                }
-            }
+            SaudadeMark(size: 64)
+            SaudadeWordmark(size: 32)
             VStack(spacing: LFBSpace.xs) {
                 Text("Make your first track").font(.lfbLargeTitle)
                 Text("Pick a style and length, and the generator writes piano, guitar, bass and drums.")
@@ -283,13 +280,14 @@ struct FirstLaunchView: View {
             } label: {
                 Label("Generate", systemImage: "sparkles").frame(minWidth: 140)
             }
-            .buttonStyle(.borderedProminent).controlSize(.large)
+            .buttonStyle(LFBPrimaryButtonStyle()).controlSize(.large)
             .accessibilityHint("Creates the project and writes the first take")
             .accessibilityInputLabels(["Generate", "Make music"])
             GeneratorStatusPill(status: status)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.lfbWindow)
+        .environment(\.lfbTheme, LFBTheme(style))
     }
 }
 

@@ -59,7 +59,7 @@ struct LoFiBossaApp: App {
     }
 
     var body: some Scene {
-        WindowGroup("Lo-Fi & Bossa") {
+        WindowGroup(LFBBrand.displayName) {
             AdaptiveRootView()
                 .environment(store)
                 .environment(session)
@@ -195,6 +195,17 @@ enum DevTools {
                     try? await Task.sleep(for: .milliseconds(300))
                 }
                 if let model = session.activeModel { await runSectionDemo(model) }
+            }
+        }
+        // `--play-at SECONDS` starts playback from there once the song exists, so the note glow
+        // can be screenshotted (`--screenshot` waits for it).
+        if let i = args.firstIndex(of: "--play-at"), args.count > i + 1, let at = Double(args[i + 1]) {
+            Task {
+                while session.activeModel?.isGeneratorBusy == true || session.activeModel?.project.currentSnapshot == nil {
+                    try? await Task.sleep(for: .milliseconds(200))
+                }
+                session.activeModel?.seek(to: at)
+                session.activeModel?.play()
             }
         }
         if args.contains("--editor") {
