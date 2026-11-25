@@ -111,9 +111,9 @@ struct LibraryGridView: View {
         .toolbar {
             ToolbarItem(placement: .principal) {
                 VStack(alignment: .leading, spacing: 0) {
-                    Text(isTrash ? "Recently Deleted" : "All Projects").font(.lfbTitle)
+                    Text(isTrash ? L("Recently Deleted") : L("All Projects")).font(.lfbTitle)
                     if !isTrash {
-                        Text("\(store.active.count) projects · saved automatically on this \(LFBSize.isTouch ? "device" : "Mac")")
+                        Text(LFBSize.isTouch ? L("\(store.active.count) projects · saved automatically on this device") : L("\(store.active.count) projects · saved automatically on this Mac"))
                             .font(.lfbCaption).foregroundStyle(Color.lfbTextSecondary)
                     }
                 }
@@ -121,7 +121,7 @@ struct LibraryGridView: View {
             ToolbarItemGroup(placement: .primaryAction) {
                 if !isTrash {
                     Picker("Sort", selection: $sort) {
-                        ForEach(Sort.allCases) { Text($0.rawValue).tag($0) }
+                        ForEach(Sort.allCases) { Text(LocalizedStringKey($0.rawValue)).tag($0) }
                     }
                     .pickerStyle(.menu)
                     Button {
@@ -141,7 +141,7 @@ struct LibraryGridView: View {
                 if let p = pendingPermanentDelete { store.permanentlyDelete(p) }
             }
         } message: {
-            Text("\"\(pendingPermanentDelete?.name ?? "")\" and all its versions will be deleted. This cannot be undone.")
+            Text("“\(pendingPermanentDelete?.name ?? "")” and all its versions will be deleted. This cannot be undone.")
         }
     }
 

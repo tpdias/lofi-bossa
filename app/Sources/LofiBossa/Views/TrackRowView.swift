@@ -69,20 +69,20 @@ struct TrackRowView: View {
                     Image(systemName: track.isLocked ? "lock.fill" : "lock.open").font(.system(size: 10, weight: .semibold))
                 }
                 .buttonStyle(KeyToggleStyle(isOn: track.isLocked, onFill: track.id.color, onText: .lfbWindow))
-                .help(track.isLocked ? "Locked: the next Generate keeps this track and writes the others around it"
-                                     : "Lock to keep this track on the next Generate")
-                .accessibilityLabel("Lock").accessibilityValue(track.isLocked ? "On" : "Off")
+                .help(track.isLocked ? L("Locked: the next Generate keeps this track and writes the others around it")
+                                     : L("Lock to keep this track on the next Generate"))
+                .accessibilityLabel("Lock").accessibilityValue(track.isLocked ? L("On") : L("Off"))
                 Button("M") { track.isMuted.toggle() }
                     .buttonStyle(KeyToggleStyle(isOn: track.isMuted, onFill: .lfbText, onText: .lfbWindow))
-                    .accessibilityLabel("Mute").accessibilityValue(track.isMuted ? "On" : "Off")
+                    .accessibilityLabel("Mute").accessibilityValue(track.isMuted ? L("On") : L("Off"))
                 Button("S") { track.isSoloed.toggle() }
                     .buttonStyle(KeyToggleStyle(isOn: track.isSoloed, onFill: .lfbAccent, onText: .lfbOnAccent))
-                    .accessibilityLabel("Solo").accessibilityValue(track.isSoloed ? "On" : "Off")
+                    .accessibilityLabel("Solo").accessibilityValue(track.isSoloed ? L("On") : L("Off"))
             }
             if !compact {
                 HStack(spacing: 6) {
                     Picker("Instrument", selection: $track.instrument) {
-                        ForEach(track.id.instruments, id: \.name) { Text($0.name).tag($0.name) }
+                        ForEach(track.id.instruments, id: \.name) { Text(localizedName($0.name)).tag($0.name) }
                     }
                     .labelsHidden()
                     .controlSize(.small)
@@ -160,10 +160,10 @@ struct TrackRowView: View {
                     rangeRewriteOverlay(range)
                 } else {
                     SweepView(color: track.id.color)
-                    RewritePill(text: "Rewriting the \(track.id.rawValue) to fit the other three…", action: onCancelRewrite)
+                    RewritePill(text: "Rewriting this track to fit the other three…", action: onCancelRewrite)
                 }
             }
-            if isEmpty { EmptyLane(trackName: track.id.rawValue, action: onRewrite) }
+            if isEmpty { EmptyLane(trackName: track.id.title, action: onRewrite) }
         }
         .clipped()   // zoomed in, notes and selections past the edges stay inside the lane
         .contentShape(Rectangle())
@@ -234,7 +234,7 @@ private struct KeyToggleBody: View {
 }
 
 struct RewritePill: View {
-    let text: String
+    let text: LocalizedStringKey
     let action: () -> Void
     var body: some View {
         HStack(spacing: 8) {
@@ -255,7 +255,7 @@ struct EmptyLane: View {
     var body: some View {
         HStack(spacing: 8) {
             Text("No notes in this part").font(.system(size: 12))
-            Button("Write the \(trackName)", action: action).buttonStyle(.plain)
+            Button("Write \(trackName)", action: action).buttonStyle(.plain)
                 .font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.lfbAccentText)
         }
         .padding(.horizontal, 12).frame(height: 28)

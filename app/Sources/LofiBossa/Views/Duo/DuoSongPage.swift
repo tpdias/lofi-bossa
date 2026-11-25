@@ -100,7 +100,7 @@ struct DuoNavBar: View {
                 Button(action: model.undo) { Image(systemName: "arrow.uturn.backward") }
                     .buttonStyle(DuoIconButtonStyle())
                     .disabled(!model.canUndo)
-                    .accessibilityLabel(model.undoTitle.map { "Undo \($0)" } ?? "Undo")
+                    .accessibilityLabel(model.undoTitle.map { L("Undo \($0)") } ?? L("Undo"))
                 moreMenu
             } else {
                 Color.clear.frame(width: 88, height: 1)   // keeps the title centred (tabletop)
@@ -116,7 +116,7 @@ struct DuoNavBar: View {
     }
 
     private var subtitle: String {
-        let tail = showsActions ? "Saved" : (model.project.current.map { "Version \($0.number)" } ?? "Not generated yet")
+        let tail = showsActions ? L("Saved") : (model.project.current.map { L("Version \($0.number)") } ?? L("Not generated yet"))
         return "\(model.project.style.title) · \(formatTimecode(model.project.lengthSeconds)) · \(tail)"
     }
 
@@ -198,7 +198,7 @@ struct DuoStatusBanner: View {
                 Button("Copy") { Pasteboard.copy(model.generator.fullLog) }
                 Button("OK", role: .cancel) {}
             } message: {
-                Text(reason ?? (model.generator.fullLog.isEmpty ? "No output yet." : String(model.generator.fullLog.suffix(600))))
+                Text(reason ?? (model.generator.fullLog.isEmpty ? L("No output yet.") : String(model.generator.fullLog.suffix(600))))
             }
         case .ready:
             switch model.phase {
@@ -229,7 +229,7 @@ struct DuoStatusBanner: View {
         }
     }
 
-    private func text(_ title: String, _ detail: String) -> some View {
+    private func text(_ title: LocalizedStringKey, _ detail: LocalizedStringKey) -> some View {
         (Text(title).fontWeight(.semibold) + Text(" ") + Text(detail).foregroundColor(.lfbTextSecondary))
             .font(.system(size: 14))
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -328,7 +328,7 @@ struct DuoPlayButton: View {
         }
         .buttonStyle(.plain)
         .disabled(model.displayedSnapshot == nil)
-        .accessibilityLabel(model.isPlaying ? "Pause" : "Play")
+        .accessibilityLabel(model.isPlaying ? L("Pause") : L("Play"))
     }
 }
 

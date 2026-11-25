@@ -33,7 +33,7 @@ struct PadExportSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(model.exportResult == nil ? "Cancel" : "Done") { cancelAndDismiss() }
+                    Button(model.exportResult == nil ? L("Cancel") : L("Done")) { cancelAndDismiss() }
                 }
             }
         }
@@ -59,7 +59,7 @@ struct PadExportSheet: View {
                 Text("Range").font(.system(size: 15, weight: .medium))
                 Picker("Range", selection: $range) {
                     ForEach(ProjectViewModel.ExportRange.allCases) { r in
-                        Text(r.rawValue).tag(r)
+                        Text(LocalizedStringKey(r.rawValue)).tag(r)
                     }
                 }
                 .pickerStyle(.segmented).labelsHidden()

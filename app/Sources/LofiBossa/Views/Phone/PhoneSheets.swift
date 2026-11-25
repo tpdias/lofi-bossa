@@ -23,12 +23,12 @@ struct PhoneTrackSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: LFBSpace.md) {
-                    PhoneSheetHeader(title: id.title, leading: AnyView(TrackGlyph(id: id, size: 34)))
+                    PhoneSheetHeader(title: LocalizedStringKey(id.title), leading: AnyView(TrackGlyph(id: id, size: 34)))
                     PhoneList {
                         ForEach(id.instruments, id: \.name) { option in
                             Button { binding.wrappedValue.instrument = option.name } label: {
                                 HStack {
-                                    Text(option.name).foregroundStyle(Color.lfbText)
+                                    Text(localizedName(option.name)).foregroundStyle(Color.lfbText)
                                     Spacer()
                                     if option.name == track.instrument {
                                         Image(systemName: "checkmark").foregroundStyle(Color.lfbAccentText)
@@ -85,7 +85,7 @@ struct PhoneTrackSheet: View {
                                 Image(systemName: model.rewritingTrack == id ? "stop.fill" : "arrow.triangle.2.circlepath")
                                     .foregroundStyle(Color.lfbTextSecondary).frame(width: 22)
                                 VStack(alignment: .leading, spacing: 1) {
-                                    Text(model.rewritingTrack == id ? "Stop rewriting" : "Rewrite this part")
+                                    Text(model.rewritingTrack == id ? L("Stop rewriting") : L("Rewrite this part"))
                                     Text("Fits it to the other parts · about 5 s").font(.system(size: 14))
                                         .foregroundStyle(Color.lfbTextTertiary)
                                 }
@@ -113,7 +113,7 @@ struct PhoneTrackSheet: View {
         }
     }
 
-    private func row(_ symbol: String, _ title: String, detail: String? = nil, chevron: Bool = false,
+    private func row(_ symbol: String, _ title: LocalizedStringKey, detail: LocalizedStringKey? = nil, chevron: Bool = false,
                      tint: Color = .lfbText) -> some View {
         HStack(spacing: 12) {
             Image(systemName: symbol).foregroundStyle(tint == .lfbText ? Color.lfbTextSecondary : tint).frame(width: 22)
@@ -166,12 +166,12 @@ struct PhoneTrackEffectsPage: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
-    private func card(_ title: String, _ caption: String, _ symbol: String, _ amount: Binding<Double>) -> some View {
+    private func card(_ title: LocalizedStringKey, _ caption: LocalizedStringKey, _ symbol: String, _ amount: Binding<Double>) -> some View {
         EffectCard(title: title, caption: caption, symbol: symbol, amount: amount)
             .frame(height: LFBTouchSize.effectCardHeight)
     }
 
-    private func override(_ title: String, low: String, high: String, value: Binding<Double?>, song: Double) -> some View {
+    private func override(_ title: LocalizedStringKey, low: LocalizedStringKey, high: LocalizedStringKey, value: Binding<Double?>, song: Double) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Toggle(isOn: Binding(get: { value.wrappedValue == nil }, set: { value.wrappedValue = $0 ? nil : song })) {
                 Text(title).font(.lfbBodyMedium)
@@ -205,7 +205,7 @@ struct PhoneSoundSheet: View {
                 card("Warmth", "Softens the highs", "sun.max", \.warmth)
                 card("Reverb", "Room around the band", "dot.radiowaves.left.and.right", \.reverb)
                 card("Vinyl", "Hiss and crackle", "record.circle", \.vinyl)
-                Text("Drag anywhere on a card. \(model.project.style.title) defaults\(model.effectsAreAtStyleDefault ? "" : ", adjusted"). Reset returns to them.")
+                Text(model.effectsAreAtStyleDefault ? "Drag anywhere on a card. \(model.project.style.title) defaults. Reset returns to them." : "Drag anywhere on a card. \(model.project.style.title) defaults, adjusted. Reset returns to them.")
                     .font(.system(size: 13)).foregroundStyle(Color.lfbTextTertiary)
                     .padding(.horizontal, 4)
             }
@@ -216,7 +216,7 @@ struct PhoneSoundSheet: View {
         .disabled(model.displayedSnapshot == nil)
     }
 
-    private func card(_ title: String, _ caption: String, _ symbol: String, _ key: WritableKeyPath<MixEffects, Double>) -> some View {
+    private func card(_ title: LocalizedStringKey, _ caption: LocalizedStringKey, _ symbol: String, _ key: WritableKeyPath<MixEffects, Double>) -> some View {
         EffectCard(title: title, caption: caption, symbol: symbol, amount: Binding(
             get: { effects[keyPath: key] },
             set: { var e = effects; e[keyPath: key] = $0; model.setEffects(e) }))
@@ -267,7 +267,7 @@ struct PhoneVersionsSheet: View {
                             .listRowSeparator(.hidden)
                             .swipeActions(edge: .trailing) {
                                 Button { model.toggleKept(version) } label: {
-                                    Label(version.isKept ? "Unkeep" : "Keep", systemImage: version.isKept ? "star.slash" : "star")
+                                    Label(version.isKept ? L("Unkeep") : L("Keep"), systemImage: version.isKept ? "star.slash" : "star")
                                 }
                                 .tint(Color.lfbGuitar)
                             }
@@ -315,7 +315,7 @@ struct PhoneVersionsSheet: View {
             }
             .buttonStyle(.plain)
             .foregroundStyle(Color.lfbText)
-            .accessibilityLabel(isListening ? "Stop listening" : "Listen to version \(version.number)")
+            .accessibilityLabel(isListening ? L("Stop listening") : L("Listen to version \(version.number)"))
             .accessibilityIdentifier("version-play-\(version.number)")
         }
         .accessibilityElement(children: .contain)
@@ -326,7 +326,7 @@ struct PhoneVersionsSheet: View {
             : "\(dayFormatter.string(from: date)) \(timeFormatter.string(from: date))"
     }
 
-    private func badge(_ text: String, accent: Bool) -> some View {
+    private func badge(_ text: LocalizedStringKey, accent: Bool) -> some View {
         Text(text).font(.system(size: 10.5, weight: .semibold))
             .padding(.horizontal, 7).padding(.vertical, 2)
             .background(accent ? Color.lfbAccentWash : Color.lfbHairline, in: Capsule())
@@ -355,7 +355,7 @@ struct PhoneExportSheet: View {
                 .pickerStyle(.segmented)
                 Picker("Range", selection: $range) {
                     Text("Whole song · \(formatTimecode(model.duration))").tag(ProjectViewModel.ExportRange.whole)
-                    Text(model.loopRange.map { "Loop · \(formatTimecode($0.upperBound - $0.lowerBound))" } ?? "Loop")
+                    Text(model.loopRange.map { L("Loop · \(formatTimecode($0.upperBound - $0.lowerBound))") } ?? L("Loop"))
                         .tag(ProjectViewModel.ExportRange.loop)
                 }
                 .pickerStyle(.segmented)
@@ -372,8 +372,8 @@ struct PhoneExportSheet: View {
                 } else if exportedHere, let result = model.exportResult {
                     HStack(spacing: 10) {
                         Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.lfbReady)
-                        (Text("Exported ").fontWeight(.semibold)
-                         + Text("\(result.url.lastPathComponent) · \(ByteCountFormatter.string(fromByteCount: result.bytes, countStyle: .file))")
+                        (Text("Exported").fontWeight(.semibold) + Text(verbatim: " ")
+                         + Text(verbatim: "\(result.url.lastPathComponent) · \(ByteCountFormatter.string(fromByteCount: result.bytes, countStyle: .file))")
                             .foregroundStyle(Color.lfbTextSecondary))
                             .font(.system(size: 14))
                     }
@@ -420,7 +420,7 @@ struct PhoneLogSheet: View {
         if case .offline(let reason?) = model.status { parts.append(reason) }
         let log = model.generator.fullLog
         if !log.isEmpty { parts.append(log) }
-        return parts.isEmpty ? "No output yet." : parts.joined(separator: "\n\n")
+        return parts.isEmpty ? L("No output yet.") : parts.joined(separator: "\n\n")
     }
 
     var body: some View {

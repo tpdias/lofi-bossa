@@ -34,7 +34,7 @@ struct DuoPanelPage: View {
     var body: some View {
         VStack(spacing: 10) {
             Picker("Panel", selection: panel) {
-                ForEach(DuoPanel.allCases) { Text($0.rawValue).tag($0) }
+                ForEach(DuoPanel.allCases) { Text(LocalizedStringKey($0.rawValue)).tag($0) }
             }
             .pickerStyle(.segmented)
             .controlSize(.large)
@@ -64,7 +64,7 @@ struct DuoSoundPane: View {
             VStack(spacing: 10) {
                 DuoEffectCards(model: model, layout: .stacked)
                 HStack {
-                    Text("\(model.project.style.title) defaults\(model.effectsAreAtStyleDefault ? "" : ", adjusted")")
+                    Text(model.effectsAreAtStyleDefault ? "\(model.project.style.title) defaults" : "\(model.project.style.title) defaults, adjusted")
                         .font(.system(size: 13)).foregroundStyle(Color.lfbTextSecondary)
                     Spacer()
                     Button("Reset", action: model.resetEffectsToStyleDefault)
@@ -91,7 +91,7 @@ struct DuoEffectCards: View {
 
     private var effects: MixEffects { model.displayedSnapshot?.effects ?? model.project.style.defaultEffects }
 
-    private var items: [(title: String, caption: String, symbol: String, value: Binding<Double>)] {
+    private var items: [(title: LocalizedStringKey, caption: LocalizedStringKey, symbol: String, value: Binding<Double>)] {
         let e = effects
         return [
             ("Warmth", "Softens the highs", "sun.max",
@@ -107,13 +107,13 @@ struct DuoEffectCards: View {
         switch layout {
         case .stacked:
             VStack(spacing: 10) {
-                ForEach(items, id: \.title) { item in
+                ForEach(items, id: \.symbol) { item in
                     EffectCard(title: item.title, caption: item.caption, symbol: item.symbol, amount: item.value)
                 }
             }
         case .tall:
             HStack(spacing: 8) {
-                ForEach(items, id: \.title) { item in
+                ForEach(items, id: \.symbol) { item in
                     DuoTallEffectCard(title: item.title, symbol: item.symbol, amount: item.value)
                 }
             }
@@ -124,7 +124,7 @@ struct DuoEffectCards: View {
 /// Tabletop effect card: the same whole-card slider as `EffectCard`, 112 pt tall with the icon,
 /// name and value stacked (`.macro` at height 112, column layout).
 struct DuoTallEffectCard: View {
-    let title: String
+    let title: LocalizedStringKey
     let symbol: String
     @Binding var amount: Double
 
@@ -191,7 +191,7 @@ struct DuoVersionsPane: View {
                             .listRowBackground(Color.clear)
                             .swipeActions(edge: .trailing) {
                                 Button { model.toggleKept(version) } label: {
-                                    Label(version.isKept ? "Unkeep" : "Keep", systemImage: version.isKept ? "star.slash" : "star")
+                                    Label(version.isKept ? L("Unkeep") : L("Keep"), systemImage: version.isKept ? "star.slash" : "star")
                                 }
                                 .tint(Color.lfbCaution)
                             }
@@ -234,13 +234,13 @@ struct DuoVersionsPane: View {
                     .background(Color.lfbAccentWash, in: Circle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(isListening ? "Stop listening" : "Listen to version \(version.number)")
+            .accessibilityLabel(isListening ? L("Stop listening") : L("Listen to version \(version.number)"))
         }
         .padding(.leading, 8).padding(.trailing, 4).padding(.vertical, 5)
         .background(isListening ? Color.lfbAccentWash : .clear, in: RoundedRectangle(cornerRadius: 8))
     }
 
-    private func badge(_ text: String, tint: Color) -> some View {
+    private func badge(_ text: LocalizedStringKey, tint: Color) -> some View {
         Text(text).font(.system(size: 11, weight: .semibold))
             .padding(.horizontal, 7).padding(.vertical, 2)
             .background(tint.opacity(0.14), in: Capsule())

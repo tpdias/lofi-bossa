@@ -37,7 +37,7 @@ struct MusicSettingsSection: View {
                     Text("\(Int(bpm)) BPM").monospacedDigit().frame(minWidth: 64, alignment: .trailing)
                 }
             } else {
-                Text(model.displayedTempo.map { "Detected \(Int($0.rounded())) BPM" } ?? "Detected from the song")
+                Text(model.displayedTempo.map { L("Detected \(Int($0.rounded())) BPM") } ?? L("Detected from the song"))
                     .font(.lfbCaption).foregroundStyle(Color.lfbTextSecondary)
             }
             labeled("Groove", low: "Loose", high: "Tight", id: "groove",
@@ -51,7 +51,7 @@ struct MusicSettingsSection: View {
         }
     }
 
-    private func labeled(_ title: String, low: String, high: String, id: String, value: Binding<Double>) -> some View {
+    private func labeled(_ title: LocalizedStringKey, low: LocalizedStringKey, high: LocalizedStringKey, id: String, value: Binding<Double>) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title).font(.lfbBodyMedium)
             HStack(spacing: LFBSpace.sm) {
@@ -67,7 +67,7 @@ struct MusicSettingsSection: View {
 extension ProjectViewModel {
     /// "A minor · 90" for the song settings button: the key (or Auto) and the tempo, if known.
     var musicSummary: String {
-        let key = displayedKey ?? "Auto"
+        let key = displayedKey.map { MusicKey.display($0) } ?? L("Auto")
         return displayedTempo.map { "\(key) · \(Int($0.rounded()))" } ?? key
     }
 }

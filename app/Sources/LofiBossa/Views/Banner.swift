@@ -131,7 +131,7 @@ struct GenerationErrorBanner: View {
                 HStack(spacing: 12) {
                     Button("Try Again", action: onRetry).buttonStyle(LFBPrimaryButtonStyle()).controlSize(.small)
                     if detail != nil {
-                        Button(showDetail ? "Hide Details" : "Details") { showDetail.toggle() }
+                        Button(showDetail ? L("Hide Details") : L("Details")) { showDetail.toggle() }
                             .buttonStyle(.plain).controlSize(.small)
                             .font(.lfbCaption).foregroundStyle(Color.lfbAccentText)
                     }

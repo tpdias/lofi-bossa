@@ -10,6 +10,10 @@
 		B10000000000000000000013 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000012 /* Assets.xcassets */; };
 		A10000000000000000000013 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000012 /* Assets.xcassets */; };
 		B10000000000000000000015 /* GeneralUser-GS.sf2 in Resources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000014 /* GeneralUser-GS.sf2 */; };
+		B10000000000000000000021 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000020 /* Localizable.xcstrings */; };
+		A10000000000000000000021 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000020 /* Localizable.xcstrings */; };
+		B10000000000000000000023 /* InfoPlist.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000022 /* InfoPlist.xcstrings */; };
+		A10000000000000000000023 /* InfoPlist.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000022 /* InfoPlist.xcstrings */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -38,6 +42,8 @@
 		A20000000000000000000001 /* LofiBossaUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LofiBossaUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A77F873430AF3ACF002CF23A /* LofiBossaTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LofiBossaTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		B10000000000000000000014 /* GeneralUser-GS.sf2 */ = {isa = PBXFileReference; lastKnownFileType = file; name = "GeneralUser-GS.sf2"; path = "SoundBank/GeneralUser-GS.sf2"; sourceTree = "<group>"; };
+		A10000000000000000000020 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
+		A10000000000000000000022 /* InfoPlist.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = InfoPlist.xcstrings; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -99,6 +105,8 @@
 				A1000000000000000000000D /* Info.plist */,
 				B1000000000000000000000D /* Info-iOS.plist */,
 				A10000000000000000000012 /* Assets.xcassets */,
+				A10000000000000000000020 /* Localizable.xcstrings */,
+				A10000000000000000000022 /* InfoPlist.xcstrings */,
 				B10000000000000000000014 /* GeneralUser-GS.sf2 */,
 				A77F873530AF3ACF002CF23A /* LofiBossaTests */,
 				A10000000000000000000005 /* Products */,
@@ -235,6 +243,12 @@
 			knownRegions = (
 				en,
 				Base,
+				de,
+				fr,
+				it,
+				"zh-Hans",
+				"pt-BR",
+				es,
 			);
 			mainGroup = A10000000000000000000004;
 			minimizedProjectReferenceProxies = 1;
@@ -257,6 +271,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				B10000000000000000000013 /* Assets.xcassets in Resources */,
+				B10000000000000000000021 /* Localizable.xcstrings in Resources */,
+				B10000000000000000000023 /* InfoPlist.xcstrings in Resources */,
 				B10000000000000000000015 /* GeneralUser-GS.sf2 in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -266,6 +282,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				A10000000000000000000013 /* Assets.xcassets in Resources */,
+				A10000000000000000000021 /* Localizable.xcstrings in Resources */,
+				A10000000000000000000023 /* InfoPlist.xcstrings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

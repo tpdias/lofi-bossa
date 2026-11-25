@@ -13,9 +13,20 @@ enum TrackID: String, CaseIterable, Codable, Identifiable, Hashable {
 
     var title: String {
         switch self {
-        case .keys: "Keys & Pads"
-        default: rawValue.capitalized
+        case .piano: String(localized: "Piano")
+        case .guitar: String(localized: "Guitar")
+        case .bass: String(localized: "Bass")
+        case .drums: String(localized: "Drums")
+        case .keys: String(localized: "Keys & Pads")
+        case .lead: String(localized: "Lead")
+        case .vibes: String(localized: "Vibes")
         }
+    }
+
+    /// The name inside a sentence ("Rewrote guitar"): lowercase, except in German where nouns keep
+    /// their capital.
+    var inlineTitle: String {
+        Locale.current.language.languageCode?.identifier == "de" ? title : title.lowercased(with: .current)
     }
 
     /// Fill color for notes, tiles, sliders.
@@ -102,6 +113,7 @@ struct InstrumentOption: Hashable {
 enum MusicStyle: String, CaseIterable, Codable, Identifiable {
     case lofi, bossa
     var id: String { rawValue }
+    // Style names are proper names and stay as they are in every language.
     var title: String { self == .lofi ? "Lo-Fi" : "Bossa Nova" }
 
     /// Sound design that goes with the style: instrument per track and effect amounts,
@@ -142,7 +154,7 @@ enum NoteModel: String, CaseIterable, Codable, Identifiable {
     case pretrained, fineTuned
 
     var id: String { rawValue }
-    var title: String { self == .pretrained ? "Pretrained" : "Fine-tuned" }
+    var title: String { self == .pretrained ? String(localized: "Pretrained") : String(localized: "Fine-tuned") }
 
     /// Raw value the local generator's `model` query parameter expects.
     var apiValue: String { self == .pretrained ? "pretrained" : "finetuned" }
@@ -192,10 +204,35 @@ struct MusicSettings: Equatable {
 /// The 24 major/minor keys the server can keep new notes in (training/tracks.py `KEYS`, same
 /// names and order); `Project.key == nil` means "Auto" (detect it instead of naming one).
 enum MusicKey {
+    /// Stable English identifiers: stored in projects and sent to the server. Show a key to
+    /// people with `display(_:)`.
     static let names: [String] = {
         let notes = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
         return notes.flatMap { ["\($0) major", "\($0) minor"] }
     }()
+
+    /// "A minor" in the reader's language and note naming: "La menor", "A-Moll", "A小调".
+    static func display(_ name: String, locale: Locale = .current) -> String {
+        let parts = name.split(separator: " ")
+        guard parts.count == 2, let pc = NoteName.letters.firstIndex(of: String(parts[0])) else { return name }
+        let tonic = NoteName.localized(pitchClass: pc, locale: locale)
+        switch (parts[1], NoteName.family(for: locale)) {
+        case ("major", .german): return "\(tonic)-Dur"
+        case ("minor", .german): return "\(tonic)-Moll"
+        case ("major", .solfege) where locale.language.languageCode?.identifier == "fr": return "\(tonic) majeur"
+        case ("minor", .solfege) where locale.language.languageCode?.identifier == "fr": return "\(tonic) mineur"
+        case ("major", .solfege) where locale.language.languageCode?.identifier == "it": return "\(tonic) maggiore"
+        case ("minor", .solfege) where locale.language.languageCode?.identifier == "it": return "\(tonic) minore"
+        case ("major", .solfege) where locale.language.languageCode?.identifier == "pt": return "\(tonic) maior"
+        case ("minor", .solfege) where locale.language.languageCode?.identifier == "pt": return "\(tonic) menor"
+        case ("major", .solfege): return "\(tonic) mayor"
+        case ("minor", .solfege): return "\(tonic) menor"
+        case ("major", .letters) where locale.language.languageCode?.identifier == "zh": return "\(tonic)大调"
+        case ("minor", .letters) where locale.language.languageCode?.identifier == "zh": return "\(tonic)小调"
+        case ("major", .letters): return "\(tonic) major"
+        default: return "\(tonic) minor"
+        }
+    }
 }
 
 // MARK: - Music data (seconds, not bars; a grid can be layered on later)
@@ -292,18 +329,18 @@ enum VersionKind: Codable, Hashable {
 
     var title: String {
         switch self {
-        case .newTake(let seed): "New take · seed \(seed)"
-        case .rewrite(let track): "Rewrote \(track.rawValue)"
-        case .noteEdit(let track): "Edited \(track.rawValue) notes"
-        case .restore(let n): "Restored version \(n)"
+        case .newTake(let seed): String(localized: "New take · seed \(seed)")
+        case .rewrite(let track): String(localized: "Rewrote \(track.inlineTitle)")
+        case .noteEdit(let track): String(localized: "Edited \(track.inlineTitle) notes")
+        case .restore(let n): String(localized: "Restored version \(n)")
         case .sectionEdit(_, let title): title
         case .rewriteSection(let track, let start, let end):
-            "Rewrote \(track.rawValue) \(formatTimecode(start))–\(formatTimecode(end))"
-        case .addTrack(let track): "Added \(track.title)"
-        case .removeTrack(let track): "Removed \(track.title)"
+            String(localized: "Rewrote \(track.inlineTitle) \(formatTimecode(start))–\(formatTimecode(end))")
+        case .addTrack(let track): String(localized: "Added \(track.title)")
+        case .removeTrack(let track): String(localized: "Removed \(track.title)")
         case .takeAroundLocked(let seed, let kept):
-            "New take around \(kept.map(\.title).joined(separator: ", ")) · seed \(seed)"
-        case .extend(let to): "Extended to \(formatTimecode(to))"
+            String(localized: "New take around \(kept.map(\.inlineTitle).joined(separator: ", ")) · seed \(seed)")
+        case .extend(let to): String(localized: "Extended to \(formatTimecode(to))")
         }
     }
 }
@@ -422,6 +459,7 @@ struct Project: Identifiable, Codable, Hashable {
 }
 
 func formatTimecode(_ seconds: Double) -> String {
+    // Clock digits read the same in every language (0:00); the arithmetic stays locale-free.
     let total = max(Int(seconds.rounded()), 0)
     return String(format: "%d:%02d", total / 60, total % 60)
 }

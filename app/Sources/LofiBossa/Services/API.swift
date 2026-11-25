@@ -150,11 +150,11 @@ struct API {
         do {
             (data, response) = try await Self.session.data(for: request)
         } catch let error as URLError where error.code == .cannotConnectToHost || error.code == .networkConnectionLost {
-            throw ServerError(message: "The generator isn't running.")
+            throw ServerError(message: L("The generator isn't running."))
         }
         guard (response as? HTTPURLResponse)?.statusCode == 200 else {
             let detail = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["detail"]
-            throw ServerError(message: "\(detail ?? "The generator returned an error.")")
+            throw ServerError(message: (detail as? String) ?? L("The generator returned an error."))
         }
         return try JSONDecoder().decode(WireSong.self, from: data)
     }

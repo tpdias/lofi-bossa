@@ -88,7 +88,7 @@ struct TrackEffectsPopover: View {
 
     private var panLabel: String {
         let percent = Int((abs(effects.pan) * 100).rounded())
-        if percent == 0 { return "Center" }
-        return effects.pan < 0 ? "Left \(percent)" : "Right \(percent)"
+        if percent == 0 { return L("Center") }
+        return effects.pan < 0 ? L("Left \(percent)") : L("Right \(percent)")
     }
 }
