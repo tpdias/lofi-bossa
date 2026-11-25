@@ -40,7 +40,7 @@ struct ExportSheetView: View {
                 Text("Range").font(.lfbBodyMedium)
                 Picker("Range", selection: $range) {
                     ForEach(ProjectViewModel.ExportRange.allCases) { r in
-                        Text(r.rawValue).tag(r).disabled(!model.canExport(range: r))
+                        Text(LocalizedStringKey(r.rawValue)).tag(r).disabled(!model.canExport(range: r))
                     }
                 }
                 .pickerStyle(.segmented).labelsHidden()

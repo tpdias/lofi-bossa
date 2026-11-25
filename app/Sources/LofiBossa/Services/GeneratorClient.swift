@@ -8,9 +8,9 @@ enum GeneratorStatus: Equatable {
 
     var label: String {
         switch self {
-        case .ready: "Generator ready"
-        case .starting: "Generator starting…"
-        case .offline: "Generator offline"
+        case .ready: L("Generator ready")
+        case .starting: L("Generator starting…")
+        case .offline: L("Generator offline")
         }
     }
 }

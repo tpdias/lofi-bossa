@@ -77,7 +77,7 @@ struct PhoneKeyStyle: ButtonStyle {
 
 /// Sheet header (`.m-sh`): title, optional trailing content, close button.
 struct PhoneSheetHeader<Trailing: View>: View {
-    let title: String
+    let title: LocalizedStringKey
     var leading: AnyView? = nil
     @ViewBuilder var trailing: Trailing
     @Environment(\.dismiss) private var dismiss
@@ -103,7 +103,7 @@ struct PhoneSheetHeader<Trailing: View>: View {
 }
 
 extension PhoneSheetHeader where Trailing == EmptyView {
-    init(title: String, leading: AnyView? = nil) {
+    init(title: LocalizedStringKey, leading: AnyView? = nil) {
         self.init(title: title, leading: leading) { EmptyView() }
     }
 }

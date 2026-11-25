@@ -58,8 +58,8 @@ struct PadTrackRow: View {
         .overlay(alignment: .bottom) { Divider() }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("\(track.id.title) track")
-        .accessibilityAction(named: track.isMuted ? "Unmute" : "Mute") { track.isMuted.toggle() }
-        .accessibilityAction(named: track.isSoloed ? "Unsolo" : "Solo") { track.isSoloed.toggle() }
+        .accessibilityAction(named: track.isMuted ? L("Unmute") : L("Mute")) { track.isMuted.toggle() }
+        .accessibilityAction(named: track.isSoloed ? L("Unsolo") : L("Solo")) { track.isSoloed.toggle() }
         .accessibilityAction(named: "Edit Notes", onSelect)
         .accessibilityAction(named: "Rewrite") { if !isGeneratorBusy { onRewrite() } }
     }
@@ -79,14 +79,14 @@ struct PadTrackRow: View {
                     Image(systemName: track.isLocked ? "lock.fill" : "lock.open").font(.system(size: 13, weight: .semibold))
                 }
                 .buttonStyle(PadKeyStyle(isOn: track.isLocked, onFill: track.id.color, onText: .lfbWindow))
-                .accessibilityLabel("Lock").accessibilityValue(track.isLocked ? "On" : "Off")
+                .accessibilityLabel("Lock").accessibilityValue(track.isLocked ? L("On") : L("Off"))
                 .accessibilityHint("A locked track stays as it is on the next Generate")
                 Button("M") { track.isMuted.toggle() }
                     .buttonStyle(PadKeyStyle(isOn: track.isMuted, onFill: .lfbText, onText: .lfbWindow))
-                    .accessibilityLabel("Mute").accessibilityValue(track.isMuted ? "On" : "Off")
+                    .accessibilityLabel("Mute").accessibilityValue(track.isMuted ? L("On") : L("Off"))
                 Button("S") { track.isSoloed.toggle() }
                     .buttonStyle(PadKeyStyle(isOn: track.isSoloed, onFill: .lfbAccent, onText: .lfbOnAccent))
-                    .accessibilityLabel("Solo").accessibilityValue(track.isSoloed ? "On" : "Off")
+                    .accessibilityLabel("Solo").accessibilityValue(track.isSoloed ? L("On") : L("Off"))
             }
             .frame(height: 32)
             if !compact {
@@ -135,11 +135,11 @@ struct PadTrackRow: View {
     private var instrumentMenu: some View {
         Menu {
             Picker("Instrument", selection: $track.instrument) {
-                ForEach(track.id.instruments, id: \.name) { Text($0.name).tag($0.name) }
+                ForEach(track.id.instruments, id: \.name) { Text(localizedName($0.name)).tag($0.name) }
             }
         } label: {
             HStack(spacing: 4) {
-                Text(track.instrument).lineLimit(1).truncationMode(.tail)
+                Text(localizedName(track.instrument)).lineLimit(1).truncationMode(.tail)
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.up.chevron.down").font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(Color.lfbTextSecondary)
@@ -160,7 +160,7 @@ struct PadTrackRow: View {
         Button { onRewrite() } label: { Label("Rewrite \(track.id.title)", systemImage: "arrow.triangle.2.circlepath") }
             .disabled(isGeneratorBusy)
         Button { track.isLocked.toggle() } label: {
-            Label(track.isLocked ? "Unlock" : "Lock", systemImage: track.isLocked ? "lock.open" : "lock")
+            Label(track.isLocked ? L("Unlock") : L("Lock"), systemImage: track.isLocked ? "lock.open" : "lock")
         }
         if let onRemove {
             Divider()
@@ -182,7 +182,7 @@ struct PadTrackRow: View {
                     rangeRewriteOverlay(range)
                 } else {
                     SweepView(color: track.id.color)
-                    RewritePill(text: "Rewriting the \(track.id.rawValue) to fit the other three…", action: onCancelRewrite)
+                    RewritePill(text: "Rewriting this track to fit the other three…", action: onCancelRewrite)
                 }
             }
             if isEmpty { EmptyLane(trackName: track.id.rawValue, action: onRewrite) }

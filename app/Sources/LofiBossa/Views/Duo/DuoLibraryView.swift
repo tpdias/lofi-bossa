@@ -153,9 +153,9 @@ struct DuoLibraryView: View {
 
     private func meta(_ p: Project) -> String {
         var parts = [p.style.title, formatTimecode(p.lengthSeconds)]
-        if let seed = p.current?.snapshot.seed { parts.append("seed \(seed)") }
-        parts.append(p.versions.count == 1 ? "1 version" : "\(p.versions.count) versions")
-        parts.append("edited \(p.modifiedAt.formatted(.relative(presentation: .named)))")
+        if let seed = p.current?.snapshot.seed { parts.append(L("seed \(seed)")) }
+        parts.append(L("\(p.versions.count) versions"))
+        parts.append(L("edited \(p.modifiedAt.formatted(.relative(presentation: .named)))"))
         return parts.joined(separator: " · ")
     }
 }

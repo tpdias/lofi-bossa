@@ -50,7 +50,7 @@ struct PhonePianoRollView: View {
     private static let lowPitch = 21, highPitch = 108
     private static let blackKeys: Set<Int> = [1, 3, 6, 8, 10]
     private static let snapOptions: [Double] = [0, 0.1, 0.25, 0.5, 1]
-    private static let snapLabels: [Double: String] = [0: "Off", 0.1: "0.1 s", 0.25: "0.25 s", 0.5: "0.5 s", 1: "1 s"]
+    private static let snapLabels: [Double: String] = [0: L("Off"), 0.1: "0.1 s", 0.25: "0.25 s", 0.5: "0.5 s", 1: "1 s"]
 
     private var isLandscape: Bool { verticalSizeClass == .compact }
     private var rowH: CGFloat { isLandscape ? LFBPhoneSize.pianoRowHeightLandscape : LFBPhoneSize.pianoRowHeight }
@@ -149,7 +149,7 @@ struct PhonePianoRollView: View {
             }
         } label: {
             HStack(spacing: 5) {
-                Text(isLandscape ? (Self.snapLabels[snap] ?? "") : "Snap \(Self.snapLabels[snap] ?? "")")
+                Text(isLandscape ? (Self.snapLabels[snap] ?? "") : L("Snap \(Self.snapLabels[snap] ?? "")"))
                 Image(systemName: "chevron.down").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.lfbTextTertiary)
             }
         }
@@ -159,7 +159,7 @@ struct PhonePianoRollView: View {
     }
 
     private var otherPartsChip: some View {
-        Button(isLandscape ? "Other parts" : "Show other parts") { showOtherParts.toggle() }
+        Button(isLandscape ? L("Other parts") : L("Show other parts")) { showOtherParts.toggle() }
             .buttonStyle(PhoneChipStyle(isOn: showOtherParts))
             .fixedSize()
             .accessibilityAddTraits(showOtherParts ? .isSelected : [])
@@ -169,12 +169,12 @@ struct PhonePianoRollView: View {
         Button(action: model.undoNoteEdit) { Image(systemName: "arrow.uturn.backward").font(.system(size: 19)).frame(width: 44, height: 44) }
             .disabled(!model.canUndoNoteEdit)
             .foregroundStyle(model.canUndoNoteEdit ? Color.lfbAccentText : Color.lfbTextTertiary)
-            .accessibilityLabel(model.noteUndoTitle.map { "Undo \($0)" } ?? "Undo note edit")
+            .accessibilityLabel(model.noteUndoTitle.map { L("Undo \($0)") } ?? L("Undo note edit"))
             .accessibilityIdentifier("roll-undo")
     }
 
     @ViewBuilder private var selectionControls: some View {
-        Text(selected.isEmpty ? (isLandscape ? "" : "Tap a note to select it") : "\(selected.count) selected\(isLandscape ? "" : " · Loudness")")
+        Text(selected.isEmpty ? (isLandscape ? "" : L("Tap a note to select it")) : (isLandscape ? L("\(selected.count) selected") : L("\(selected.count) selected · Loudness")))
             .font(.system(size: 13)).foregroundStyle(Color.lfbTextSecondary).lineLimit(1).fixedSize()
         if !selected.isEmpty {
             Slider(value: loudnessBinding, in: 1...127) { editing in
@@ -211,7 +211,7 @@ struct PhonePianoRollView: View {
                 .background(Color.lfbText, in: Circle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(model.isPlaying ? "Pause" : "Play")
+        .accessibilityLabel(model.isPlaying ? L("Pause") : L("Play"))
     }
 
     private var loudnessBinding: Binding<Double> {
@@ -287,7 +287,7 @@ struct PhonePianoRollView: View {
                 if Self.blackKeys.contains(p % 12) { ctx.fill(Path(r), with: .color(Color.lfbHairline)) }
                 ctx.fill(Path(CGRect(x: 0, y: top + rowH - 0.5, width: size.width, height: 0.5)), with: .color(Color.lfbHairline))
                 if p % 12 == 0 {
-                    ctx.draw(Text("C\(p / 12 - 1)").font(.system(size: 10)).foregroundStyle(Color.lfbTextTertiary),
+                    ctx.draw(Text(verbatim: NoteName.localized(pitch: p)).font(.system(size: 10)).foregroundStyle(Color.lfbTextTertiary),
                              at: CGPoint(x: size.width - 4, y: top + rowH / 2), anchor: .trailing)
                 }
             }
@@ -359,14 +359,14 @@ struct PhonePianoRollView: View {
         .gesture(gridTouch)
         .simultaneousGesture(pinch)
         .accessibilityElement()
-        .accessibilityLabel("\(track.title) notes, \(notes.count) notes")
-        .accessibilityValue(selected.isEmpty ? "None selected" : "\(selected.count) selected")
+        .accessibilityLabel(track.title + ", " + L("\(notes.count) notes"))
+        .accessibilityValue(selected.isEmpty ? L("None selected") : L("\(selected.count) selected"))
         .accessibilityHint("Swipe up or down to move the selected notes by a semitone")
         .accessibilityAdjustableAction { direction in
             transposeSelection(by: direction == .increment ? 1 : -1)
         }
-        .accessibilityAction(named: "Select all") { model.selectedNoteIDs = Set(notes.map(\.id)) }
-        .accessibilityAction(named: "Delete selected") { deleteSelection() }
+        .accessibilityAction(named: Text("Select all")) { model.selectedNoteIDs = Set(notes.map(\.id)) }
+        .accessibilityAction(named: Text("Delete selected")) { deleteSelection() }
         .accessibilityIdentifier("roll-grid")
     }
 

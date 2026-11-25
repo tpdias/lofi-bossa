@@ -26,10 +26,10 @@ struct AppCommands: Commands {
         // through the window's UndoManager), and through versions otherwise. Inside a text field
         // (rename, seed) they must still undo typing, so they pass the key on to the text system there.
         CommandGroup(replacing: .undoRedo) {
-            Button(model?.undoTitle.map { "Undo \($0)" } ?? "Undo") { undo() }
+            Button(model?.undoTitle.map { L("Undo \($0)") } ?? L("Undo")) { undo() }
                 .keyboardShortcut("z")
                 .disabled(!inTextField && model?.canUndo != true)
-            Button(model?.redoTitle.map { "Redo \($0)" } ?? "Redo") { redo() }
+            Button(model?.redoTitle.map { L("Redo \($0)") } ?? L("Redo")) { redo() }
                 .keyboardShortcut("z", modifiers: [.command, .shift])
                 .disabled(!inTextField && model?.canRedo != true)
         }
@@ -45,7 +45,7 @@ struct AppCommands: Commands {
         }
 
         CommandMenu("Transport") {
-            Button(model?.isPlaying == true ? "Pause" : "Play") { model?.togglePlay() }
+            Button(model?.isPlaying == true ? L("Pause") : L("Play")) { model?.togglePlay() }
                 .disabled(model?.displayedSnapshot == nil)
             Button("Go to Start") { model?.seek(to: 0) }
                 .keyboardShortcut(.leftArrow, modifiers: [.command, .option])
@@ -102,7 +102,7 @@ struct AppCommands: Commands {
             Button("Zoom Out") { zoom(.out) }
                 .keyboardShortcut("-", modifiers: .command)
                 .disabled(!canZoom(.out))
-            Button(model?.isPianoRollOpen == true ? "Show Whole Song in Roll" : "Show Whole Song") { zoom(.fit) }
+            Button(model?.isPianoRollOpen == true ? L("Show Whole Song in Roll") : L("Show Whole Song")) { zoom(.fit) }
                 .keyboardShortcut("0", modifiers: .command)
                 .disabled(!canZoom(.fit))
         }
@@ -149,8 +149,8 @@ struct AppCommands: Commands {
 /// What the Keyboard Shortcuts sheet lists. Menu items are above; the rest are keys the window
 /// handles itself (they only work when the thing they act on has focus).
 enum KeyboardShortcuts {
-    struct Item: Identifiable { let id = UUID(); let keys: String; let what: String }
-    struct Group: Identifiable { let id = UUID(); let title: String; let items: [Item] }
+    struct Item: Identifiable { let id = UUID(); let keys: LocalizedStringKey; let what: LocalizedStringKey }
+    struct Group: Identifiable { let id = UUID(); let title: LocalizedStringKey; let items: [Item] }
 
     static let groups: [Group] = [
         Group(title: "Song", items: [

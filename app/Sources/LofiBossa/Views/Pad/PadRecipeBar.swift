@@ -104,15 +104,15 @@ struct PadRecipeBar: View {
         .buttonStyle(.borderedProminent)
         .keyboardShortcut(.return, modifiers: .command)
         .disabled(model.isGeneratorBusy || isWaitingForGenerator || !model.canGenerate)
-        .accessibilityHint(model.lockedTracks.isEmpty ? "Write a new take of every track"
-                           : "Write a new take around the locked tracks")
+        .accessibilityHint(model.lockedTracks.isEmpty ? L("Write a new take of every track")
+                           : L("Write a new take around the locked tracks"))
         .accessibilityIdentifier("generate")
     }
 
     private var generateTitle: String {
-        if model.isGenerating { return "Generating…" }
-        if isStarting { return "Waiting for generator…" }
-        return model.project.hasGenerated ? "Generate New Take" : "Generate"
+        if model.isGenerating { return L("Generating…") }
+        if isStarting { return L("Waiting for generator…") }
+        return model.project.hasGenerated ? L("Generate New Take") : L("Generate")
     }
 
     private var isStarting: Bool { if case .starting = model.status { true } else { false } }
@@ -130,12 +130,12 @@ private struct PadSongSettings: View {
                 Text("Key")
                 Spacer()
                 if model.project.key == nil, let detected = model.displayedKey {
-                    Text(detected).foregroundStyle(Color.lfbTextSecondary)
+                    Text(verbatim: MusicKey.display(detected)).foregroundStyle(Color.lfbTextSecondary)
                 }
                 Picker("Key", selection: Binding(get: { model.project.key ?? "Auto" },
                                                  set: { model.setKey($0 == "Auto" ? nil : $0) })) {
                     Text("Auto").tag("Auto")
-                    ForEach(MusicKey.names, id: \.self) { Text($0).tag($0) }
+                    ForEach(MusicKey.names, id: \.self) { Text(verbatim: MusicKey.display($0)).tag($0) }
                 }
                 .labelsHidden()
             }
@@ -181,7 +181,7 @@ private struct PadSeedField: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Random seed every time")
-            .accessibilityValue(model.isDiceOn ? "On" : "Off")
+            .accessibilityValue(model.isDiceOn ? L("On") : L("Off"))
 
             TextField("Random", text: Binding(
                 get: { focused ? text : (model.displaySeed.map(String.init) ?? "") },

@@ -7,7 +7,7 @@ struct InspectorView: View {
     var body: some View {
         VStack(spacing: 0) {
             Picker("", selection: $model.inspectorTab) {
-                ForEach(InspectorTab.allCases) { Text($0.rawValue).tag($0) }
+                ForEach(InspectorTab.allCases) { Text(LocalizedStringKey($0.rawValue)).tag($0) }
             }
             .pickerStyle(.segmented).labelsHidden()
             .padding(LFBSpace.md)
@@ -41,7 +41,7 @@ private struct SoundTab: View {
                           amount: Binding(get: { effects.vinyl }, set: { model.setEffects(MixEffects(warmth: effects.warmth, reverb: effects.reverb, vinyl: $0)) }))
 
                 HStack {
-                    Text("\(model.project.style.title) defaults\(model.effectsAreAtStyleDefault ? "" : ", adjusted")")
+                    Text(model.effectsAreAtStyleDefault ? "\(model.project.style.title) defaults" : "\(model.project.style.title) defaults, adjusted")
                         .font(.lfbCaption).foregroundStyle(Color.lfbTextSecondary)
                     Spacer()
                     if !model.effectsAreAtStyleDefault {
@@ -151,7 +151,7 @@ private struct VersionRow: View {
 }
 
 private struct Badge: View {
-    let text: String
+    let text: LocalizedStringKey
     let tint: Color
     var body: some View {
         Text(text).font(.system(size: 9, weight: .bold))
