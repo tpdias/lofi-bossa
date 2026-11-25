@@ -343,13 +343,14 @@ struct PhoneExportSheet: View {
     @State private var range: ProjectViewModel.ExportRange = .whole
     @State private var exportedHere = false
     @State private var savingToFiles = false
+    @State private var showVideo = false
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 PhoneSheetHeader(title: "Export")
                 Picker("Format", selection: $format) {
-                    ForEach([ProjectViewModel.ExportFormat.wav, .m4a, .midi]) { Text($0.rawValue).tag($0) }
+                    ForEach([ProjectViewModel.ExportFormat.wav, .m4a, .midi, .stems]) { Text($0.rawValue).tag($0) }
                 }
                 .pickerStyle(.segmented)
                 Picker("Range", selection: $range) {
@@ -360,6 +361,8 @@ struct PhoneExportSheet: View {
                 .pickerStyle(.segmented)
                 .disabled(model.loopRange == nil)
                 Text(format.note).font(.system(size: 13)).foregroundStyle(Color.lfbTextTertiary).padding(.horizontal, 4)
+                ExportOptionsSection(model: model, format: format)
+                Button("Video soundtrack…") { showVideo = true }
 
                 if model.isExporting {
                     VStack(alignment: .leading, spacing: 8) {
@@ -399,6 +402,7 @@ struct PhoneExportSheet: View {
         .scrollBounceBehavior(.basedOnSize)
         .onChange(of: format) { exportedHere = false }
         .onChange(of: range) { exportedHere = false }
+        .sheet(isPresented: $showVideo) { VideoSoundtrackSheet(model: model) }
     }
 }
 

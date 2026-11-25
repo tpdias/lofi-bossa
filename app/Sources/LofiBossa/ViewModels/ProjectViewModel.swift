@@ -926,10 +926,11 @@ final class ProjectViewModel {
     // MARK: Export
 
     enum ExportFormat: String, CaseIterable, Identifiable {
-        case m4a = "M4A", wav = "WAV", midi = "MIDI"
+        case m4a = "M4A", wav = "WAV", midi = "MIDI", stems = "Stems"
         var id: String { rawValue }
         var type: UTType {
             switch self {
+            case .stems: .zip
             case .wav: .wav
             case .m4a: .mpeg4Audio
             case .midi: .midi
@@ -940,6 +941,7 @@ final class ProjectViewModel {
             case .m4a: "Compressed audio, smaller file. The mix and effects exactly as heard."
             case .wav: "Uncompressed audio, larger file. The mix and effects exactly as heard."
             case .midi: "Notes only. Effects and instruments are not included."
+            case .stems: "A ZIP with one WAV per track, plus the MIDI. For mixing in an editor."
             }
         }
     }
@@ -948,6 +950,8 @@ final class ProjectViewModel {
         var id: String { rawValue }
     }
 
+    /// Fades and loop folding, set in the export sheets (see ExportOptionsSection).
+    var exportOptions = ExportOptions()
     private(set) var isExporting = false
     private(set) var exportProgress: Double = 0
     private(set) var exportResult: (url: URL, seconds: Double, bytes: Int64)?
@@ -959,7 +963,7 @@ final class ProjectViewModel {
         // No save panel on iOS: export to a temporary file, then Share / Save to Files (HANDOFF §8).
         let seedPart = displaySeed.map { "-\($0)" } ?? ""
         // Spelled out: deriving it from the UTType gave ".mp4" for M4A.
-        let ext = switch format { case .m4a: "m4a"; case .wav: "wav"; case .midi: "mid" }
+        let ext = switch format { case .m4a: "m4a"; case .wav: "wav"; case .midi: "mid"; case .stems: "zip" }
         return FileManager.default.temporaryDirectory
             .appendingPathComponent("\(project.name)\(seedPart)").appendingPathExtension(ext)
         #else
@@ -972,6 +976,14 @@ final class ProjectViewModel {
         #endif
     }
 
+    /// The whole song as a WAV for the video soundtrack. Not the Export sheet's result.
+    func renderMusicForVideo(to url: URL) throws {
+        guard let snapshot = project.currentSnapshot else { return }
+        let wasPlaying = isPlaying
+        defer { loadIntoAudio(snapshot, resumeIfPlaying: wasPlaying) }
+        try audio.export(to: url, format: .wav, tail: 0)
+    }
+
     func export(format: ExportFormat, range: ExportRange, to url: URL) async {
         guard let snapshot = project.currentSnapshot else { return }
         isExporting = true
@@ -982,8 +994,14 @@ final class ProjectViewModel {
         do {
             if format == .midi {
                 try audio.midiData().write(to: url)
+            } else if format == .stems {
+                let folder = FileManager.default.temporaryDirectory
+                    .appendingPathComponent("stems-\(UUID().uuidString)/\(project.name)-stems", isDirectory: true)
+                defer { try? FileManager.default.removeItem(at: folder.deletingLastPathComponent()) }
+                try audio.exportStems(snapshot, to: folder, range: bounds, options: exportOptions)
+                try StemArchive.zip(folder: folder, to: url)
             } else {
-                try audio.export(to: url, format: format == .wav ? .wav : .m4a, range: bounds)
+                try audio.export(to: url, format: format == .wav ? .wav : .m4a, range: bounds, options: exportOptions)
             }
             let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int64) ?? nil
             let seconds = (bounds.map { $0.upperBound - $0.lowerBound }) ?? snapshot.lengthSeconds
