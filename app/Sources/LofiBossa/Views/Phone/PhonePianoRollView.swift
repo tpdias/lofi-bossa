@@ -358,7 +358,17 @@ struct PhonePianoRollView: View {
         }
         .gesture(gridTouch)
         .simultaneousGesture(pinch)
-        .accessibilityElement()
+        .overlay {
+            NoteAccessibilityLayer(
+                notes: notes, grid: model.displayedSnapshot?.beatGrid, songLength: duration,
+                lengthStep: snap > 0 ? snap : 0.25,
+                frame: { noteRect($0) },
+                select: { model.selectedNoteIDs = [$0] },
+                commit: { model.updateEditingNotes($0, for: track) },
+                audition: { audition($0.pitch, $0.velocity) })
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityChartDescriptor(NoteContourDescriptor(title: track.title, notes: notes, duration: duration))
         .accessibilityLabel("\(track.title) notes, \(notes.count) notes")
         .accessibilityValue(selected.isEmpty ? "None selected" : "\(selected.count) selected")
         .accessibilityHint("Swipe up or down to move the selected notes by a semitone")

@@ -369,6 +369,12 @@ struct PianoRollView: View {
         ZStack(alignment: .topLeading) {
             Canvas { ctx, size in drawRoll(&ctx, size: size) }
                 .allowsHitTesting(false)
+            NoteAccessibilityLayer(
+                notes: notes, grid: grid, songLength: duration, lengthStep: effectiveSnap,
+                frame: { n in noteRect(n).offsetBy(dx: -scroll.x, dy: -scroll.y) },
+                select: { model.selectedNoteIDs = [$0] },
+                commit: { model.updateEditingNotes($0, for: track) },
+                audition: { audition($0.pitch, $0.velocity) })
             // Takes the clicks and drags. Points are in the window's coordinates; the surface
             // they mean is that plus the scroll offset.
             #if os(macOS)
@@ -403,6 +409,7 @@ struct PianoRollView: View {
         }
         .clipped()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityChartDescriptor(NoteContourDescriptor(title: track.title, notes: notes, duration: duration))
     }
 
     private func onSurface(_ p: CGPoint) -> CGPoint { CGPoint(x: p.x + scroll.x, y: p.y + scroll.y) }

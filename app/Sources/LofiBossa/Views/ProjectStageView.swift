@@ -200,6 +200,9 @@ private struct RecipeBar: View {
             Text("Length").foregroundStyle(Color.lfbTextSecondary).fixedSize()
             Slider(value: Binding(get: { model.project.lengthSeconds }, set: { model.setLength($0) }), in: 15...180, step: 15)
                 .frame(minWidth: 50, maxWidth: 120)
+                .accessibilityLabel("Song length")
+                .accessibilityValue(formatTimecode(model.project.lengthSeconds))
+                .accessibilityHint("Changes how long the next take is")
             Text(formatTimecode(model.project.lengthSeconds)).monospacedDigit().frame(width: 36, alignment: .leading)
         }
     }
@@ -210,6 +213,9 @@ private struct RecipeBar: View {
             Slider(value: Binding(get: { model.project.songBusyness }, set: { model.setBusyness($0) }), in: 0...1)
                 .frame(minWidth: 50, maxWidth: 100)
                 .accessibilityIdentifier("busyness")
+                .accessibilityLabel("Busyness")
+                .accessibilityValue("\(Int(model.project.songBusyness * 100)) percent")
+                .accessibilityHint("How many notes the model may play. Applies to the next take or rewrite.")
         }
         .help("How many notes the model may play: sparse on the left, everything it writes on the right. Applies to the next take or rewrite; your own edits are never limited.")
     }
@@ -227,6 +233,10 @@ private struct RecipeBar: View {
         }
         .help("Key and note length for the next take or rewrite")
         .accessibilityIdentifier("songSettings")
+        .accessibilityLabel("Song settings")
+        .accessibilityValue(model.musicSummary)
+        .accessibilityHint("Opens key, note length, tempo, groove and dynamics")
+        .accessibilityInputLabels(["Song settings", "Key and tempo", "Settings"])
     }
 
     @ViewBuilder private func extendButton(iconOnly: Bool) -> some View {
@@ -240,6 +250,9 @@ private struct RecipeBar: View {
         .disabled(!model.canExtend || isWaitingForGenerator)
         .help("Continue the song for \(Int(ProjectViewModel.extendStep)) more seconds, every track at once (up to 3:00)")
         .accessibilityIdentifier("extend")
+        .accessibilityLabel("Extend")
+        .accessibilityHint("Continues the song for \(Int(ProjectViewModel.extendStep)) more seconds, every track at once")
+        .accessibilityInputLabels(["Extend", "Continue the song", "Make it longer"])
     }
 
     private var generateButton: some View {
@@ -259,6 +272,10 @@ private struct RecipeBar: View {
         .help(model.lockedTracks.isEmpty ? "Write a new take of every track"
               : "Write a new take around the locked tracks (they stay as they are)")
         .accessibilityIdentifier("generate")
+        .accessibilityLabel(model.isGenerating ? "Generating"
+                            : (model.project.hasGenerated ? "Generate new take" : "Generate"))
+        .accessibilityHint("Writes a new take of every track that is not locked")
+        .accessibilityInputLabels(["Generate", "Generate new take", "Write music"])
     }
 
     private var isWaitingForGenerator: Bool {
@@ -302,6 +319,8 @@ private struct SongSettingsPopover: View {
                     Text("Short").font(.lfbCaption).foregroundStyle(Color.lfbTextTertiary)
                     Slider(value: Binding(get: { model.project.songNoteLength }, set: { model.setNoteLength($0) }), in: 0...1)
                         .accessibilityIdentifier("noteLength")
+                        .accessibilityLabel("Note length")
+                        .accessibilityValue("\(Int(model.project.songNoteLength * 100)) percent, short to long")
                     Text("Long").font(.lfbCaption).foregroundStyle(Color.lfbTextTertiary)
                 }
                 Text("How long new notes are by default; override per track in its effects.")
@@ -344,6 +363,7 @@ private struct SeedField: View {
 
             Button { model.copySeedToPasteboard() } label: { Image(systemName: "doc.on.doc") }
                 .buttonStyle(.plain).disabled(model.displaySeed == nil).help("Copy Seed")
+                .accessibilityLabel("Copy seed")
         }
         .padding(.horizontal, 8).frame(height: LFBSize.controlHeight)
         .background(Color.lfbWell, in: RoundedRectangle(cornerRadius: LFBRadius.button))
@@ -510,6 +530,8 @@ private struct RulerAndTracks: View {
                 .menuIndicator(.hidden)
                 .help("Add a keys, lead or vibes track. The model writes it to fit the song.")
                 .accessibilityIdentifier("add-track")
+                .accessibilityLabel("Add track")
+                .accessibilityHint("Adds a keys, lead or vibes track written to fit the song")
             }
         }
     }
@@ -669,6 +691,8 @@ private struct TransportBar: View {
                 Button { model.seek(to: 0) } label: { Image(systemName: "backward.end.fill") }
                     .buttonStyle(.plain).disabled(model.displayedSnapshot == nil)
                     .help("Go to start (⌥⌘←)")
+                    .accessibilityLabel("Back to start")
+                    .accessibilityShowsLargeContentViewer { Label("Back to start", systemImage: "backward.end.fill") }
                 Button(action: model.togglePlay) {
                     Image(systemName: model.isPlaying ? "pause.circle.fill" : "play.circle.fill")
                         .font(.system(size: LFBSize.playButton))
@@ -677,14 +701,23 @@ private struct TransportBar: View {
                 .buttonStyle(.plain).disabled(model.displayedSnapshot == nil)
                 .keyboardShortcut(.space, modifiers: [])
                 .accessibilityIdentifier("play").accessibilityLabel(model.isPlaying ? "Pause" : "Play")
+                .accessibilityInputLabels(["Play", "Pause", "Play music"])
+                .accessibilityShowsLargeContentViewer {
+                    Label(model.isPlaying ? "Pause" : "Play", systemImage: model.isPlaying ? "pause.fill" : "play.fill")
+                }
                 .help(model.isPlaying ? "Pause (Space)" : "Play (Space)")
                 Button { model.toggleLoop() } label: { Image(systemName: "repeat") }
                     .buttonStyle(.plain)
                     .foregroundStyle(model.isLoopEnabled ? Color.lfbAccent : Color.lfbTextSecondary)
                     .disabled(model.loopRange == nil)
                     .help("Loop the selection (⌘L)")
+                    .accessibilityLabel("Loop the selected range")
+                    .accessibilityValue(model.isLoopEnabled ? "On" : "Off")
+                    .accessibilityShowsLargeContentViewer { Label("Loop", systemImage: "repeat") }
                 Text("\(formatTimecode(model.position)) / \(formatTimecode(model.duration))")
                     .font(.lfbTimecode).frame(width: 110)
+                    .accessibilityLabel("Position")
+                    .accessibilityValue("\(formatTimecode(model.position)) of \(formatTimecode(model.duration))")
             }
 
             Spacer()
@@ -696,6 +729,7 @@ private struct TransportBar: View {
                             .font(.lfbCaption)
                         Button { model.clearLoop() } label: { Image(systemName: "xmark.circle.fill") }
                             .buttonStyle(.plain).font(.caption)
+                            .accessibilityLabel("Clear loop")
                     }
                     .padding(.horizontal, 10).frame(height: 24)
                     .background(Color.lfbWell, in: Capsule())
