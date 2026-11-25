@@ -182,3 +182,15 @@ final class ExportFeaturesTests: XCTestCase {
         if let error = writer.error { throw error }
     }
 }
+
+@MainActor
+final class ScenePresetTests: XCTestCase {
+    func testEveryPresetUsesAKeyAndTempoTheAppAccepts() {
+        for p in ScenePreset.all {
+            XCTAssertTrue(MusicKey.names.contains(p.key), p.name)
+            XCTAssertTrue(Project.tempoRange.contains(p.tempo), p.name)
+            for v in [p.busyness, p.noteLength, p.groove, p.dynamics] { XCTAssertTrue((0...1).contains(v), p.name) }
+        }
+        XCTAssertEqual(Set(ScenePreset.all.map(\.name)).count, ScenePreset.all.count)
+    }
+}

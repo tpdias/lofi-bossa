@@ -8,6 +8,16 @@ struct MusicSettingsSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: LFBSpace.sm) {
+            Menu {
+                ForEach(ScenePreset.all) { preset in
+                    Button { model.apply(preset) } label: { Label(preset.name, systemImage: preset.symbol) }
+                }
+            } label: {
+                Label("Scene preset", systemImage: "wand.and.stars")
+            }
+            .accessibilityIdentifier("scenePresets")
+            Text("Sets the style, tempo, key, busyness, note length and effects together.")
+                .font(.lfbCaption).foregroundStyle(Color.lfbTextSecondary)
             HStack {
                 Text("Tempo").font(.lfbBodyMedium)
                 Spacer()
