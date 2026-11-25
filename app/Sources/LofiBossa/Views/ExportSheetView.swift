@@ -8,6 +8,7 @@ struct ExportSheetView: View {
 
     @State private var format: ProjectViewModel.ExportFormat = .m4a
     @State private var range: ProjectViewModel.ExportRange = .whole
+    @State private var showVideo = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: LFBSpace.lg) {
@@ -21,6 +22,7 @@ struct ExportSheetView: View {
         }
         .padding(LFBSpace.xl)
         .frame(width: 440)
+        .sheet(isPresented: $showVideo) { VideoSoundtrackSheet(model: model) }
     }
 
     private var form: some View {
@@ -46,7 +48,10 @@ struct ExportSheetView: View {
                 .pickerStyle(.segmented).labelsHidden()
             }
 
+            ExportOptionsSection(model: model, format: format)
+
             HStack {
+                Button("Video soundtrack…") { showVideo = true }
                 Spacer()
                 Button("Cancel") { dismiss() }
                 Button("Export") {

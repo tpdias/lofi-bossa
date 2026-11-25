@@ -228,13 +228,50 @@ final class AudioEngine {
     // MARK: Export
 
     /// Renders `range` (default: the whole song) through the current mix and effects, faster
-    /// than real time.
-    func export(to url: URL, format: ExportFormat, range: ClosedRange<Double>? = nil, tail: Double = 2.5) throws {
-        guard let sequencer else { return }
+    /// than real time. `options` adds fades or folds the tail into the head for a seamless loop.
+    func export(to url: URL, format: ExportFormat, range: ClosedRange<Double>? = nil, tail: Double = 2.5,
+                options: ExportOptions = ExportOptions()) throws {
+        guard sequencer != nil else { return }
+        let pcm = try renderPCM(range: range, tail: tail, includeVinyl: true, options: options)
+        try Self.write(pcm, to: url, format: format)
+    }
+
+    /// One WAV (or M4A) per track that has notes, plus the song's MIDI, written into `folder`.
+    /// Each stem is the track alone through its own effects and the master chain, at the
+    /// track's own volume whether or not it is muted in the mix, without the vinyl noise.
+    /// Returns the audio files written.
+    @discardableResult
+    func exportStems(_ snapshot: SongSnapshot, to folder: URL, format: ExportFormat = .wav,
+                     range: ClosedRange<Double>? = nil, tail: Double = 2.5,
+                     options: ExportOptions = ExportOptions()) throws -> [URL] {
+        guard sequencer != nil else { return [] }
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let saved = samplers.mapValues { $0.volume }
+        defer { for (id, volume) in saved { samplers[id]?.volume = volume } }
+        var written: [URL] = []
+        let ext = format == .wav ? "wav" : "m4a"
+        for (index, track) in snapshot.tracks.enumerated() where !track.notes.isEmpty {
+            for (id, sampler) in samplers { sampler.volume = id == track.id ? Float(track.volume) : 0 }
+            let pcm = try renderPCM(range: range, tail: tail, includeVinyl: false, options: options)
+            let url = folder.appendingPathComponent("\(index + 1)-\(track.id.title).\(ext)")
+            try Self.write(pcm, to: url, format: format)
+            written.append(url)
+        }
+        try midiData().write(to: folder.appendingPathComponent("song.mid"))
+        return written
+    }
+
+    private static let renderRate = 44100.0
+
+    /// Renders the loaded song offline and returns it as one array per channel, with the options
+    /// applied. The result is `range` long (plus `tail`, unless the options fold it away).
+    private func renderPCM(range: ClosedRange<Double>?, tail: Double, includeVinyl: Bool,
+                           options: ExportOptions) throws -> [[Float]] {
+        guard let sequencer else { return [] }
         stop()
-        vinylGate = true   // the file should have the vinyl, even though nothing plays live
+        vinylGate = includeVinyl   // the file should have the vinyl, even though nothing plays live
         engine.stop()
-        let renderFormat = AVAudioFormat(standardFormatWithSampleRate: 44100, channels: 2)!
+        let renderFormat = AVAudioFormat(standardFormatWithSampleRate: Self.renderRate, channels: 2)!
         try engine.enableManualRenderingMode(.offline, format: renderFormat, maximumFrameCount: 4096)
         reloadInstruments()
         defer {
@@ -253,7 +290,31 @@ final class AudioEngine {
         sequencer.prepareToPlay()
         try sequencer.start()
 
-        var settings: [String: Any] = [AVSampleRateKey: 44100, AVNumberOfChannelsKey: 2]
+        let buffer = AVAudioPCMBuffer(
+            pcmFormat: engine.manualRenderingFormat, frameCapacity: engine.manualRenderingMaximumFrameCount)!
+        let bodyFrames = Int(max(end - start, 0) * Self.renderRate)
+        let total = AVAudioFramePosition(bodyFrames) + AVAudioFramePosition(max(tail, 0) * Self.renderRate)
+        var channels = [[Float]](repeating: [], count: 2)
+        for i in 0..<2 { channels[i].reserveCapacity(Int(total)) }
+
+        while engine.manualRenderingSampleTime < total {
+            let frames = AVAudioFrameCount(
+                min(Int64(buffer.frameCapacity), total - engine.manualRenderingSampleTime))
+            switch try engine.renderOffline(frames, to: buffer) {
+            case .success:
+                guard let data = buffer.floatChannelData else { throw CocoaError(.fileWriteUnknown) }
+                for c in 0..<2 {
+                    channels[c].append(contentsOf: UnsafeBufferPointer(start: data[c], count: Int(buffer.frameLength)))
+                }
+            case .error: throw CocoaError(.fileWriteUnknown)
+            default: break
+            }
+        }
+        return ExportProcessing.finish(channels, bodyFrames: bodyFrames, sampleRate: Self.renderRate, options: options)
+    }
+
+    private static func write(_ channels: [[Float]], to url: URL, format: ExportFormat) throws {
+        var settings: [String: Any] = [AVSampleRateKey: renderRate, AVNumberOfChannelsKey: 2]
         switch format {
         case .wav:
             settings[AVFormatIDKey] = kAudioFormatLinearPCM
@@ -264,19 +325,21 @@ final class AudioEngine {
             settings[AVEncoderBitRateKey] = 256_000
         }
         let file = try AVAudioFile(forWriting: url, settings: settings)
-        let buffer = AVAudioPCMBuffer(
-            pcmFormat: engine.manualRenderingFormat, frameCapacity: engine.manualRenderingMaximumFrameCount)!
-        let duration = max(end - start, 0) + tail
-        let total = AVAudioFramePosition(duration * renderFormat.sampleRate)
-
-        while engine.manualRenderingSampleTime < total {
-            let frames = AVAudioFrameCount(
-                min(Int64(buffer.frameCapacity), total - engine.manualRenderingSampleTime))
-            switch try engine.renderOffline(frames, to: buffer) {
-            case .success: try file.write(from: buffer)
-            case .error: throw CocoaError(.fileWriteUnknown)
-            default: break
+        let chunk = 16384
+        let pcmFormat = AVAudioFormat(standardFormatWithSampleRate: renderRate, channels: 2)!
+        let buffer = AVAudioPCMBuffer(pcmFormat: pcmFormat, frameCapacity: AVAudioFrameCount(chunk))!
+        let count = channels.first?.count ?? 0
+        var offset = 0
+        while offset < count {
+            let n = min(chunk, count - offset)
+            for c in 0..<2 {
+                channels[c].withUnsafeBufferPointer { src in
+                    buffer.floatChannelData![c].update(from: src.baseAddress! + offset, count: n)
+                }
             }
+            buffer.frameLength = AVAudioFrameCount(n)
+            try file.write(from: buffer)
+            offset += n
         }
     }
 

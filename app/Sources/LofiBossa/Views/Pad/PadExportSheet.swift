@@ -14,6 +14,7 @@ struct PadExportSheet: View {
     @State private var task: Task<Void, Never>?
     @State private var saveCopy: URL?
     @State private var savedToFiles = false
+    @State private var showVideo = false
 
     var body: some View {
         NavigationStack {
@@ -36,7 +37,8 @@ struct PadExportSheet: View {
                 }
             }
         }
-        .presentationDetents([.medium])
+        .presentationDetents([.medium, .large])
+        .sheet(isPresented: $showVideo) { VideoSoundtrackSheet(model: model) }
         .fileMover(isPresented: Binding(get: { saveCopy != nil }, set: { if !$0 { saveCopy = nil } }),
                    file: saveCopy) { result in
             if case .success = result { savedToFiles = true }
@@ -66,6 +68,8 @@ struct PadExportSheet: View {
                     Text("Drag in the ruler to choose a loop range.").font(.footnote).foregroundStyle(Color.lfbTextSecondary)
                 }
             }
+            ExportOptionsSection(model: model, format: format)
+            Button("Video soundtrack…") { showVideo = true }
             Button {
                 guard let url = model.chooseExportDestination(format: format) else { return }
                 let chosen = model.canExport(range: range) ? range : .whole
