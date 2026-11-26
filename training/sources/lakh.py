@@ -322,8 +322,10 @@ def classify(f, core=CORE_SCORE, wide=WIDE_SCORE):
 
 def fingerprint(f):
     """Rough identity of the arrangement: LMD-full holds many near-identical copies of a song
-    under different checksums."""
-    return (round(f["duration"]), f["notes"] // 20, tuple(sorted(f["programs"])))
+    under different checksums, often differing only in a melody or an extra part. Length,
+    tempo and the size of the four core parts identify the copies."""
+    core = tuple(f["tracks"].get(t, 0) // 10 for t in ("piano", "guitar", "bass", "drums"))
+    return (round(f["duration"]), round(f["tempo"] or 0), core)
 
 
 # --- Scanning --------------------------------------------------------------------------------

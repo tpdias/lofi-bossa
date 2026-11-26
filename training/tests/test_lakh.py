@@ -100,7 +100,8 @@ class ScorerTests(unittest.TestCase):
         pm = song(130, guitar=lakh.NYLON_GUITAR, bass=lakh.UPRIGHT_BASS, kit=lakh.BRUSH_KIT,
                   chord=MAJ7_9, side_stick=True)
         f = lakh.features(pm)
-        rows = lakh.select({"lmd_full/a/a1.mid": f, "lmd_full/b/b1.mid": dict(f),
+        copy = {**f, "tracks": {**f["tracks"], "lead": 60}, "notes": f["notes"] + 60}   # same song + a melody
+        rows = lakh.select({"lmd_full/a/a1.mid": f, "lmd_full/b/b1.mid": copy,
                             "lmd_full/c/c1.mid": {"error": "OSError"}})
         self.assertEqual(len(rows), 1)
         r = rows[0]

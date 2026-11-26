@@ -1,7 +1,10 @@
 # Training on a cloud GPU
 
 Fine-tunes the model on all seven tracks (piano, guitar, bass, drums, keys & pads, lead, vibes)
-for both styles. A single 24 GB GPU (RTX 4090 / A5000 / L4) is plenty; expect a few hours.
+for both styles. A single 24 GB GPU (RTX 4090 / A5000 / L4) is plenty. The CC BY set is about
+4,200 files and 230-260 hours of music per style (2-5x the old GigaMIDI set), so expect several
+hours per style; early stopping usually ends it sooner. To shorten it, pick fewer Lakh files:
+`training/sources/lakh.py --max-per-style 2500` (default 4000), then rebuild the manifest.
 Fine-tuning on the Mac works for smoke tests only.
 
 ## 1. Prepare the data locally
