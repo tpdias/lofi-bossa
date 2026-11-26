@@ -260,7 +260,7 @@ struct PadEmptyProjectView: View {
                     Button { model.generate() } label: {
                         Label("Generate", systemImage: "sparkles").frame(minWidth: 160, minHeight: 32)
                     }
-                    .buttonStyle(.borderedProminent).controlSize(.large)
+                    .buttonStyle(LFBPrimaryButtonStyle()).controlSize(.large)
                     .disabled(model.isGeneratorBusy || !isReady)
                 }
                 .padding(LFBSpace.xl)
@@ -320,7 +320,7 @@ struct PadTransportBar: View {
                 .disabled(model.displayedSnapshot == nil)
                 .keyboardShortcut(.space, modifiers: [])
                 .accessibilityIdentifier("play")
-                .accessibilityLabel(model.isPlaying ? "Pause" : "Play")
+                .accessibilityLabel(model.isPlaying ? L("Pause") : L("Play"))
                 Button { model.toggleLoop() } label: {
                     Image(systemName: "repeat").font(.system(size: 18)).frame(width: 44, height: 44)
                 }
@@ -328,7 +328,7 @@ struct PadTransportBar: View {
                 .foregroundStyle(model.isLoopEnabled ? Color.lfbAccent : Color.lfbTextSecondary)
                 .disabled(model.loopRange == nil)
                 .accessibilityLabel("Loop")
-                .accessibilityValue(model.isLoopEnabled ? "On" : "Off")
+                .accessibilityValue(model.isLoopEnabled ? L("On") : L("Off"))
                 Text("\(formatTimecode(model.position)) / \(formatTimecode(model.duration))")
                     .font(.system(size: 22, weight: .semibold, design: .rounded)).monospacedDigit()
                     .fixedSize()

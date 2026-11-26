@@ -37,7 +37,7 @@ struct PadRootView: View {
                             } label: {
                                 Image(systemName: "sidebar.leading")
                             }
-                            .accessibilityLabel(sidebarShown ? "Hide Projects" : "Show Projects")
+                            .accessibilityLabel(sidebarShown ? L("Hide Projects") : L("Show Projects"))
                             .accessibilityIdentifier("pad-sidebar-toggle")
                         }
                     }

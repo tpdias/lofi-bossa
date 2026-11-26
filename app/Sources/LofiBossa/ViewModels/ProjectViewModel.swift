@@ -174,7 +174,7 @@ final class ProjectViewModel {
             } catch is CancellationError {
                 phase = .idle
             } catch {
-                phase = .failed(message: "That take didn't finish.",
+                phase = .failed(message: L("That take didn't finish."),
                                 detail: (error as? API.ServerError)?.message ?? error.localizedDescription,
                                 trackScope: nil)
             }
@@ -207,7 +207,7 @@ final class ProjectViewModel {
             } catch is CancellationError {
                 phase = .idle
             } catch {
-                phase = .failed(message: "The song couldn't be extended.",
+                phase = .failed(message: L("The song couldn't be extended."),
                                 detail: (error as? API.ServerError)?.message ?? error.localizedDescription,
                                 trackScope: nil)
             }
@@ -259,7 +259,7 @@ final class ProjectViewModel {
                 phase = .idle
             } catch {
                 rewritingRange = nil
-                phase = .failed(message: "The \(track.rawValue) didn't finish rewriting.",
+                phase = .failed(message: L("The \(track.inlineTitle) didn't finish rewriting."),
                                 detail: (error as? API.ServerError)?.message ?? error.localizedDescription,
                                 trackScope: track)
             }
@@ -399,13 +399,13 @@ final class ProjectViewModel {
     func cutSection() {
         guard let sel = sectionSelection, canEditSections else { return }
         copySection()
-        commitSection("Cut \(sel.track.rawValue) \(label(sel.range))", track: sel.track,
+        commitSection(L("Cut \(sel.track.inlineTitle) \(label(sel.range))"), track: sel.track,
                       notes: NoteEditing.removing(notes(of: sel.track), range: sel.range))
     }
 
     func deleteSection() {
         guard let sel = sectionSelection, canEditSections else { return }
-        commitSection("Deleted \(sel.track.rawValue) \(label(sel.range))", track: sel.track,
+        commitSection(L("Deleted \(sel.track.inlineTitle) \(label(sel.range))"), track: sel.track,
                       notes: NoteEditing.removing(notes(of: sel.track), range: sel.range))
     }
 
@@ -416,7 +416,7 @@ final class ProjectViewModel {
         let at = min(snapToGrid(position), max(duration - Self.sectionGrid, 0))
         let result = NoteEditing.pasting(clip, into: notes(of: track), at: at, songLength: duration)
         let end = min(at + clip.length, duration)
-        commitSection("Pasted into \(track.rawValue) at \(formatTimecode(at))", track: track, notes: result)
+        commitSection(L("Pasted into \(track.inlineTitle) at \(formatTimecode(at))"), track: track, notes: result)
         if end - at >= Self.sectionGrid { sectionSelection = SectionSelection(track: track, range: at...end) }
     }
 
@@ -425,7 +425,7 @@ final class ProjectViewModel {
         let result = NoteEditing.duplicating(notes(of: sel.track), range: sel.range, songLength: duration)
         let length = sel.range.upperBound - sel.range.lowerBound
         let newEnd = min(sel.range.upperBound + length, duration)
-        commitSection("Duplicated \(sel.track.rawValue) \(label(sel.range))", track: sel.track, notes: result)
+        commitSection(L("Duplicated \(sel.track.inlineTitle) \(label(sel.range))"), track: sel.track, notes: result)
         sectionSelection = SectionSelection(track: sel.track, range: sel.range.upperBound...newEnd)
     }
 
@@ -436,7 +436,7 @@ final class ProjectViewModel {
         guard abs(offset) >= Self.sectionGrid else { return }
         let moved = NoteEditing.moving(notes(of: sel.track), range: sel.range, by: offset, songLength: duration)
         guard moved.range != sel.range else { return }
-        commitSection("Moved \(sel.track.rawValue) \(label(sel.range)) to \(formatTimecode(moved.range.lowerBound))",
+        commitSection(L("Moved \(sel.track.inlineTitle) \(label(sel.range)) to \(formatTimecode(moved.range.lowerBound))"),
                       track: sel.track, notes: moved.notes)
         sectionSelection = SectionSelection(track: sel.track, range: moved.range)
     }
@@ -779,22 +779,21 @@ final class ProjectViewModel {
         let new = Dictionary(after.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         let added = after.filter { old[$0.id] == nil }.count
         let removed = before.filter { new[$0.id] == nil }.count
-        func plural(_ n: Int) -> String { n == 1 ? "Note" : "Notes" }
-        if added > 0 && removed == 0 { return "Add \(plural(added))" }
-        if removed > 0 && added == 0 { return "Delete \(plural(removed))" }
-        if added > 0 || removed > 0 { return "Note Edit" }
+        if added > 0 && removed == 0 { return added == 1 ? L("Add Note") : L("Add Notes") }
+        if removed > 0 && added == 0 { return removed == 1 ? L("Delete Note") : L("Delete Notes") }
+        if added > 0 || removed > 0 { return String(localized: "Note Edit") }
         let changed = after.compactMap { n in old[n.id].flatMap { $0 != n ? ($0, n) : nil } }
-        guard !changed.isEmpty else { return "Note Edit" }
+        guard !changed.isEmpty else { return String(localized: "Note Edit") }
         if changed.allSatisfy({ $0.0.velocity != $0.1.velocity && $0.0.start == $0.1.start && $0.0.pitch == $0.1.pitch && $0.0.duration == $0.1.duration }) {
-            return "Change Loudness"
+            return String(localized: "Change Loudness")
         }
         if changed.allSatisfy({ $0.0.duration != $0.1.duration && $0.0.start == $0.1.start && $0.0.pitch == $0.1.pitch }) {
-            return "Resize \(plural(changed.count))"
+            return changed.count == 1 ? L("Resize Note") : L("Resize Notes")
         }
         if changed.allSatisfy({ $0.0.duration == $0.1.duration && $0.0.velocity == $0.1.velocity }) {
-            return "Move \(plural(changed.count))"
+            return changed.count == 1 ? L("Move Note") : L("Move Notes")
         }
-        return "Note Edit"
+        return String(localized: "Note Edit")
     }
 
     // MARK: Transport
@@ -821,7 +820,7 @@ final class ProjectViewModel {
                 MainActor.assumeIsolated { self?.tick() }
             }
         } catch {
-            phase = .failed(message: "Couldn't start audio.", detail: error.localizedDescription, trackScope: nil)
+            phase = .failed(message: L("Couldn't start audio."), detail: error.localizedDescription, trackScope: nil)
         }
     }
 
@@ -926,10 +925,11 @@ final class ProjectViewModel {
     // MARK: Export
 
     enum ExportFormat: String, CaseIterable, Identifiable {
-        case m4a = "M4A", wav = "WAV", midi = "MIDI"
+        case m4a = "M4A", wav = "WAV", midi = "MIDI", stems = "Stems"
         var id: String { rawValue }
         var type: UTType {
             switch self {
+            case .stems: .zip
             case .wav: .wav
             case .m4a: .mpeg4Audio
             case .midi: .midi
@@ -937,9 +937,10 @@ final class ProjectViewModel {
         }
         var note: String {
             switch self {
-            case .m4a: "Compressed audio, smaller file. The mix and effects exactly as heard."
-            case .wav: "Uncompressed audio, larger file. The mix and effects exactly as heard."
-            case .midi: "Notes only. Effects and instruments are not included."
+            case .m4a: L("Compressed audio, smaller file. The mix and effects exactly as heard.")
+            case .wav: L("Uncompressed audio, larger file. The mix and effects exactly as heard.")
+            case .midi: L("Notes only. Effects and instruments are not included.")
+            case .stems: L("A ZIP with one WAV per track, plus the MIDI. For mixing in an editor.")
             }
         }
     }
@@ -948,6 +949,8 @@ final class ProjectViewModel {
         var id: String { rawValue }
     }
 
+    /// Fades and loop folding, set in the export sheets (see ExportOptionsSection).
+    var exportOptions = ExportOptions()
     private(set) var isExporting = false
     private(set) var exportProgress: Double = 0
     private(set) var exportResult: (url: URL, seconds: Double, bytes: Int64)?
@@ -959,7 +962,7 @@ final class ProjectViewModel {
         // No save panel on iOS: export to a temporary file, then Share / Save to Files (HANDOFF §8).
         let seedPart = displaySeed.map { "-\($0)" } ?? ""
         // Spelled out: deriving it from the UTType gave ".mp4" for M4A.
-        let ext = switch format { case .m4a: "m4a"; case .wav: "wav"; case .midi: "mid" }
+        let ext = switch format { case .m4a: "m4a"; case .wav: "wav"; case .midi: "mid"; case .stems: "zip" }
         return FileManager.default.temporaryDirectory
             .appendingPathComponent("\(project.name)\(seedPart)").appendingPathExtension(ext)
         #else
@@ -972,6 +975,14 @@ final class ProjectViewModel {
         #endif
     }
 
+    /// The whole song as a WAV for the video soundtrack. Not the Export sheet's result.
+    func renderMusicForVideo(to url: URL) throws {
+        guard let snapshot = project.currentSnapshot else { return }
+        let wasPlaying = isPlaying
+        defer { loadIntoAudio(snapshot, resumeIfPlaying: wasPlaying) }
+        try audio.export(to: url, format: .wav, tail: 0)
+    }
+
     func export(format: ExportFormat, range: ExportRange, to url: URL) async {
         guard let snapshot = project.currentSnapshot else { return }
         isExporting = true
@@ -982,14 +993,20 @@ final class ProjectViewModel {
         do {
             if format == .midi {
                 try audio.midiData().write(to: url)
+            } else if format == .stems {
+                let folder = FileManager.default.temporaryDirectory
+                    .appendingPathComponent("stems-\(UUID().uuidString)/\(project.name)-stems", isDirectory: true)
+                defer { try? FileManager.default.removeItem(at: folder.deletingLastPathComponent()) }
+                try audio.exportStems(snapshot, to: folder, range: bounds, options: exportOptions)
+                try StemArchive.zip(folder: folder, to: url)
             } else {
-                try audio.export(to: url, format: format == .wav ? .wav : .m4a, range: bounds)
+                try audio.export(to: url, format: format == .wav ? .wav : .m4a, range: bounds, options: exportOptions)
             }
             let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int64) ?? nil
             let seconds = (bounds.map { $0.upperBound - $0.lowerBound }) ?? snapshot.lengthSeconds
             exportResult = (url, seconds, size ?? 0)
         } catch {
-            phase = .failed(message: "Export failed.", detail: error.localizedDescription, trackScope: nil)
+            phase = .failed(message: L("Export failed."), detail: error.localizedDescription, trackScope: nil)
         }
         isExporting = false
         exportProgress = 1

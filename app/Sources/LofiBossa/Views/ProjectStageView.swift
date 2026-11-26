@@ -38,9 +38,9 @@ struct ProjectStageView: View {
             ToolbarItemGroup(placement: .primaryAction) {
                 // ⌘Z / ⇧⌘Z live in the Edit menu (AppCommands), which can also name what it undoes.
                 Button(action: model.undo) { Image(systemName: "arrow.uturn.backward") }
-                    .disabled(!model.canUndo).help(model.undoTitle.map { "Undo \($0) (⌘Z)" } ?? "Undo (⌘Z)")
+                    .disabled(!model.canUndo).help(model.undoTitle.map { L("Undo \($0) (⌘Z)") } ?? L("Undo (⌘Z)"))
                 Button(action: model.redo) { Image(systemName: "arrow.uturn.forward") }
-                    .disabled(!model.canRedo).help(model.redoTitle.map { "Redo \($0) (⇧⌘Z)" } ?? "Redo (⇧⌘Z)")
+                    .disabled(!model.canRedo).help(model.redoTitle.map { L("Redo \($0) (⇧⌘Z)") } ?? L("Redo (⇧⌘Z)"))
                 Button { showExportSheet = true } label: { Label("Export", systemImage: "square.and.arrow.up") }
                     .disabled(snapshot == nil)
                 Button { showInspector.toggle() } label: { Image(systemName: "sidebar.trailing") }
@@ -77,8 +77,8 @@ struct ProjectStageView: View {
         #else
         let panel = NSAlert()
         panel.messageText = "Generator Log"
-        panel.informativeText = model.generator.fullLog.isEmpty ? "No output yet." : model.generator.fullLog
-        panel.addButton(withTitle: "Copy")
+        panel.informativeText = model.generator.fullLog.isEmpty ? L("No output yet.") : model.generator.fullLog
+        panel.addButton(withTitle: L("Copy"))
         panel.addButton(withTitle: "OK")
         if panel.runModal() == .alertFirstButtonReturn {
             NSPasteboard.general.clearContents()
@@ -115,10 +115,10 @@ private struct ProjectTitle: View {
     }
 
     private var subtitle: String {
-        let versionPart = model.project.current.map { "Version \($0.number)" } ?? "Not generated yet"
+        let versionPart = model.project.current.map { L("Version \($0.number)") } ?? L("Not generated yet")
         let saveState: String
         switch model.project.id {
-        default: saveState = "Saved"   // ProjectStore's saveState is global; "Saved" reads fine per-project in practice
+        default: saveState = L("Saved")   // ProjectStore's saveState is global; "Saved" reads fine per-project in practice
         }
         return "\(model.project.style.title) · \(formatTimecode(model.project.lengthSeconds)) · \(versionPart) · \(saveState)"
     }
@@ -137,7 +137,7 @@ private struct ListeningBanner: View {
             }
             Spacer()
             Button("Back to Current", action: onBack).buttonStyle(.plain).font(.lfbCaption).foregroundStyle(Color.lfbAccentText)
-            Button("Restore This Version", action: onRestore).buttonStyle(.borderedProminent).controlSize(.small)
+            Button("Restore This Version", action: onRestore).buttonStyle(LFBPrimaryButtonStyle()).controlSize(.small)
         }
     }
 }
@@ -200,6 +200,9 @@ private struct RecipeBar: View {
             Text("Length").foregroundStyle(Color.lfbTextSecondary).fixedSize()
             Slider(value: Binding(get: { model.project.lengthSeconds }, set: { model.setLength($0) }), in: 15...180, step: 15)
                 .frame(minWidth: 50, maxWidth: 120)
+                .accessibilityLabel("Song length")
+                .accessibilityValue(formatTimecode(model.project.lengthSeconds))
+                .accessibilityHint("Changes how long the next take is")
             Text(formatTimecode(model.project.lengthSeconds)).monospacedDigit().frame(width: 36, alignment: .leading)
         }
     }
@@ -210,6 +213,9 @@ private struct RecipeBar: View {
             Slider(value: Binding(get: { model.project.songBusyness }, set: { model.setBusyness($0) }), in: 0...1)
                 .frame(minWidth: 50, maxWidth: 100)
                 .accessibilityIdentifier("busyness")
+                .accessibilityLabel("Busyness")
+                .accessibilityValue("\(Int(model.project.songBusyness * 100)) percent")
+                .accessibilityHint("How many notes the model may play. Applies to the next take or rewrite.")
         }
         .help("How many notes the model may play: sparse on the left, everything it writes on the right. Applies to the next take or rewrite; your own edits are never limited.")
     }
@@ -227,6 +233,10 @@ private struct RecipeBar: View {
         }
         .help("Key and note length for the next take or rewrite")
         .accessibilityIdentifier("songSettings")
+        .accessibilityLabel("Song settings")
+        .accessibilityValue(model.musicSummary)
+        .accessibilityHint("Opens key, note length, tempo, groove and dynamics")
+        .accessibilityInputLabels(["Song settings", "Key and tempo", "Settings"])
     }
 
     @ViewBuilder private func extendButton(iconOnly: Bool) -> some View {
@@ -238,8 +248,11 @@ private struct RecipeBar: View {
         }
         .buttonStyle(.bordered).fixedSize()
         .disabled(!model.canExtend || isWaitingForGenerator)
-        .help("Continue the song for \(Int(ProjectViewModel.extendStep)) more seconds, every track at once (up to 3:00)")
+        .help(L("Continue the song for \(Int(ProjectViewModel.extendStep)) more seconds, every track at once (up to 3:00)"))
         .accessibilityIdentifier("extend")
+        .accessibilityLabel("Extend")
+        .accessibilityHint("Continues the song for \(Int(ProjectViewModel.extendStep)) more seconds, every track at once")
+        .accessibilityInputLabels(["Extend", "Continue the song", "Make it longer"])
     }
 
     private var generateButton: some View {
@@ -248,17 +261,20 @@ private struct RecipeBar: View {
         } label: {
             HStack(spacing: 6) {
                 if model.isGenerating { ProgressView().controlSize(.small) } else { Image(systemName: "sparkles") }
-                Text(model.project.hasGenerated ? (model.isGenerating ? "Generating…" : "Generate New Take")
-                     : (model.isGenerating ? "Generating…" : "Generate"))
+                Text(model.isGenerating ? L("Generating…") : model.project.hasGenerated ? L("Generate New Take") : L("Generate"))
             }
             .frame(minWidth: 130)
         }
-        .buttonStyle(.borderedProminent)
+        .buttonStyle(LFBPrimaryButtonStyle(isBusy: model.isGenerating))
         .keyboardShortcut(.return, modifiers: .command)
         .disabled(model.isGeneratorBusy || isWaitingForGenerator || !model.canGenerate)
-        .help(model.lockedTracks.isEmpty ? "Write a new take of every track"
-              : "Write a new take around the locked tracks (they stay as they are)")
+        .help(model.lockedTracks.isEmpty ? L("Write a new take of every track")
+              : L("Write a new take around the locked tracks (they stay as they are)"))
         .accessibilityIdentifier("generate")
+        .accessibilityLabel(model.isGenerating ? "Generating"
+                            : (model.project.hasGenerated ? "Generate new take" : "Generate"))
+        .accessibilityHint("Writes a new take of every track that is not locked")
+        .accessibilityInputLabels(["Generate", "Generate new take", "Write music"])
     }
 
     private var isWaitingForGenerator: Bool {
@@ -279,7 +295,7 @@ private struct SongSettingsPopover: View {
                     Text("Key").font(.lfbBodyMedium)
                     Spacer()
                     if model.project.key == nil, let detected = model.displayedKey {
-                        Text(detected).font(.lfbCaption).foregroundStyle(Color.lfbTextSecondary)
+                        Text(verbatim: MusicKey.display(detected)).font(.lfbCaption).foregroundStyle(Color.lfbTextSecondary)
                     }
                 }
                 Picker("Key", selection: Binding(
@@ -287,7 +303,7 @@ private struct SongSettingsPopover: View {
                     set: { model.setKey($0 == "Auto" ? nil : $0) })
                 ) {
                     Text("Auto").tag("Auto")
-                    ForEach(MusicKey.names, id: \.self) { Text($0).tag($0) }
+                    ForEach(MusicKey.names, id: \.self) { Text(verbatim: MusicKey.display($0)).tag($0) }
                 }
                 .labelsHidden()
                 Toggle("Strict (forbid out-of-key notes)", isOn: Binding(
@@ -302,6 +318,8 @@ private struct SongSettingsPopover: View {
                     Text("Short").font(.lfbCaption).foregroundStyle(Color.lfbTextTertiary)
                     Slider(value: Binding(get: { model.project.songNoteLength }, set: { model.setNoteLength($0) }), in: 0...1)
                         .accessibilityIdentifier("noteLength")
+                        .accessibilityLabel("Note length")
+                        .accessibilityValue("\(Int(model.project.songNoteLength * 100)) percent, short to long")
                     Text("Long").font(.lfbCaption).foregroundStyle(Color.lfbTextTertiary)
                 }
                 Text("How long new notes are by default; override per track in its effects.")
@@ -344,6 +362,7 @@ private struct SeedField: View {
 
             Button { model.copySeedToPasteboard() } label: { Image(systemName: "doc.on.doc") }
                 .buttonStyle(.plain).disabled(model.displaySeed == nil).help("Copy Seed")
+                .accessibilityLabel("Copy seed")
         }
         .padding(.horizontal, 8).frame(height: LFBSize.controlHeight)
         .background(Color.lfbWell, in: RoundedRectangle(cornerRadius: LFBRadius.button))
@@ -364,8 +383,8 @@ private struct ModelPopup: View {
         }
         .pickerStyle(.menu).fixedSize()
         .help(model.hasFinetunedForStyle
-              ? "Which weights write the notes (a testing control)"
-              : "\(model.project.style.title) has no fine-tuned model yet, so the pretrained one is used")
+              ? L("Which weights write the notes (a testing control)")
+              : L("\(model.project.style.title) has no fine-tuned model yet, so the pretrained one is used"))
     }
 }
 
@@ -403,7 +422,7 @@ private struct EmptyProjectView: View {
                     Text("Press Generate to write piano, guitar, bass and drums.")
                         .font(.lfbBody).foregroundStyle(Color.lfbTextSecondary)
                     Button { model.generate() } label: { Label("Generate", systemImage: "sparkles") }
-                        .buttonStyle(.borderedProminent).controlSize(.large)
+                        .buttonStyle(LFBPrimaryButtonStyle()).controlSize(.large)
                         .disabled(model.isGeneratorBusy)
                 }
                 .padding(LFBSpace.xl)
@@ -510,6 +529,8 @@ private struct RulerAndTracks: View {
                 .menuIndicator(.hidden)
                 .help("Add a keys, lead or vibes track. The model writes it to fit the song.")
                 .accessibilityIdentifier("add-track")
+                .accessibilityLabel("Add track")
+                .accessibilityHint("Adds a keys, lead or vibes track written to fit the song")
             }
         }
     }
@@ -669,6 +690,8 @@ private struct TransportBar: View {
                 Button { model.seek(to: 0) } label: { Image(systemName: "backward.end.fill") }
                     .buttonStyle(.plain).disabled(model.displayedSnapshot == nil)
                     .help("Go to start (⌥⌘←)")
+                    .accessibilityLabel("Back to start")
+                    .accessibilityShowsLargeContentViewer { Label("Back to start", systemImage: "backward.end.fill") }
                 Button(action: model.togglePlay) {
                     Image(systemName: model.isPlaying ? "pause.circle.fill" : "play.circle.fill")
                         .font(.system(size: LFBSize.playButton))
@@ -677,14 +700,23 @@ private struct TransportBar: View {
                 .buttonStyle(.plain).disabled(model.displayedSnapshot == nil)
                 .keyboardShortcut(.space, modifiers: [])
                 .accessibilityIdentifier("play").accessibilityLabel(model.isPlaying ? "Pause" : "Play")
-                .help(model.isPlaying ? "Pause (Space)" : "Play (Space)")
+                .accessibilityInputLabels(["Play", "Pause", "Play music"])
+                .accessibilityShowsLargeContentViewer {
+                    Label(model.isPlaying ? "Pause" : "Play", systemImage: model.isPlaying ? "pause.fill" : "play.fill")
+                }
+                .help(model.isPlaying ? L("Pause (Space)") : L("Play (Space)"))
                 Button { model.toggleLoop() } label: { Image(systemName: "repeat") }
                     .buttonStyle(.plain)
                     .foregroundStyle(model.isLoopEnabled ? Color.lfbAccent : Color.lfbTextSecondary)
                     .disabled(model.loopRange == nil)
                     .help("Loop the selection (⌘L)")
+                    .accessibilityLabel("Loop the selected range")
+                    .accessibilityValue(model.isLoopEnabled ? "On" : "Off")
+                    .accessibilityShowsLargeContentViewer { Label("Loop", systemImage: "repeat") }
                 Text("\(formatTimecode(model.position)) / \(formatTimecode(model.duration))")
                     .font(.lfbTimecode).frame(width: 110)
+                    .accessibilityLabel("Position")
+                    .accessibilityValue("\(formatTimecode(model.position)) of \(formatTimecode(model.duration))")
             }
 
             Spacer()
@@ -696,6 +728,7 @@ private struct TransportBar: View {
                             .font(.lfbCaption)
                         Button { model.clearLoop() } label: { Image(systemName: "xmark.circle.fill") }
                             .buttonStyle(.plain).font(.caption)
+                            .accessibilityLabel("Clear loop")
                     }
                     .padding(.horizontal, 10).frame(height: 24)
                     .background(Color.lfbWell, in: Capsule())

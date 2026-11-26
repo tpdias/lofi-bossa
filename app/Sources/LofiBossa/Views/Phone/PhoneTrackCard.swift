@@ -45,10 +45,10 @@ struct PhoneTrackCard: View {
         .accessibilityHint("Shows instrument, volume and note editing")
         .accessibilityAddTraits(.isButton)
         .accessibilityAction { onOpenTrack() }
-        .accessibilityAction(named: track.isMuted ? "Unmute" : "Mute") { binding.wrappedValue.isMuted.toggle() }
-        .accessibilityAction(named: track.isSoloed ? "Unsolo" : "Solo") { binding.wrappedValue.isSoloed.toggle() }
-        .accessibilityAction(named: isRewriting ? "Stop rewriting" : "Rewrite") { rewriteOrStop() }
-        .accessibilityAction(named: track.isLocked ? "Unlock" : "Lock") { binding.wrappedValue.isLocked.toggle() }
+        .accessibilityAction(named: track.isMuted ? L("Unmute") : L("Mute")) { binding.wrappedValue.isMuted.toggle() }
+        .accessibilityAction(named: track.isSoloed ? L("Unsolo") : L("Solo")) { binding.wrappedValue.isSoloed.toggle() }
+        .accessibilityAction(named: isRewriting ? L("Stop rewriting") : L("Rewrite")) { rewriteOrStop() }
+        .accessibilityAction(named: track.isLocked ? L("Unlock") : L("Lock")) { binding.wrappedValue.isLocked.toggle() }
         .accessibilityAction(named: "Edit notes") { model.openEditor(for: id) }
         .accessibilityAction(named: "Change instrument") { onOpenTrack() }
         .accessibilityIdentifier("track-card-\(id.rawValue)")
@@ -70,7 +70,7 @@ struct PhoneTrackCard: View {
                             }
                         }
                         if !typeSize.isAccessibilitySize {
-                            Text(track.instrument).font(.system(size: 12)).foregroundStyle(Color.lfbTextTertiary).lineLimit(1)
+                            Text(localizedName(track.instrument)).font(.system(size: 12)).foregroundStyle(Color.lfbTextTertiary).lineLimit(1)
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -99,10 +99,10 @@ struct PhoneTrackCard: View {
 
     @ViewBuilder private var contextMenu: some View {
         Picker("Instrument", selection: binding.instrument) {
-            ForEach(id.instruments, id: \.name) { Text($0.name).tag($0.name) }
+            ForEach(id.instruments, id: \.name) { Text(localizedName($0.name)).tag($0.name) }
         }
         .pickerStyle(.menu)
-        Button(track.isLocked ? "Unlock" : "Lock for Next Take", systemImage: track.isLocked ? "lock.open" : "lock") {
+        Button(track.isLocked ? L("Unlock") : L("Lock for Next Take"), systemImage: track.isLocked ? "lock.open" : "lock") {
             binding.wrappedValue.isLocked.toggle()
         }
         Button("Edit Notes", systemImage: "pianokeys") { model.openEditor(for: id) }
@@ -131,7 +131,8 @@ struct PhoneTrackCard: View {
                         .offset(x: CGFloat(range.lowerBound / duration) * w)
                 }
                 NoteLaneView(notes: track.notes, duration: duration,
-                             color: track.isMuted ? .lfbTextTertiary : id.color)
+                             color: track.isMuted ? .lfbTextTertiary : id.color,
+                             glows: !track.isMuted, isDrums: id == .drums)
                     .padding(.vertical, -3)   // NoteLaneView pads 10; the card lane wants 7
                     .opacity(isRewriting && model.rewritingRange == nil ? 0.2 : (track.isMuted ? 0.45 : 1))
                     .allowsHitTesting(false)
@@ -161,7 +162,7 @@ struct PhoneTrackCard: View {
             } else {
                 SweepView(color: id.color)
             }
-            RewritePill(text: "Rewriting the \(id.rawValue)…", action: model.cancelRewrite)
+            RewritePill(text: "Rewriting this track…", action: model.cancelRewrite)
                 .font(.system(size: 13))
         } else if hasSong && isEmpty && !model.isGenerating {
             EmptyLane(trackName: id.rawValue, action: { model.rewrite(id) })
@@ -281,7 +282,7 @@ struct PhoneTransport: View {
                 .buttonStyle(.plain)
                 .disabled(!hasSong)
                 .opacity(hasSong ? 1 : 0.35)
-                .accessibilityLabel(model.isPlaying ? "Pause" : "Play")
+                .accessibilityLabel(model.isPlaying ? L("Pause") : L("Play"))
                 .accessibilityIdentifier("play")
                 Spacer()
                 Button(action: model.toggleLoop) {
@@ -294,7 +295,7 @@ struct PhoneTransport: View {
                 .disabled(model.loopRange == nil)
                 .opacity(model.loopRange == nil ? 0.4 : 1)
                 .accessibilityLabel("Loop the selected range")
-                .accessibilityValue(model.isLoopEnabled ? "On" : "Off")
+                .accessibilityValue(model.isLoopEnabled ? L("On") : L("Off"))
                 Spacer()
                 paneButton("Versions", "clock.arrow.circlepath", action: onVersions)
                     .accessibilityIdentifier("versions")

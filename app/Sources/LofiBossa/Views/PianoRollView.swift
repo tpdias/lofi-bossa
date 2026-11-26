@@ -60,7 +60,7 @@ struct PianoRollView: View {
 
     private static let snapOptions: [Double] = [0, 0.1, 0.25, 0.5, 1]
     private static let beatSnapOptions: [(beats: Double, label: String)] =
-        [(0.25, "1/16"), (0.5, "1/8"), (1, "Beat"), (4, "Bar")]
+        [(0.25, "1/16"), (0.5, "1/8"), (1, L("Beat")), (4, L("Bar"))]
     private var grid: BeatGrid? { model.displayedSnapshot?.beatGrid }
     /// Seconds between snap points (0 = off), and whether they count from the song's first beat.
     private var snapStep: Double {
@@ -71,7 +71,7 @@ struct PianoRollView: View {
     private var snapsToBeat: Bool { snapChoice.hasPrefix("b:") && grid != nil }
     // Spelled out rather than formatted from the Double, so the decimal point doesn't turn
     // into a comma under locales that format numbers that way.
-    private static let snapLabels: [Double: String] = [0: "Off", 0.1: "0.1s", 0.25: "0.25s", 0.5: "0.5s", 1: "1s"]
+    private static let snapLabels: [Double: String] = [0: L("Off"), 0.1: "0.1s", 0.25: "0.25s", 0.5: "0.5s", 1: "1s"]
     private static let lowPitch = 21, highPitch = 108       // A0...C8, the range of a piano
     private static let rowHeight: CGFloat = 12
     private static let keyColumnWidth: CGFloat = 56
@@ -264,7 +264,7 @@ struct PianoRollView: View {
                     .buttonStyle(.plain)
             }
 
-            Button("Done") { model.closeEditor() }.buttonStyle(.borderedProminent).controlSize(.small)
+            Button("Done") { model.closeEditor() }.buttonStyle(LFBPrimaryButtonStyle()).controlSize(.small)
                 .accessibilityIdentifier("roll-done")
         }
         .padding(.horizontal, LFBSpace.md).padding(.vertical, LFBSpace.sm)
@@ -353,7 +353,7 @@ struct PianoRollView: View {
                              with: .color(Color.black.opacity(0.08)))
                 }
                 if pitch % 12 == 0 {
-                    ctx.draw(Text("C\(pitch / 12 - 1)").font(.system(size: 9)).foregroundStyle(.secondary),
+                    ctx.draw(Text(verbatim: NoteName.localized(pitch: pitch)).font(.system(size: 9)).foregroundStyle(.secondary),
                              at: CGPoint(x: size.width - 4, y: y + Self.rowHeight / 2), anchor: .trailing)
                 }
             }
@@ -369,6 +369,17 @@ struct PianoRollView: View {
         ZStack(alignment: .topLeading) {
             Canvas { ctx, size in drawRoll(&ctx, size: size) }
                 .allowsHitTesting(false)
+            NoteGlowLayer(notes: notes, color: track.color, isDrums: track == .drums) { n, size in
+                let r = CGRect(x: timeToX(n.start) - scroll.x, y: pitchToY(n.pitch) - scroll.y + 1,
+                               width: max(CGFloat(n.duration) * pps, 3), height: Self.rowHeight - 2)
+                return r.maxX >= 0 && r.minX <= size.width && r.maxY >= 0 && r.minY <= size.height ? r : nil
+            }
+            NoteAccessibilityLayer(
+                notes: notes, grid: grid, songLength: duration, lengthStep: effectiveSnap,
+                frame: { n in noteRect(n).offsetBy(dx: -scroll.x, dy: -scroll.y) },
+                select: { model.selectedNoteIDs = [$0] },
+                commit: { model.updateEditingNotes($0, for: track) },
+                audition: { audition($0.pitch, $0.velocity) })
             // Takes the clicks and drags. Points are in the window's coordinates; the surface
             // they mean is that plus the scroll offset.
             #if os(macOS)
@@ -403,6 +414,7 @@ struct PianoRollView: View {
         }
         .clipped()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityChartDescriptor(NoteContourDescriptor(title: track.title, notes: notes, duration: duration))
     }
 
     private func onSurface(_ p: CGPoint) -> CGPoint { CGPoint(x: p.x + scroll.x, y: p.y + scroll.y) }

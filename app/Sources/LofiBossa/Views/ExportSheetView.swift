@@ -8,6 +8,7 @@ struct ExportSheetView: View {
 
     @State private var format: ProjectViewModel.ExportFormat = .m4a
     @State private var range: ProjectViewModel.ExportRange = .whole
+    @State private var showVideo = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: LFBSpace.lg) {
@@ -21,6 +22,7 @@ struct ExportSheetView: View {
         }
         .padding(LFBSpace.xl)
         .frame(width: 440)
+        .sheet(isPresented: $showVideo) { VideoSoundtrackSheet(model: model) }
     }
 
     private var form: some View {
@@ -33,6 +35,7 @@ struct ExportSheetView: View {
                     ForEach(ProjectViewModel.ExportFormat.allCases) { Text($0.rawValue).tag($0) }
                 }
                 .pickerStyle(.segmented).labelsHidden()
+                .accessibilityLabel("Format")
                 Text(format.note).font(.lfbCaption).foregroundStyle(Color.lfbTextSecondary)
             }
 
@@ -40,20 +43,25 @@ struct ExportSheetView: View {
                 Text("Range").font(.lfbBodyMedium)
                 Picker("Range", selection: $range) {
                     ForEach(ProjectViewModel.ExportRange.allCases) { r in
-                        Text(r.rawValue).tag(r).disabled(!model.canExport(range: r))
+                        Text(LocalizedStringKey(r.rawValue)).tag(r).disabled(!model.canExport(range: r))
                     }
                 }
                 .pickerStyle(.segmented).labelsHidden()
+                .accessibilityLabel("Range")
             }
 
+            ExportOptionsSection(model: model, format: format)
+
             HStack {
+                Button("Video soundtrack…") { showVideo = true }
                 Spacer()
                 Button("Cancel") { dismiss() }
                 Button("Export") {
                     guard let url = model.chooseExportDestination(format: format) else { return }
                     Task { await model.export(format: format, range: range, to: url) }
                 }
-                .buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
+                .buttonStyle(LFBPrimaryButtonStyle()).keyboardShortcut(.defaultAction)
+                .accessibilityHint("Chooses where to save, then renders the audio")
             }
         }
     }
@@ -62,6 +70,8 @@ struct ExportSheetView: View {
         VStack(alignment: .leading, spacing: LFBSpace.md) {
             Text("Rendering audio…").font(.lfbTitle)
             ProgressView(value: model.exportProgress)
+                .accessibilityLabel("Export progress")
+                .accessibilityValue("\(Int(model.exportProgress * 100)) percent")
             HStack {
                 Spacer()
                 Button("Cancel") { dismiss() }
@@ -81,7 +91,7 @@ struct ExportSheetView: View {
                 #else
                 ShareLink("Share…", item: result.url)
                 #endif
-                Button("Done") { dismiss() }.buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
+                Button("Done") { dismiss() }.buttonStyle(LFBPrimaryButtonStyle()).keyboardShortcut(.defaultAction)
             }
         }
     }

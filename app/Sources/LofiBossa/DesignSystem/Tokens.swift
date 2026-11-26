@@ -23,16 +23,33 @@ extension Color {
             NSColor(srgbRed: v.0, green: v.1, blue: v.2, alpha: v.3)
         }
         self = Color(NSColor(name: nil) { appearance in
-            appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? rgba(dark) : rgba(light)
+            let match = appearance.bestMatch(from: [.aqua, .darkAqua, .accessibilityHighContrastAqua,
+                                                    .accessibilityHighContrastDarkAqua])
+            let isDark = match == .darkAqua || match == .accessibilityHighContrastDarkAqua
+            let increased = match == .accessibilityHighContrastAqua || match == .accessibilityHighContrastDarkAqua
+            return rgba(increased ? Color.increasedContrast(isDark ? dark : light, dark: isDark) : (isDark ? dark : light))
         })
         #else
         func rgba(_ v: (Double, Double, Double, Double)) -> UIColor {
             UIColor(red: v.0, green: v.1, blue: v.2, alpha: v.3)
         }
         self = Color(UIColor { traits in
-            traits.userInterfaceStyle == .dark ? rgba(dark) : rgba(light)
+            let isDark = traits.userInterfaceStyle == .dark
+            let base = isDark ? dark : light
+            return rgba(traits.accessibilityContrast == .high ? Color.increasedContrast(base, dark: isDark) : base)
         })
         #endif
+    }
+
+    /// The token under Increase Contrast: pushed a quarter of the way toward black (light) or
+    /// white (dark), and faint hairlines made more opaque, so text and borders stand out more.
+    static func increasedContrast(_ v: (Double, Double, Double, Double), dark: Bool) -> (Double, Double, Double, Double) {
+        let target = dark ? 1.0 : 0.0
+        let luma = 0.299 * v.0 + 0.587 * v.1 + 0.114 * v.2
+        // Surfaces (light colors in light mode, dark in dark mode) stay; only foregrounds move.
+        let isForeground = dark ? luma > 0.5 : luma < 0.5
+        func mix(_ c: Double) -> Double { isForeground ? c + (target - c) * 0.25 : c }
+        return (mix(v.0), mix(v.1), mix(v.2), v.3 < 0.5 ? min(v.3 * 2.2, 1) : v.3)
     }
 
     /// Convenience for a token with no separate light/dark value.
@@ -207,13 +224,39 @@ enum LFBDevice {
 // Rounded design for titles and numerals, default SF Pro for everything else.
 
 extension Font {
-    static let lfbLargeTitle = Font.system(size: 26, weight: .bold, design: .rounded)
-    static let lfbTitle = Font.system(size: 17, weight: .semibold, design: .rounded)
-    static let lfbHeadline = Font.system(size: 14, weight: .semibold, design: .rounded)
-    static let lfbBody = Font.system(size: 13)
-    static let lfbBodyMedium = Font.system(size: 13, weight: .medium)
-    static let lfbCaption = Font.system(size: 11, weight: .medium)
-    static let lfbTimecode = Font.system(size: 20, weight: .semibold, design: .rounded).monospacedDigit()
+    static let lfbLargeTitle = lfbText(26, .bold, .rounded, .largeTitle)
+    static let lfbTitle = lfbText(17, .semibold, .rounded, .title3)
+    static let lfbHeadline = lfbText(14, .semibold, .rounded, .headline)
+    static let lfbBody = lfbText(13, .regular, .default, .body)
+    static let lfbBodyMedium = lfbText(13, .medium, .default, .body)
+    static let lfbCaption = lfbText(11, .medium, .default, .caption1)
+    static let lfbTimecode = lfbText(20, .semibold, .rounded, .title3).monospacedDigit()
+
+    /// The design's fixed size on the Mac; on iOS the same size scaled by the user's Dynamic Type
+    /// setting (read when the app starts, capped so the layouts stay usable at the largest sizes).
+    private static func lfbText(_ size: CGFloat, _ weight: Font.Weight, _ design: Font.Design,
+                                _ style: LFBTextStyle) -> Font {
+        #if os(iOS)
+        var base = UIFont.systemFont(ofSize: size, weight: UIFont.Weight(rawValue: weightValue(weight)))
+        if design == .rounded, let rounded = base.fontDescriptor.withDesign(.rounded) {
+            base = UIFont(descriptor: rounded, size: size)
+        }
+        return Font(UIFontMetrics(forTextStyle: style).scaledFont(for: base, maximumPointSize: size * 1.6))
+        #else
+        return Font.system(size: size, weight: weight, design: design)
+        #endif
+    }
+
+    #if os(iOS)
+    private static func weightValue(_ w: Font.Weight) -> CGFloat {
+        switch w {
+        case .bold: UIFont.Weight.bold.rawValue
+        case .semibold: UIFont.Weight.semibold.rawValue
+        case .medium: UIFont.Weight.medium.rawValue
+        default: UIFont.Weight.regular.rawValue
+        }
+    }
+    #endif
 }
 
 // MARK: - Motion
@@ -222,4 +265,82 @@ enum LFBMotion {
     static let sweepSeconds: Double = 1.8
     static let writeHeadPulseSeconds: Double = 1.2
     static let spinnerSeconds: Double = 0.8
+}
+
+#if os(iOS)
+typealias LFBTextStyle = UIFont.TextStyle
+#else
+/// On the Mac the sizes are fixed, so the text style is only a name.
+enum LFBTextStyle { case largeTitle, title3, headline, body, caption1 }
+#endif
+
+// MARK: - Elevation (tokens.json `elevation`)
+
+/// Two stacked shadows per level: a tight dark one for contact and a wide warm one for lift.
+/// Shared by the Mac, iPad, iPhone and Duo layouts through `ButtonStyles.swift`.
+struct LFBElevation: Equatable {
+    var tightRadius: CGFloat, tightY: CGFloat, tightOpacity: Double
+    var wideRadius: CGFloat, wideY: CGFloat, wideOpacity: Double
+
+    static let none = LFBElevation(tightRadius: 0, tightY: 0, tightOpacity: 0, wideRadius: 0, wideY: 0, wideOpacity: 0)
+    static let low = LFBElevation(tightRadius: 1, tightY: 1, tightOpacity: 0.14, wideRadius: 4, wideY: 2, wideOpacity: 0.08)
+    static let mid = LFBElevation(tightRadius: 1.5, tightY: 1.5, tightOpacity: 0.18, wideRadius: 10, wideY: 5, wideOpacity: 0.14)
+    static let high = LFBElevation(tightRadius: 2, tightY: 2, tightOpacity: 0.22, wideRadius: 20, wideY: 10, wideOpacity: 0.2)
+
+    /// Pressed buttons sit closer to the surface.
+    var pressed: LFBElevation {
+        LFBElevation(tightRadius: tightRadius * 0.5, tightY: tightY * 0.4, tightOpacity: tightOpacity * 0.8,
+                     wideRadius: wideRadius * 0.4, wideY: wideY * 0.3, wideOpacity: wideOpacity * 0.5)
+    }
+}
+
+/// Note glow (tokens.json `glow`).
+enum LFBGlow {
+    static let haloRadius: CGFloat = 8
+    static let haloPadding: CGFloat = 3.5
+    static let releaseSeconds: Double = 0.18
+    static let particleLifeSeconds: Double = 0.6
+    static let maxParticles = 300
+}
+
+// MARK: - Style themes (tokens.json `themes`)
+
+/// Per-style colors: Lo-Fi is dusk purple and amber, Bossa is sea teal and sand. The theme tints
+/// the primary button, the Generate glow, and the note glow and sparks of the open project.
+struct LFBTheme: Equatable {
+    var accent: Color
+    var onAccent: Color
+    var glow: Color
+    var wash: Color
+
+    static let standard = LFBTheme(accent: .lfbAccent, onAccent: .lfbOnAccent, glow: .lfbAccent, wash: .lfbAccentWash)
+    static let lofi = LFBTheme(
+        accent: Color(light: hex("#6B46B8"), dark: hex("#B9A1F2")),
+        onAccent: Color(light: hex("#FFFFFF"), dark: hex("#1E1233")),
+        glow: Color(light: hex("#E08A12"), dark: hex("#FFB547")),
+        wash: Color(light: hex("#6B46B8", 0.14), dark: hex("#B9A1F2", 0.18)))
+    static let bossa = LFBTheme(
+        accent: Color(light: hex("#0B7A78"), dark: hex("#5CCBC4")),
+        onAccent: Color(light: hex("#FFFFFF"), dark: hex("#06201F")),
+        glow: Color(light: hex("#C9A15A"), dark: hex("#EBD6A4")),
+        wash: Color(light: hex("#0B7A78", 0.14), dark: hex("#5CCBC4", 0.18)))
+
+    init(accent: Color, onAccent: Color, glow: Color, wash: Color) {
+        self.accent = accent; self.onAccent = onAccent; self.glow = glow; self.wash = wash
+    }
+    init(_ style: MusicStyle?) {
+        switch style {
+        case .lofi: self = .lofi
+        case .bossa: self = .bossa
+        case nil: self = .standard
+        }
+    }
+}
+
+private struct LFBThemeKey: EnvironmentKey { static let defaultValue = LFBTheme.standard }
+extension EnvironmentValues {
+    var lfbTheme: LFBTheme {
+        get { self[LFBThemeKey.self] }
+        set { self[LFBThemeKey.self] = newValue }
+    }
 }

@@ -40,7 +40,7 @@ struct SidebarView: View {
             } label: {
                 Label("New Project", systemImage: "plus").frame(maxWidth: .infinity)
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(LFBPrimaryButtonStyle())
             .controlSize(.regular)
             .padding(LFBSpace.sm)
         }
@@ -111,9 +111,9 @@ struct LibraryGridView: View {
         .toolbar {
             ToolbarItem(placement: .principal) {
                 VStack(alignment: .leading, spacing: 0) {
-                    Text(isTrash ? "Recently Deleted" : "All Projects").font(.lfbTitle)
+                    Text(isTrash ? L("Recently Deleted") : L("All Projects")).font(.lfbTitle)
                     if !isTrash {
-                        Text("\(store.active.count) projects · saved automatically on this \(LFBSize.isTouch ? "device" : "Mac")")
+                        Text(LFBSize.isTouch ? L("\(store.active.count) projects · saved automatically on this device") : L("\(store.active.count) projects · saved automatically on this Mac"))
                             .font(.lfbCaption).foregroundStyle(Color.lfbTextSecondary)
                     }
                 }
@@ -121,7 +121,7 @@ struct LibraryGridView: View {
             ToolbarItemGroup(placement: .primaryAction) {
                 if !isTrash {
                     Picker("Sort", selection: $sort) {
-                        ForEach(Sort.allCases) { Text($0.rawValue).tag($0) }
+                        ForEach(Sort.allCases) { Text(LocalizedStringKey($0.rawValue)).tag($0) }
                     }
                     .pickerStyle(.menu)
                     Button {
@@ -141,7 +141,7 @@ struct LibraryGridView: View {
                 if let p = pendingPermanentDelete { store.permanentlyDelete(p) }
             }
         } message: {
-            Text("\"\(pendingPermanentDelete?.name ?? "")\" and all its versions will be deleted. This cannot be undone.")
+            Text("“\(pendingPermanentDelete?.name ?? "")” and all its versions will be deleted. This cannot be undone.")
         }
     }
 
@@ -188,6 +188,17 @@ private struct ProjectCard: View {
         .contentShape(Rectangle())
         .onTapGesture(count: LFBSize.isTouch ? 1 : 2, perform: onOpen)   // a tap opens on touch
         .contextMenu { contextMenuItems }
+        .accessibilityElement(children: isRenaming ? .contain : .ignore)
+        .accessibilityLabel(project.name)
+        .accessibilityValue(project.subtitle)
+        .accessibilityAddTraits(isRenaming ? [] : .isButton)
+        .accessibilityHint(isTrash ? "Opens the actions for this deleted project" : "Opens the project")
+        .accessibilityAction { if !isTrash { onOpen() } }
+        .accessibilityAction(named: "Put back") { if isTrash { onRestore() } }
+        .accessibilityAction(named: "Rename") { if !isTrash { onRename() } }
+        .accessibilityAction(named: "Duplicate") { if !isTrash { onDuplicate() } }
+        .accessibilityAction(named: "Copy seed") { if !isTrash { onCopySeed() } }
+        .accessibilityAction(named: "Delete") { if isTrash { onPermanentlyDelete() } else { onDelete() } }
     }
 
     private var thumbnail: some View {
@@ -200,6 +211,7 @@ private struct ProjectCard: View {
             }
         }
         .padding(LFBSpace.sm)
+        .accessibilityHidden(true)
     }
 
     @ViewBuilder private var contextMenuItems: some View {
@@ -237,11 +249,8 @@ struct FirstLaunchView: View {
 
     var body: some View {
         VStack(spacing: LFBSpace.xl) {
-            HStack(spacing: 3) {
-                ForEach(TrackID.core) { id in
-                    RoundedRectangle(cornerRadius: 2).fill(id.color).frame(width: 36, height: 10)
-                }
-            }
+            SaudadeMark(size: 64)
+            SaudadeWordmark(size: 32)
             VStack(spacing: LFBSpace.xs) {
                 Text("Make your first track").font(.lfbLargeTitle)
                 Text("Pick a style and length, and the generator writes piano, guitar, bass and drums.")
@@ -259,6 +268,8 @@ struct FirstLaunchView: View {
                     Text(formatTimecode(length)).monospacedDigit()
                 }
                 Slider(value: $length, in: 15...180, step: 15)
+                    .accessibilityLabel("Length")
+                    .accessibilityValue(formatTimecode(length))
             }
             .frame(width: 280)
             Button {
@@ -269,11 +280,14 @@ struct FirstLaunchView: View {
             } label: {
                 Label("Generate", systemImage: "sparkles").frame(minWidth: 140)
             }
-            .buttonStyle(.borderedProminent).controlSize(.large)
+            .buttonStyle(LFBPrimaryButtonStyle()).controlSize(.large)
+            .accessibilityHint("Creates the project and writes the first take")
+            .accessibilityInputLabels(["Generate", "Make music"])
             GeneratorStatusPill(status: status)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.lfbWindow)
+        .environment(\.lfbTheme, LFBTheme(style))
     }
 }
 
@@ -298,5 +312,7 @@ private struct StyleCard: View {
                 .strokeBorder(isSelected ? Color.lfbAccent : Color.lfbControlHairline, lineWidth: isSelected ? 2 : 1))
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(style.title)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }

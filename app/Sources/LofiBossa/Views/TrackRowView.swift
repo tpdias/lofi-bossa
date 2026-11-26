@@ -69,20 +69,20 @@ struct TrackRowView: View {
                     Image(systemName: track.isLocked ? "lock.fill" : "lock.open").font(.system(size: 10, weight: .semibold))
                 }
                 .buttonStyle(KeyToggleStyle(isOn: track.isLocked, onFill: track.id.color, onText: .lfbWindow))
-                .help(track.isLocked ? "Locked: the next Generate keeps this track and writes the others around it"
-                                     : "Lock to keep this track on the next Generate")
-                .accessibilityLabel("Lock").accessibilityValue(track.isLocked ? "On" : "Off")
+                .help(track.isLocked ? L("Locked: the next Generate keeps this track and writes the others around it")
+                                     : L("Lock to keep this track on the next Generate"))
+                .accessibilityLabel("Lock").accessibilityValue(track.isLocked ? L("On") : L("Off"))
                 Button("M") { track.isMuted.toggle() }
                     .buttonStyle(KeyToggleStyle(isOn: track.isMuted, onFill: .lfbText, onText: .lfbWindow))
-                    .accessibilityLabel("Mute").accessibilityValue(track.isMuted ? "On" : "Off")
+                    .accessibilityLabel("Mute").accessibilityValue(track.isMuted ? L("On") : L("Off"))
                 Button("S") { track.isSoloed.toggle() }
                     .buttonStyle(KeyToggleStyle(isOn: track.isSoloed, onFill: .lfbAccent, onText: .lfbOnAccent))
-                    .accessibilityLabel("Solo").accessibilityValue(track.isSoloed ? "On" : "Off")
+                    .accessibilityLabel("Solo").accessibilityValue(track.isSoloed ? L("On") : L("Off"))
             }
             if !compact {
                 HStack(spacing: 6) {
                     Picker("Instrument", selection: $track.instrument) {
-                        ForEach(track.id.instruments, id: \.name) { Text($0.name).tag($0.name) }
+                        ForEach(track.id.instruments, id: \.name) { Text(localizedName($0.name)).tag($0.name) }
                     }
                     .labelsHidden()
                     .controlSize(.small)
@@ -103,6 +103,7 @@ struct TrackRowView: View {
                     if isRewriting {
                         Button(action: onCancelRewrite) { Image(systemName: "stop.fill") }
                             .help("Stop rewriting")
+                            .accessibilityLabel("Stop rewriting \(track.id.title)")
                     } else {
                         Button(action: onRewrite) { Image(systemName: "arrow.triangle.2.circlepath") }
                             .disabled(isGeneratorBusy)
@@ -114,6 +115,8 @@ struct TrackRowView: View {
                 HStack(spacing: 6) {
                     Image(systemName: "speaker.wave.2").font(.system(size: 11)).foregroundStyle(Color.lfbTextTertiary)
                     Slider(value: $track.volume, in: 0...1).controlSize(.small).tint(track.id.color)
+                        .accessibilityLabel("\(track.id.title) volume")
+                        .accessibilityValue("\(Int(track.volume * 100)) percent")
                     Text("\(Int(track.volume * 100))").font(.lfbCaption).monospacedDigit()
                         .foregroundStyle(Color.lfbTextTertiary).frame(width: 22, alignment: .trailing)
                 }
@@ -148,17 +151,19 @@ struct TrackRowView: View {
             Color.lfbSurface
             if isSelected { track.id.color.opacity(0.06) }
             NoteLaneView(notes: track.notes, duration: duration, window: window,
-                         color: track.isMuted ? .lfbTextTertiary : track.id.color, onSeek: onSeek, grid: grid)
+                         color: track.isMuted ? .lfbTextTertiary : track.id.color, onSeek: onSeek, grid: grid,
+                         glows: !track.isMuted, isDrums: track.id == .drums)
                 .opacity(isRewriting && rewritingRange == nil ? 0.2 : (track.isMuted ? 0.45 : (isDimmedBySolo ? 0.3 : 1)))
+                .accessibilityChartDescriptor(NoteContourDescriptor(title: track.id.title, notes: track.notes, duration: duration))
             if isRewriting {
                 if let range = rewritingRange {
                     rangeRewriteOverlay(range)
                 } else {
                     SweepView(color: track.id.color)
-                    RewritePill(text: "Rewriting the \(track.id.rawValue) to fit the other three…", action: onCancelRewrite)
+                    RewritePill(text: "Rewriting this track to fit the other three…", action: onCancelRewrite)
                 }
             }
-            if isEmpty { EmptyLane(trackName: track.id.rawValue, action: onRewrite) }
+            if isEmpty { EmptyLane(trackName: track.id.title, action: onRewrite) }
         }
         .clipped()   // zoomed in, notes and selections past the edges stay inside the lane
         .contentShape(Rectangle())
@@ -202,19 +207,34 @@ struct KeyToggleStyle: ButtonStyle {
     var onFill: Color
     var onText: Color
     func makeBody(configuration: Configuration) -> some View {
+        KeyToggleBody(configuration: configuration, isOn: isOn, onFill: onFill, onText: onText)
+    }
+}
+
+/// The toggle's look. Split out so it can read Differentiate Without Color: when it is on, an
+/// "on" key also gets a heavy outline, so state is not carried by fill color alone.
+private struct KeyToggleBody: View {
+    @Environment(\.accessibilityDifferentiateWithoutColor) private var differentiate
+    let configuration: ButtonStyleConfiguration
+    let isOn: Bool
+    let onFill: Color
+    let onText: Color
+
+    var body: some View {
         configuration.label
             .font(.system(size: 11, weight: .bold))
             .foregroundStyle(isOn ? onText : Color.lfbTextSecondary)
             .frame(width: 24, height: 22)
             .background(isOn ? onFill : Color.lfbControl, in: RoundedRectangle(cornerRadius: LFBRadius.key))
             .overlay(RoundedRectangle(cornerRadius: LFBRadius.key)
-                .strokeBorder(isOn ? .clear : Color.lfbControlHairline, lineWidth: 1))
+                .strokeBorder(isOn ? (differentiate ? Color.lfbText : .clear) : Color.lfbControlHairline,
+                              lineWidth: isOn && differentiate ? 2 : 1))
             .opacity(configuration.isPressed ? 0.7 : 1)
     }
 }
 
 struct RewritePill: View {
-    let text: String
+    let text: LocalizedStringKey
     let action: () -> Void
     var body: some View {
         HStack(spacing: 8) {
@@ -235,7 +255,7 @@ struct EmptyLane: View {
     var body: some View {
         HStack(spacing: 8) {
             Text("No notes in this part").font(.system(size: 12))
-            Button("Write the \(trackName)", action: action).buttonStyle(.plain)
+            Button("Write \(trackName)", action: action).buttonStyle(.plain)
                 .font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.lfbAccentText)
         }
         .padding(.horizontal, 12).frame(height: 28)

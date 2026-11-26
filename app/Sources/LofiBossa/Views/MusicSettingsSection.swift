@@ -8,6 +8,16 @@ struct MusicSettingsSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: LFBSpace.sm) {
+            Menu {
+                ForEach(ScenePreset.all) { preset in
+                    Button { model.apply(preset) } label: { Label(preset.name, systemImage: preset.symbol) }
+                }
+            } label: {
+                Label("Scene preset", systemImage: "wand.and.stars")
+            }
+            .accessibilityIdentifier("scenePresets")
+            Text("Sets the style, tempo, key, busyness, note length and effects together.")
+                .font(.lfbCaption).foregroundStyle(Color.lfbTextSecondary)
             HStack {
                 Text("Tempo").font(.lfbBodyMedium)
                 Spacer()
@@ -16,34 +26,38 @@ struct MusicSettingsSection: View {
                     set: { model.setTempo($0 ? nil : (model.displayedTempo ?? 90)) }))
                     .checkboxToggleStyle().font(.lfbCaption)
                     .accessibilityIdentifier("tempoAuto")
+                    .accessibilityHint("When on, the tempo is detected from the song")
             }
             if let bpm = model.project.tempo {
                 HStack(spacing: LFBSpace.sm) {
                     Slider(value: Binding(get: { bpm }, set: { model.setTempo($0) }),
                            in: Project.tempoRange, step: 1)
                         .accessibilityLabel("Tempo").accessibilityIdentifier("tempo")
+                        .accessibilityValue("\(Int(bpm)) beats per minute")
                     Text("\(Int(bpm)) BPM").monospacedDigit().frame(minWidth: 64, alignment: .trailing)
                 }
             } else {
-                Text(model.displayedTempo.map { "Detected \(Int($0.rounded())) BPM" } ?? "Detected from the song")
+                Text(model.displayedTempo.map { L("Detected \(Int($0.rounded())) BPM") } ?? L("Detected from the song"))
                     .font(.lfbCaption).foregroundStyle(Color.lfbTextSecondary)
             }
             labeled("Groove", low: "Loose", high: "Tight", id: "groove",
                     value: Binding(get: { model.project.songGroove }, set: { model.setGroove($0) }))
             labeled("Dynamics", low: "Flat", high: "Expressive", id: "dynamics",
                     value: Binding(get: { model.project.songDynamics }, set: { model.setDynamics($0) }))
+            NoteEffectsPicker()
             Text("Groove pulls new notes onto the beat; dynamics adds accents and swells.")
                 .font(.lfbCaption).foregroundStyle(Color.lfbTextSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
 
-    private func labeled(_ title: String, low: String, high: String, id: String, value: Binding<Double>) -> some View {
+    private func labeled(_ title: LocalizedStringKey, low: LocalizedStringKey, high: LocalizedStringKey, id: String, value: Binding<Double>) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title).font(.lfbBodyMedium)
             HStack(spacing: LFBSpace.sm) {
                 Text(low).font(.lfbCaption).foregroundStyle(Color.lfbTextTertiary)
                 Slider(value: value, in: 0...1).accessibilityLabel(title).accessibilityIdentifier(id)
+                    .accessibilityValue("\(Int(value.wrappedValue * 100)) percent, \(low) to \(high)")
                 Text(high).font(.lfbCaption).foregroundStyle(Color.lfbTextTertiary)
             }
         }
@@ -53,7 +67,7 @@ struct MusicSettingsSection: View {
 extension ProjectViewModel {
     /// "A minor · 90" for the song settings button: the key (or Auto) and the tempo, if known.
     var musicSummary: String {
-        let key = displayedKey ?? "Auto"
+        let key = displayedKey.map { MusicKey.display($0) } ?? L("Auto")
         return displayedTempo.map { "\(key) · \(Int($0.rounded()))" } ?? key
     }
 }

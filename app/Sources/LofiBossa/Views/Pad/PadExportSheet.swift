@@ -14,6 +14,7 @@ struct PadExportSheet: View {
     @State private var task: Task<Void, Never>?
     @State private var saveCopy: URL?
     @State private var savedToFiles = false
+    @State private var showVideo = false
 
     var body: some View {
         NavigationStack {
@@ -32,11 +33,12 @@ struct PadExportSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(model.exportResult == nil ? "Cancel" : "Done") { cancelAndDismiss() }
+                    Button(model.exportResult == nil ? L("Cancel") : L("Done")) { cancelAndDismiss() }
                 }
             }
         }
-        .presentationDetents([.medium])
+        .presentationDetents([.medium, .large])
+        .sheet(isPresented: $showVideo) { VideoSoundtrackSheet(model: model) }
         .fileMover(isPresented: Binding(get: { saveCopy != nil }, set: { if !$0 { saveCopy = nil } }),
                    file: saveCopy) { result in
             if case .success = result { savedToFiles = true }
@@ -57,7 +59,7 @@ struct PadExportSheet: View {
                 Text("Range").font(.system(size: 15, weight: .medium))
                 Picker("Range", selection: $range) {
                     ForEach(ProjectViewModel.ExportRange.allCases) { r in
-                        Text(r.rawValue).tag(r)
+                        Text(LocalizedStringKey(r.rawValue)).tag(r)
                     }
                 }
                 .pickerStyle(.segmented).labelsHidden()
@@ -66,6 +68,8 @@ struct PadExportSheet: View {
                     Text("Drag in the ruler to choose a loop range.").font(.footnote).foregroundStyle(Color.lfbTextSecondary)
                 }
             }
+            ExportOptionsSection(model: model, format: format)
+            Button("Video soundtrack…") { showVideo = true }
             Button {
                 guard let url = model.chooseExportDestination(format: format) else { return }
                 let chosen = model.canExport(range: range) ? range : .whole
@@ -76,7 +80,7 @@ struct PadExportSheet: View {
             } label: {
                 Text("Export").frame(maxWidth: .infinity, minHeight: 36)
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(LFBPrimaryButtonStyle())
             .keyboardShortcut(.defaultAction)
             .accessibilityIdentifier("export-confirm")
         }
@@ -103,7 +107,7 @@ struct PadExportSheet: View {
                 ShareLink(item: result.url) {
                     Label("Share…", systemImage: "square.and.arrow.up").frame(maxWidth: .infinity, minHeight: 36)
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(LFBPrimaryButtonStyle())
                 Button { saveCopy = copyForFiles(result.url) } label: {
                     Label("Save to Files", systemImage: "folder").frame(maxWidth: .infinity, minHeight: 36)
                 }

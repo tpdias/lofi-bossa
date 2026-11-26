@@ -9,6 +9,7 @@ import UIKit
 struct PhoneChipStyle: ButtonStyle {
     var isOn = false
     @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.lfbTheme) private var theme
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 14, weight: .medium))
@@ -16,26 +17,27 @@ struct PhoneChipStyle: ButtonStyle {
             .foregroundStyle(isOn ? Color.lfbAccentText : Color.lfbText)
             .padding(.horizontal, 12)
             .frame(minHeight: LFBPhoneSize.chipHeight)
-            .background(isOn ? Color.lfbAccentWash : Color.lfbControl, in: Capsule())
-            .shadow(color: .black.opacity(isOn ? 0 : 0.08), radius: 1.5, y: 1)
+            .lfbDepth(Capsule(), fill: isOn ? theme.wash : Color.lfbControl, elevation: isOn ? .none : .low,
+                      pressed: configuration.isPressed, highlight: !isOn)
             .contentShape(Capsule())
-            .opacity(configuration.isPressed ? 0.7 : (isEnabled ? 1 : 0.45))
+            .opacity(isEnabled ? 1 : 0.45)
     }
 }
 
 /// The strip's primary button (`.m-gen`): accent capsule, grey when it can't be used.
 struct PhoneGenerateStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.lfbTheme) private var theme
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 14, weight: .semibold))
             .lineLimit(1)
-            .foregroundStyle(isEnabled ? Color.lfbOnAccent : Color.lfbTextTertiary)
+            .foregroundStyle(isEnabled ? theme.onAccent : Color.lfbTextTertiary)
             .padding(.horizontal, 14)
             .frame(minHeight: LFBPhoneSize.chipHeight)
-            .background(isEnabled ? Color.lfbAccent : Color.lfbWell, in: Capsule())
+            .lfbDepth(Capsule(), fill: isEnabled ? theme.accent : Color.lfbWell, elevation: isEnabled ? .mid : .none,
+                      pressed: configuration.isPressed, highlight: isEnabled)
             .contentShape(Capsule())
-            .opacity(configuration.isPressed ? 0.75 : 1)
     }
 }
 
@@ -43,15 +45,17 @@ struct PhoneGenerateStyle: ButtonStyle {
 struct PhoneBigButtonStyle: ButtonStyle {
     var secondary = false
     @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.lfbTheme) private var theme
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 17, weight: .semibold))
-            .foregroundStyle(secondary ? Color.lfbText : (isEnabled ? Color.lfbOnAccent : Color.lfbTextTertiary))
+            .foregroundStyle(secondary ? Color.lfbText : (isEnabled ? theme.onAccent : Color.lfbTextTertiary))
             .frame(maxWidth: .infinity, minHeight: LFBPhoneSize.bigButton)
-            .background(secondary || !isEnabled ? Color.lfbWell : Color.lfbAccent,
-                        in: RoundedRectangle(cornerRadius: LFBPhoneSize.bigButton / 2))
+            .lfbDepth(RoundedRectangle(cornerRadius: LFBPhoneSize.bigButton / 2),
+                      fill: secondary || !isEnabled ? Color.lfbWell : theme.accent,
+                      elevation: secondary || !isEnabled ? .none : .mid, pressed: configuration.isPressed,
+                      highlight: !secondary && isEnabled)
             .contentShape(Rectangle())
-            .opacity(configuration.isPressed ? 0.75 : 1)
     }
 }
 
@@ -77,7 +81,7 @@ struct PhoneKeyStyle: ButtonStyle {
 
 /// Sheet header (`.m-sh`): title, optional trailing content, close button.
 struct PhoneSheetHeader<Trailing: View>: View {
-    let title: String
+    let title: LocalizedStringKey
     var leading: AnyView? = nil
     @ViewBuilder var trailing: Trailing
     @Environment(\.dismiss) private var dismiss
@@ -103,7 +107,7 @@ struct PhoneSheetHeader<Trailing: View>: View {
 }
 
 extension PhoneSheetHeader where Trailing == EmptyView {
-    init(title: String, leading: AnyView? = nil) {
+    init(title: LocalizedStringKey, leading: AnyView? = nil) {
         self.init(title: title, leading: leading) { EmptyView() }
     }
 }

@@ -29,7 +29,13 @@ struct AdaptiveRootView: View {
             #endif
             }
         }
+        .environment(\.lfbTheme, LFBTheme(session.activeModel?.project.style))
+        .environment(\.noteClock, NoteClock { [weak session] in
+            (session?.activeModel?.position ?? 0, session?.activeModel?.isPlaying ?? false)
+        })
         .onAppear { session.syncActiveModel(); DevTools.runDemoIfAsked(session) }
+        .announcesProgress(of: session.activeModel)
+        .hapticBeat(of: session.activeModel)
         // App-wide commands that the menus (Mac) and hardware-keyboard shortcuts (iPad) post.
         .onReceive(NotificationCenter.default.publisher(for: .lfbNewProject)) { _ in session.newProject() }
         .onReceive(NotificationCenter.default.publisher(for: .lfbGenerate)) { _ in session.activeModel?.generate() }

@@ -128,7 +128,7 @@ final class ProjectStore {
         let used = Set(projects.map(\.name))
         var n = 1
         while used.contains("Untitled Track \(n)") { n += 1 }
-        return "Untitled Track \(n)"
+        return String(localized: "Untitled Track \(n)")
     }
 
     private func touch(_ p: Project) {

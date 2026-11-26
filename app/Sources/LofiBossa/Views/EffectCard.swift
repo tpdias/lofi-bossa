@@ -3,8 +3,8 @@ import SwiftUI
 /// Sound-design control that invites playing with it: the whole card is the slider.
 /// Used for Warmth, Reverb and Vinyl in the inspector's Sound tab.
 struct EffectCard: View {
-    let title: String
-    let caption: String
+    let title: LocalizedStringKey
+    let caption: LocalizedStringKey
     let symbol: String
     @Binding var amount: Double          // 0...1, displayed as 0...100
 
@@ -35,7 +35,8 @@ struct EffectCard: View {
         .frame(height: LFBSize.isTouch ? LFBTouchSize.effectCardHeight : LFBSize.effectCardHeight)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(title)
-        .accessibilityValue("\(Int(amount * 100))")
+        .accessibilityValue("\(Int(amount * 100)) percent")
+        .accessibilityHint("\(caption). Swipe up or down to adjust.")
         .accessibilityAdjustableAction { direction in
             switch direction {
             case .increment: amount = min(amount + 0.05, 1)

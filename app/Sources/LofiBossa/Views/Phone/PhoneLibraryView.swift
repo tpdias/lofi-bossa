@@ -34,7 +34,7 @@ struct PhoneLibraryView: View {
                     .toolbar(.hidden, for: .navigationBar)
             } else {
                 grid
-                    .navigationTitle(showTrash ? "Recently Deleted" : "Projects")
+                    .navigationTitle(showTrash ? L("Recently Deleted") : L("Projects"))
                     .navigationBarTitleDisplayMode(.large)
                     .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always),
                                 prompt: "Search projects")
@@ -54,16 +54,16 @@ struct PhoneLibraryView: View {
                 if let p = pendingPermanentDelete { store.permanentlyDelete(p) }
             }
         } message: {
-            Text("\"\(pendingPermanentDelete?.name ?? "")\" and all its versions will be deleted. This cannot be undone.")
+            Text("“\(pendingPermanentDelete?.name ?? "")” and all its versions will be deleted. This cannot be undone.")
         }
     }
 
     private var grid: some View {
         ScrollView {
             if projects.isEmpty {
-                ContentUnavailableView(showTrash ? "Nothing in Recently Deleted" : "No Results",
+                ContentUnavailableView(showTrash ? L("Nothing in Recently Deleted") : L("No Results"),
                                        systemImage: showTrash ? "trash" : "magnifyingglass",
-                                       description: Text(showTrash ? "Deleted projects stay here for 30 days." : "Try another name."))
+                                       description: Text(showTrash ? L("Deleted projects stay here for 30 days.") : L("Try another name.")))
                     .padding(.top, 60)
             }
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
@@ -85,7 +85,7 @@ struct PhoneLibraryView: View {
         ToolbarItem(placement: .topBarLeading) {
             Menu {
                 Picker("Sort By", selection: $sort) {
-                    ForEach(LibraryGridView.Sort.allCases) { Text($0.rawValue).tag($0) }
+                    ForEach(LibraryGridView.Sort.allCases) { Text(LocalizedStringKey($0.rawValue)).tag($0) }
                 }
                 Divider()
                 Toggle(isOn: $showTrash) { Label("Recently Deleted", systemImage: "trash") }
@@ -194,6 +194,8 @@ struct PhoneFirstLaunchView: View {
                 }
                 .frame(height: 48)
                 .accessibilityHidden(true)
+                SaudadeMark(size: 56)
+                SaudadeWordmark(size: 34)
                 Text("Make your first track").font(.system(size: 28, weight: .bold, design: .rounded))
                     .multilineTextAlignment(.center)
                 Text("Pick a feel. Lo-Fi & Bossa writes a short four-part song that you can mix, rework and export.")
@@ -227,8 +229,8 @@ struct PhoneFirstLaunchView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(s.title).font(.system(size: 16, weight: .semibold, design: .rounded))
                 Text(s == .lofi
-                     ? "Electric piano, soft guitar, round bass and a dusty kit, with tape warmth and a little vinyl."
-                     : "Nylon guitar, grand piano, upright bass and light percussion, with an open, airy room.")
+                     ? L("Electric piano, soft guitar, round bass and a dusty kit, with tape warmth and a little vinyl.")
+                     : L("Nylon guitar, grand piano, upright bass and light percussion, with an open, airy room."))
                     .font(.system(size: 13)).foregroundStyle(Color.lfbTextSecondary)
                     .multilineTextAlignment(.leading)
             }

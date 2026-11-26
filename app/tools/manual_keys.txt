@@ -1,0 +1,33 @@
+Grand Piano
+Electric Piano
+Soft Electric Piano
+Vibraphone
+Nylon Guitar
+Steel Guitar
+Jazz Guitar
+Clean Electric
+Acoustic Bass
+Fingered Bass
+Fretless Bass
+Standard Kit
+Room Kit
+Jazz Kit
+Brush Kit
+Warm Pad
+String Ensemble
+Slow Strings
+Choir Aahs
+Church Organ
+Flute
+Soft Sax
+Muted Trumpet
+Clarinet
+Oboe
+Marimba
+Glockenspiel
+Music Box
+Whole song
+Loop range
+Last Edited
+Created
+Notes

@@ -95,25 +95,25 @@ struct PadProjectView: View {
         ToolbarItemGroup(placement: .primaryAction) {
             Button(action: model.undo) { Image(systemName: "arrow.uturn.backward") }
                 .disabled(!model.canUndo)
-                .accessibilityLabel(model.undoTitle.map { "Undo \($0)" } ?? "Undo")
+                .accessibilityLabel(model.undoTitle.map { L("Undo \($0)") } ?? L("Undo"))
             Button(action: model.redo) { Image(systemName: "arrow.uturn.forward") }
                 .disabled(!model.canRedo)
-                .accessibilityLabel(model.redoTitle.map { "Redo \($0)" } ?? "Redo")
+                .accessibilityLabel(model.redoTitle.map { L("Redo \($0)") } ?? L("Redo"))
             Button { showExport = true } label: { Label("Export", systemImage: "square.and.arrow.up") }
                 .labelStyle(.titleAndIcon)
                 .disabled(snapshot == nil || model.isGenerating)
                 .accessibilityIdentifier("export")
             Button(action: toggleInspector) { Image(systemName: "sidebar.trailing") }
                 .disabled(model.isPianoRollOpen)
-                .accessibilityLabel(inspectorShown ? "Hide Inspector" : "Show Inspector")
+                .accessibilityLabel(inspectorShown ? L("Hide Inspector") : L("Show Inspector"))
                 .accessibilityIdentifier("inspector-toggle")
         }
     }
 
     private var subtitle: String {
-        let version = model.project.current.map { "Version \($0.number)" }
-        guard let version else { return "\(model.project.style.title) · not generated yet" }
-        return "\(model.project.style.title) · \(formatTimecode(model.project.lengthSeconds)) · \(version) · Saved"
+        let version = model.project.current.map { L("Version \($0.number)") }
+        guard let version else { return L("\(model.project.style.title) · not generated yet") }
+        return L("\(model.project.style.title) · \(formatTimecode(model.project.lengthSeconds)) · \(version) · Saved")
     }
 
     // MARK: Stage
@@ -183,7 +183,7 @@ struct PadListeningBanner: View {
             Button("Back to Current", action: onBack)
                 .buttonStyle(.bordered)
             Button("Restore This Version", action: onRestore)
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(LFBPrimaryButtonStyle())
         }
     }
 }
@@ -198,7 +198,7 @@ struct PadLogSheet: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                Text(log.isEmpty ? "No output yet." : log)
+                Text(log.isEmpty ? L("No output yet.") : log)
                     .font(.system(size: 12, design: .monospaced))
                     .foregroundStyle(log.isEmpty ? Color.lfbTextSecondary : Color.lfbText)
                     .textSelection(.enabled)

@@ -7,9 +7,10 @@ struct InspectorView: View {
     var body: some View {
         VStack(spacing: 0) {
             Picker("", selection: $model.inspectorTab) {
-                ForEach(InspectorTab.allCases) { Text($0.rawValue).tag($0) }
+                ForEach(InspectorTab.allCases) { Text(LocalizedStringKey($0.rawValue)).tag($0) }
             }
             .pickerStyle(.segmented).labelsHidden()
+            .accessibilityLabel("Inspector")
             .padding(LFBSpace.md)
             Divider()
             switch model.inspectorTab {
@@ -41,12 +42,13 @@ private struct SoundTab: View {
                           amount: Binding(get: { effects.vinyl }, set: { model.setEffects(MixEffects(warmth: effects.warmth, reverb: effects.reverb, vinyl: $0)) }))
 
                 HStack {
-                    Text("\(model.project.style.title) defaults\(model.effectsAreAtStyleDefault ? "" : ", adjusted")")
+                    Text(model.effectsAreAtStyleDefault ? "\(model.project.style.title) defaults" : "\(model.project.style.title) defaults, adjusted")
                         .font(.lfbCaption).foregroundStyle(Color.lfbTextSecondary)
                     Spacer()
                     if !model.effectsAreAtStyleDefault {
                         Button("Reset", action: model.resetEffectsToStyleDefault)
                             .buttonStyle(.plain).font(.lfbCaption).foregroundStyle(Color.lfbAccentText)
+                            .accessibilityHint("Puts warmth, reverb and vinyl back to the style's defaults")
                     }
                 }
 
@@ -140,6 +142,8 @@ private struct VersionRow: View {
                     .foregroundStyle(version.isKept ? Color.lfbCaution : Color.lfbTextTertiary)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(version.isKept ? "Unkeep version \(version.number)" : "Keep version \(version.number)")
+            .accessibilityHint("Kept versions are never pruned from the history")
             Button(action: onPlay) { Image(systemName: "play.fill") }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("version-play-\(version.number)")
@@ -147,11 +151,14 @@ private struct VersionRow: View {
         }
         .padding(.horizontal, LFBSpace.md).padding(.vertical, 6)
         .background(isCurrent ? Color.lfbAccentWash : .clear)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Version \(version.number), \(version.kind.title)")
+        .accessibilityValue(isCurrent ? "Current" : (isListening ? "Listening" : ""))
     }
 }
 
 private struct Badge: View {
-    let text: String
+    let text: LocalizedStringKey
     let tint: Color
     var body: some View {
         Text(text).font(.system(size: 9, weight: .bold))

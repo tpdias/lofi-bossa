@@ -26,6 +26,7 @@ struct PhoneProjectView: View {
     @Environment(\.verticalSizeClass) private var verticalSizeClass
 
     @State private var sheet: PhoneSheet?
+    @AppStorage("lfb.hapticBeat") private var hapticBeat = false
     @State private var renaming = false
     @State private var draftName = ""
     @State private var height: CGFloat = LFBDevice.iphone.height
@@ -112,7 +113,7 @@ struct PhoneProjectView: View {
             case .generating(let startedAt, _):
                 PhoneGeneratingBanner(startedAt: startedAt, onCancel: model.cancelGenerate)
             case .failed(let message, let detail, let scope) where scope == nil:
-                PhoneBanner(kind: .error, icon: "exclamationmark.triangle.fill", title: message,
+                PhoneBanner(kind: .error, icon: "exclamationmark.triangle.fill", title: LocalizedStringKey(message),
                             text: "Your song is unchanged.",
                             secondary: detail == nil ? nil : ("Details", { sheet = .log }),
                             primary: ("Try again", { model.dismissError(); model.generate() }))
@@ -161,19 +162,19 @@ struct PhoneProjectView: View {
         ToolbarItemGroup(placement: .topBarTrailing) {
             Button(action: model.undo) { Image(systemName: "arrow.uturn.backward") }
                 .disabled(!model.canUndo || model.isGenerating)
-                .accessibilityLabel(model.undoTitle.map { "Undo \($0)" } ?? "Undo")
+                .accessibilityLabel(model.undoTitle.map { L("Undo \($0)") } ?? L("Undo"))
                 .accessibilityIdentifier("undo")
             moreMenu
         }
     }
 
     private var subtitle: String {
-        guard model.project.hasGenerated else { return "\(model.project.style.title) · not generated yet" }
+        guard model.project.hasGenerated else { return L("\(model.project.style.title) · not generated yet") }
         let save: String
         switch store.saveState {
-        case .saved: save = "Saved"
-        case .saving: save = "Saving…"
-        case .failed: save = "Not saved"
+        case .saved: save = L("Saved")
+        case .saving: save = L("Saving…")
+        case .failed: save = L("Not saved")
         }
         return "\(model.project.style.title) · \(formatTimecode(model.project.lengthSeconds)) · \(save)"
     }
@@ -204,6 +205,9 @@ struct PhoneProjectView: View {
                         }
                     }
                 }
+            }
+            if HapticSupport.isAvailable {
+                Toggle("Haptic Beat", systemImage: "hand.tap", isOn: $hapticBeat)
             }
             Divider()
             Button("Delete", systemImage: "trash", role: .destructive) {
@@ -291,11 +295,11 @@ struct PhoneRecipeStrip: View {
                     Button { showSeed = true } label: {
                         HStack(spacing: 5) {
                             Image(systemName: "dice")
-                            Text(model.displaySeed.map(String.init) ?? "Random").monospacedDigit()
+                            (model.displaySeed.map { Text(verbatim: String($0)) } ?? Text("Random")).monospacedDigit()
                         }
                     }
                     .buttonStyle(PhoneChipStyle(isOn: model.isDiceOn))
-                    .accessibilityLabel("Seed, \(model.displaySeed.map(String.init) ?? "random")\(model.isDiceOn ? ", new every take" : "")")
+                    .accessibilityLabel(model.displaySeed.map { L("Seed, \($0)") } ?? (model.isDiceOn ? L("Seed, random, new every take") : L("Seed, random")))
                     .accessibilityIdentifier("seed-chip")
                     .popover(isPresented: $showSeed) { PhoneSeedPopover(model: model) }
 
@@ -330,13 +334,13 @@ struct PhoneRecipeStrip: View {
             Button { model.generate() } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "sparkles")
-                    Text(model.status == .starting ? "Waiting…" : (model.project.hasGenerated ? "New take" : "Generate"))
+                    Text(model.status == .starting ? L("Waiting…") : (model.project.hasGenerated ? L("New take") : L("Generate")))
                 }
             }
             .buttonStyle(PhoneGenerateStyle())
             .disabled(model.isGeneratorBusy || isWaiting || !model.canGenerate)
-            .accessibilityHint(model.lockedTracks.isEmpty ? "Writes a new take of every track"
-                               : "Writes a new take around the locked tracks")
+            .accessibilityHint(model.lockedTracks.isEmpty ? L("Writes a new take of every track")
+                               : L("Writes a new take around the locked tracks"))
             .accessibilityIdentifier("generate")
             .padding(.trailing, LFBSpace.lg)
         }
@@ -419,8 +423,8 @@ struct PhoneSongSettings: View {
                 Spacer()
                 Picker("Key", selection: Binding(get: { model.project.key ?? "Auto" },
                                                  set: { model.setKey($0 == "Auto" ? nil : $0) })) {
-                    Text(model.project.key == nil && model.displayedKey != nil ? "Auto (\(model.displayedKey!))" : "Auto").tag("Auto")
-                    ForEach(MusicKey.names, id: \.self) { Text($0).tag($0) }
+                    Text(model.project.key == nil && model.displayedKey != nil ? L("Auto (\(MusicKey.display(model.displayedKey!)))") : L("Auto")).tag("Auto")
+                    ForEach(MusicKey.names, id: \.self) { Text(verbatim: MusicKey.display($0)).tag($0) }
                 }
                 .pickerStyle(.menu)
             }
@@ -442,7 +446,7 @@ struct PhoneSongSettings: View {
         .presentationCompactAdaptation(.popover)
     }
 
-    private func slider(_ title: String, low: String, high: String, value: Binding<Double>, id: String) -> some View {
+    private func slider(_ title: LocalizedStringKey, low: LocalizedStringKey, high: LocalizedStringKey, value: Binding<Double>, id: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title).font(.lfbBodyMedium)
             HStack(spacing: LFBSpace.sm) {
@@ -462,10 +466,10 @@ struct PhoneBanner: View {
     let kind: Kind
     var spinner = false
     var icon: String? = nil
-    let title: String
-    let text: String
-    var secondary: (String, () -> Void)? = nil
-    var primary: (String, () -> Void)? = nil
+    let title: LocalizedStringKey
+    let text: LocalizedStringKey
+    var secondary: (LocalizedStringKey, () -> Void)? = nil
+    var primary: (LocalizedStringKey, () -> Void)? = nil
     var showsProgress = false
 
     private var tint: Color {
