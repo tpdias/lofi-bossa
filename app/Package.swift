@@ -8,6 +8,8 @@ let package = Package(
     platforms: [.macOS(.v14), .iOS("27.0")],
     targets: [
         .executableTarget(name: "LofiBossa", path: "Sources/LofiBossa"),
-        .testTarget(name: "LofiBossaTests", dependencies: ["LofiBossa"], path: "LofiBossaTests"),
+        .testTarget(name: "LofiBossaTests", dependencies: ["LofiBossa"], path: "LofiBossaTests",
+                    // golden JSON for the clean-up port, read from disk by CleanupGoldenTests
+                    exclude: ["Fixtures"]),
     ]
 )
