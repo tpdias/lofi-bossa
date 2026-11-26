@@ -11,7 +11,7 @@ import CoreAI
 /// fed in chunks at increasing positions, and a shorter one is padded: the padding lands at later
 /// positions that no real query sees, and decode overwrites them as it goes.
 @available(macOS 27.0, iOS 27.0, *)
-final class MusicModel {
+final class MusicModel: LogitsModel {
     static let prefillLength = 512
     static let maxLength = 1024
     static let vocabulary = 55028
@@ -45,8 +45,14 @@ final class MusicModel {
     /// Feeds `tokens` at positions `start...` and returns the logits after the last one.
     func feed(_ tokens: [Int32], at start: Int) async throws -> [Float] {
         precondition(!tokens.isEmpty && start + tokens.count <= Self.maxLength)
-        if tokens.count == 1 {
-            return try await run(decodeFunction, tokens: tokens, start: start, readRow: 0)
+        // A few tokens (one event) are cheaper one by one through decode than as a padded
+        // 512-token prefill.
+        if tokens.count <= 4 {
+            var logits: [Float] = []
+            for (i, token) in tokens.enumerated() {
+                logits = try await run(decodeFunction, tokens: [token], start: start + i, readRow: 0)
+            }
+            return logits
         }
         var logits: [Float] = []
         var offset = 0
@@ -154,6 +160,39 @@ enum EngineBench {
             return 0
         } catch {
             print("engine bench failed: \(error)")
+            return 1
+        }
+    }
+}
+
+/// `LofiBossa --engine-generate model.aimodel seconds out.json [seed]`: writes a four-track song
+/// with the Swift sampler on Core AI (no clean-up yet) and saves it in the server's wire format,
+/// so `--render out.json lofi out.wav` can play it. Prints timing and note counts.
+@available(macOS 27.0, iOS 27.0, *)
+enum EngineGenerate {
+    static func run(model url: URL, seconds: Double, output: URL, seed: UInt64) async -> Int32 {
+        do {
+            let model = try await MusicModel(contentsOf: url)
+            let tracks = TrackID.core
+            var options = SamplerOptions()
+            options.drumMinGapTicks = Dictionary(uniqueKeysWithValues: (27...87).map { ($0, 10) })
+            let t = Date()
+            var lastPrint = Date()
+            let events = try await Sampler.generate(
+                model: model, start: 0, end: seconds, instruments: tracks.flatMap(\.modelInstruments),
+                options: options, seed: seed) { fraction in
+                    if Date().timeIntervalSince(lastPrint) > 5 { print(String(format: "  %.0f%%", fraction * 100)); lastPrint = Date() }
+                }
+            let elapsed = Date().timeIntervalSince(t)
+            let notes = NoteEvents.notes(from: events)
+            let counts = tracks.map { "\($0.rawValue) \(notes[$0]?.count ?? 0)" }.joined(separator: ", ")
+            print(String(format: "wrote %.0f s of music in %.1f s (%d events): ", seconds, elapsed, events.count) + counts)
+            let wire = WireSong(seed: Int(seed), seconds: seconds,
+                                tracks: Dictionary(uniqueKeysWithValues: tracks.map { ($0.rawValue, notes[$0] ?? []) }))
+            try JSONEncoder().encode(wire).write(to: output)
+            return 0
+        } catch {
+            print("engine generate failed: \(error)")
             return 1
         }
     }

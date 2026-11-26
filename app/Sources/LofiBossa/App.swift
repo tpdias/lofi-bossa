@@ -35,6 +35,15 @@ enum Main {
             dispatchMain()
         }
         #endif
+        #if canImport(CoreAI)
+        if let flag = args.firstIndex(of: "--engine-generate"), args.count > flag + 3 {
+            guard #available(macOS 27.0, iOS 27.0, *) else { print("Core AI needs macOS/iOS 27"); exit(1) }
+            let seed = args.count > flag + 4 ? UInt64(args[flag + 4]) ?? 1 : 1
+            Task { exit(await EngineGenerate.run(model: URL(fileURLWithPath: args[flag + 1]), seconds: Double(args[flag + 2]) ?? 20,
+                                                 output: URL(fileURLWithPath: args[flag + 3]), seed: seed)) }
+            dispatchMain()
+        }
+        #endif
         LoFiBossaApp.main()
     }
 }
