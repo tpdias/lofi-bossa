@@ -21,6 +21,9 @@ final class MusicModel: LogitsModel {
     private let decodeFunction: InferenceFunction
     private var keys: NDArray
     private var values: NDArray
+    /// The token last written at each cache position, so a prefill that has to start earlier
+    /// (near the end of the window) can rewrite those positions with exactly what's there.
+    private var written = [Int32](repeating: 0, count: MusicModel.maxLength)
 
     struct LoadError: LocalizedError {
         let message: String
@@ -47,6 +50,7 @@ final class MusicModel: LogitsModel {
         precondition(!tokens.isEmpty && start + tokens.count <= Self.maxLength)
         // A few tokens (one event) are cheaper one by one through decode than as a padded
         // 512-token prefill.
+        for (i, token) in tokens.enumerated() { written[start + i] = token }
         if tokens.count <= 4 {
             var logits: [Float] = []
             for (i, token) in tokens.enumerated() {
@@ -59,13 +63,14 @@ final class MusicModel: LogitsModel {
         while offset < tokens.count {
             let chunk = Array(tokens[offset..<min(offset + Self.prefillLength, tokens.count)])
             let begin = start + offset
-            // Padding positions must stay inside the cache; a final short chunk near the end of
-            // the window is shifted left onto positions already written (same tokens again).
+            // A prefill writes exactly `prefillLength` positions, and they must stay inside the
+            // cache. Near the end of the window it starts earlier instead, rewriting the positions
+            // before `begin` with the tokens already there (same tokens, same cache entries).
             if begin + Self.prefillLength > Self.maxLength {
-                let shift = begin + Self.prefillLength - Self.maxLength
-                let refill = Array(tokens[(offset - shift)..<offset]) + chunk
+                let first = Self.maxLength - Self.prefillLength
+                let refill = Array(written[first..<begin]) + chunk
                 let padded = refill + Array(repeating: Int32(0), count: Self.prefillLength - refill.count)
-                logits = try await run(prefillFunction, tokens: padded, start: begin - shift, readRow: refill.count - 1)
+                logits = try await run(prefillFunction, tokens: padded, start: first, readRow: refill.count - 1)
             } else {
                 let padded = chunk + Array(repeating: Int32(0), count: Self.prefillLength - chunk.count)
                 logits = try await run(prefillFunction, tokens: padded, start: begin, readRow: chunk.count - 1)
@@ -134,6 +139,15 @@ enum EngineBench {
                 }
             }
 
+            // Near the end of the window a prefill starts earlier and rewrites positions already
+            // written; the logits must equal feeding the same tokens the plain way.
+            let sequence = (0..<610).map { _ in Int32.random(in: 0..<55000) }
+            _ = try await model.feed(Array(sequence[0..<600]), at: 0)
+            let shifted = try await model.feed(Array(sequence[600..<610]), at: 600)   // 600 + 512 > 1024
+            let plain = try await model.feed(sequence, at: 0)                         // 512 + 98, no shift
+            let nearEndDiff = zip(shifted, plain).map { abs($0 - $1) }.max() ?? .nan
+            print(String(format: "near-end prefill: max |Δlogit| vs the plain path %.5f", nearEndDiff))
+
             // Timing on fresh positions: one full prefill, then decode token by token.
             let prefillTokens = (0..<MusicModel.prefillLength).map { _ in Int32.random(in: 0..<55000) }
             var prefillTimes: [Double] = []
@@ -174,19 +188,10 @@ enum EngineGenerate {
         do {
             let model = try await MusicModel(contentsOf: url)
             let tracks = TrackID.core
-            var options = SamplerOptions()
-            options.drumMinGapTicks = Dictionary(uniqueKeysWithValues: (27...87).map { ($0, 10) })
-            let t = Date()
-            var lastPrint = Date()
-            let events = try await Sampler.generate(
-                model: model, start: 0, end: seconds, instruments: tracks.flatMap(\.modelInstruments),
-                options: options, seed: seed) { fraction in
-                    if Date().timeIntervalSince(lastPrint) > 5 { print(String(format: "  %.0f%%", fraction * 100)); lastPrint = Date() }
-                }
-            let elapsed = Date().timeIntervalSince(t)
-            let notes = NoteEvents.notes(from: events)
-            let counts = tracks.map { "\($0.rawValue) \(notes[$0]?.count ?? 0)" }.joined(separator: ", ")
-            print(String(format: "wrote %.0f s of music in %.1f s (%d events): ", seconds, elapsed, events.count) + counts)
+            let result = try await MusicEngine.generate(
+                model: model, seconds: seconds, seed: seed, tracks: tracks, busyness: [:], noteLength: [:],
+                music: MusicSettings(), log: { print($0) })
+            let notes = result.tracks
             let wire = WireSong(seed: Int(seed), seconds: seconds,
                                 tracks: Dictionary(uniqueKeysWithValues: tracks.map { ($0.rawValue, notes[$0] ?? []) }))
             try JSONEncoder().encode(wire).write(to: output)
