@@ -121,3 +121,41 @@ the actual asset via `coreai-opt` is follow-up work, not done here.
 3. Either accept the fixed 512-token prefill bucket, add 1–2 more bucket sizes, or retest
    whether a newer `coreai-torch` release supports dynamic non-batch `index_put` (this was
    tested against 0.4.4, the latest on PyPI at the time of this spike).
+
+## Speed gate on the real runtime (PR A)
+
+The spike above could only time Core AI's pip dev interpreter. This run uses the OS runtime from
+a macOS 27.2 app build (`LofiBossa --engine-bench exports/base-int8.aimodel exports/base-fixture.json`,
+`app/Sources/LofiBossa/Engine/MusicModel.swift`), on the user's Mac, with the base model.
+
+**Export.** `export_coreai.py --export-only --quantize int8` uses coreai-opt's `w8` preset
+(weight-only int8, per channel). Hugging Face's GPT-2 keeps its 48 projection layers as its own
+`Conv1D` type, which the quantizer skips, so the first int8 asset was 384 MB; converting them to
+`nn.Linear` first (identical outputs, max difference 0.0) gives **129.9 MB**.
+
+**Correct.** Against PyTorch fp32 on a 60-token prompt (`training/engine_fixture.py`):
+
+| | argmax | top-5 overlap | max \|Δlogit\| over PyTorch's top 20 |
+|---|---|---|---|
+| prefill | same (14129) | 5/5 | 0.188 |
+| decode (1 token) | same (82) | 5/5 | 0.279 |
+
+**Speed** (several runs; the spread between runs is as large as between units):
+
+| preferred unit | prefill 512 tokens | decode | first load | cached load |
+|---|---|---|---|---|
+| default | 90–111 ms | 26–31 ms/token | 18.9 s | 0.4–2.9 s |
+| GPU | 97 ms | 29 ms/token | 19.9 s | |
+| Neural Engine | 93 ms | 26 ms/token | 18.8 s | |
+| CPU | 166 ms | 31 ms/token | | 1.8 s |
+
+A 1,500-token song (about 30 s of four tracks) takes **~40–47 s** to write. That's above the
+20 ms/token target but workable for the challenge's three minutes, especially if notes play as
+they're written. **Go.**
+
+The unit barely matters, so decode is probably dominated by per-call overhead rather than math
+(85 MB of int8 weights is ~1 ms of memory traffic): most likely the 2 × 37.7 MB fp32 KV cache
+passed as state on every call. To try in the engine PR: an fp16 cache, the `encode`/
+`ComputeStream` API so state stays on the device between calls, and a shorter window if needed.
+The first load (~19 s, specialization) is cached by the system; the app should load the model in
+the background at launch. Not measured yet: an iPad (the Simulator isn't representative).

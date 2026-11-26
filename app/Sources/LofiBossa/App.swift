@@ -1,5 +1,8 @@
 import AVFoundation
 import SwiftUI
+#if canImport(CoreAI)
+import CoreAI
+#endif
 
 @main
 enum Main {
@@ -17,6 +20,19 @@ enum Main {
             // --screenshot can't capture them).
             MainActor.assumeIsolated { DevTools.renderEffectsPopover(to: args[flag + 1]) }
             exit(0)
+        }
+        #endif
+        #if canImport(CoreAI)
+        if let flag = args.firstIndex(of: "--engine-bench"), args.count > flag + 1 {
+            // On-device model check and timing:  LofiBossa --engine-bench model.aimodel [fixture.json]
+            guard #available(macOS 27.0, iOS 27.0, *) else { print("Core AI needs macOS/iOS 27"); exit(1) }
+            let model = URL(fileURLWithPath: args[flag + 1])
+            let fixture = args.count > flag + 2 && !args[flag + 2].hasPrefix("--") ? URL(fileURLWithPath: args[flag + 2]) : nil
+            // `--units cpu|gpu|ane` prefers one compute unit (default: Core AI decides).
+            let units: ComputeUnitKind? = args.firstIndex(of: "--units").flatMap { args.count > $0 + 1 ? args[$0 + 1] : nil }
+                .flatMap { ["cpu": .cpu, "gpu": .gpu, "ane": .neuralEngine][$0] }
+            Task { exit(await EngineBench.run(model: model, fixture: fixture, computeUnit: units)) }
+            dispatchMain()
         }
         #endif
         LoFiBossaApp.main()
