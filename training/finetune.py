@@ -2,6 +2,7 @@
 
     python training/finetune.py --style bossa
     python training/finetune.py --style lofi --epochs 2 --batch-size 16
+    python training/finetune.py --style bossa --licenses cc-by   # what ships: no GigaMIDI
 
 Reads processed/index.jsonl (from preprocess.py), builds training sequences, and saves the
 checkpoint with the lowest validation loss to checkpoints/<style>/. The inference server
@@ -23,6 +24,7 @@ import torch.nn.functional as F
 import sequences
 from model import BASE_MODEL, load_model
 from anticipation.vocab import ANOTE_OFFSET, NOTE_OFFSET, REST
+from licenses import LICENSE_GROUPS
 from tracks import ALL_FAMILY, ALL_TRACKS
 
 
@@ -148,6 +150,9 @@ def main():
     ap.add_argument("--rebuild", action="store_true", help="ignore cached training sequences")
     ap.add_argument("--save-last", action="store_true",
                     help="also save the final weights to <out>-last, whatever the validation loss")
+    ap.add_argument("--licenses", default="all", choices=sorted(LICENSE_GROUPS),
+                    help="cc-by: train only on CC BY (or more permissive) sources, i.e. no GigaMIDI. "
+                         "Required for checkpoints that ship; see training/DATA_LICENSES.md")
     ap.add_argument("--seed", type=int, default=0)
     args = ap.parse_args()
 
@@ -162,7 +167,7 @@ def main():
     rng = np.random.default_rng(args.seed)
 
     # Building sequences takes a while on the full dataset, so the result is cached.
-    key = f"{args.style}-{args.tiers.replace(',', '+')}-c{args.copies}-b{args.core_boost}-s{args.seed}-v{args.boost_vibes}l{args.boost_lead}{'t' if args.transpose else ''}"
+    key = f"{args.style}-{args.tiers.replace(',', '+')}-c{args.copies}-b{args.core_boost}-s{args.seed}-v{args.boost_vibes}l{args.boost_lead}{'t' if args.transpose else ''}{'' if args.licenses == 'all' else '-' + args.licenses}"
     cache = args.processed / "sequences" / f"{key}{f'-n{args.limit_files}' if args.limit_files else ''}.npz"
     if cache.exists() and not args.rebuild:
         saved = np.load(cache)
@@ -172,7 +177,8 @@ def main():
         train, val = sequences.build(
             args.processed / "index.jsonl", args.processed, args.style, set(args.tiers.split(",")),
             args.copies, args.core_boost, limit=args.limit_files, seed=args.seed,
-            boosts={"vibes": args.boost_vibes, "lead": args.boost_lead}, transpose=args.transpose)
+            boosts={"vibes": args.boost_vibes, "lead": args.boost_lead}, transpose=args.transpose,
+            licenses=args.licenses)
         cache.parent.mkdir(parents=True, exist_ok=True)
         np.savez_compressed(cache, train=train, val=val)
     if len(train) == 0 or len(val) == 0:
@@ -202,7 +208,7 @@ def main():
     print(f"{device}: {total} steps, {steps_per_epoch} per epoch; "
           f"validation loss before training {baseline:.4f}")
     print("  per track: " + show(base_eval))
-    log = {"style": args.style, "base": args.base, "args": {k: str(v) for k, v in vars(args).items()},
+    log = {"style": args.style, "base": args.base, "licenses": args.licenses, "args": {k: str(v) for k, v in vars(args).items()},
            "train_sequences": len(train), "val_sequences": len(val),
            "baseline_val_loss": baseline, "baseline_by_track": base_eval, "evals": []}
     best, step, started, recent, stale, stop = baseline, 0, time.time(), [], 0, False

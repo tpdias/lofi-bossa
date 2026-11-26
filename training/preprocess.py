@@ -3,6 +3,8 @@ plus keys & pads, lead and vibes.
 
     python training/preprocess.py --manifest processed/manifest.jsonl --root datasets --out processed
 
+For anything that ships, add `--licenses cc-by` (drops GigaMIDI; see DATA_LICENSES.md).
+
 Writes processed/midi/<style>/<id>.mid, processed/index.jsonl (one row per kept file)
 and processed/report.md (per-style totals).
 
@@ -21,6 +23,7 @@ from pathlib import Path
 
 import pretty_midi
 
+from licenses import LICENSE_GROUPS, filter_rows
 from tracks import ALL_TRACKS, OUT_PROGRAM, TRACKS, all_track_of
 
 MIN_NOTES = 8
@@ -144,9 +147,16 @@ def main():
     ap.add_argument("--min-tracks", type=int, default=3)
     ap.add_argument("--min-seconds", type=float, default=8.0)
     ap.add_argument("--workers", type=int, default=multiprocessing.cpu_count())
+    ap.add_argument("--licenses", default="all", choices=sorted(LICENSE_GROUPS),
+                    help="cc-by: only CC BY (or more permissive) sources, i.e. no GigaMIDI. "
+                         "Use it for anything that ships; see training/DATA_LICENSES.md")
     args = ap.parse_args()
 
     rows = [json.loads(line) for line in open(args.manifest)]
+    before = len(rows)
+    rows = filter_rows(rows, args.licenses)
+    if len(rows) < before:
+        print(f"--licenses {args.licenses}: left out {before - len(rows)} manifest rows")
     rows = [r for r in rows if (args.root / r["source"] / r["path"]).exists()]
     jobs = [(r, args.root, args.out, args.min_tracks, args.min_seconds) for r in rows]
 

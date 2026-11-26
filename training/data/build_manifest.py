@@ -5,7 +5,8 @@
 Each manifest row: {id, source, style, tier, path, tempo, multitrack}
 `path` is relative to datasets/<source>/. Sources that are not downloaded are skipped.
 GigaMIDI rows need data/gigamidi_styles.jsonl (see gigamidi_meta.py); their MIDI files are
-pulled out of the downloaded zips afterwards by gigamidi_extract.py.
+pulled out of the downloaded zips afterwards by gigamidi_extract.py. Lakh rows are picked by
+training/sources/lakh.py and copied in from processed/lakh_manifest.jsonl.
 
 MidiCaps metadata can be streamed instead of downloaded:
     --midicaps-meta https://huggingface.co/datasets/amaai-lab/MidiCaps/resolve/main/train.json
@@ -127,6 +128,8 @@ def main():
     ap.add_argument("--out", default="processed/manifest.jsonl", type=Path)
     ap.add_argument("--midicaps-meta", help="path or URL of MidiCaps train.json")
     ap.add_argument("--gigamidi-meta", default="data/gigamidi_styles.jsonl", type=Path)
+    ap.add_argument("--lakh-manifest", default="processed/lakh_manifest.jsonl", type=Path,
+                    help="rows picked from the Lakh MIDI Dataset by training/sources/lakh.py")
     ap.add_argument("--min-families", type=int, default=3,
                     help="multitrack files must contain this many of piano/guitar/bass/drums")
     args = ap.parse_args()
@@ -137,6 +140,8 @@ def main():
         rows += midicaps(meta, args.min_families)
     if args.gigamidi_meta.exists():
         rows += gigamidi(args.gigamidi_meta)
+    if args.lakh_manifest.exists():
+        rows += [json.loads(line) for line in open(args.lakh_manifest)]
     for name, scan in (("groove", groove), ("guitarset", guitarset), ("kaggle_lofi", kaggle_lofi)):
         if (args.root / name).exists():
             rows += scan(args.root / name)
