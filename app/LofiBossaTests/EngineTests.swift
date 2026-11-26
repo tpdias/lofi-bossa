@@ -58,7 +58,7 @@ final class EngineEventsTests: XCTestCase {
 
 /// A stand-in for the model: deterministic pseudo-random logits per position and token, so the
 /// sampler runs its real loop without Core AI.
-private final class FakeModel: LogitsModel {
+final class FakeModel: LogitsModel {
     private(set) var fed = 0
     func feed(_ tokens: [Int32], at start: Int) async throws -> [Float] {
         fed += tokens.count
@@ -145,5 +145,64 @@ final class SamplerTests: XCTestCase {
         let logits: [Float] = [10, 0, 0, -.infinity]
         for _ in 0..<50 { XCTAssertEqual(Sampler.sample(logits, topP: 0.5, using: &rng), 0) }
         for _ in 0..<50 { XCTAssertNotEqual(Sampler.sample(logits, topP: 1, using: &rng), 3) }
+    }
+}
+
+/// The server's flows on top of the sampler, with the fake model.
+final class MusicEngineTests: XCTestCase {
+    private let music = MusicSettings()
+
+    private func song() -> [TrackID: [Note]] {
+        [.piano: (0..<12).map { Note(pitch: 60 + $0 % 5, start: Double($0) * 0.4, duration: 0.3, velocity: 80) },
+         .bass: (0..<6).map { Note(pitch: 36 + $0 % 3, start: Double($0) * 0.8, duration: 0.6, velocity: 90) }]
+    }
+
+    func testGenerateWritesEveryTrackAndKeepsLockedOnes() async throws {
+        let locked = song()
+        let result = try await MusicEngine.generate(
+            model: FakeModel(), seconds: 5, seed: 4, tracks: [.piano, .bass, .drums],
+            busyness: [:], noteLength: [:], music: music, keeping: locked, locked: [.piano])
+        XCTAssertEqual(result.tracks[.piano], locked[.piano], "a locked track comes back exactly as it was")
+        XCTAssertFalse(result.tracks[.bass, default: []].isEmpty)
+        XCTAssertFalse(result.tracks[.drums, default: []].isEmpty, "a silent track gets a part of its own")
+        XCTAssertNotNil(result.key, "the key is detected on Auto")
+    }
+
+    func testEveryTrackLockedIsRefused() async {
+        do {
+            _ = try await MusicEngine.generate(model: FakeModel(), seconds: 5, seed: 1, tracks: [.piano],
+                                               busyness: [:], noteLength: [:], music: music, keeping: song(), locked: [.piano])
+            XCTFail("should refuse")
+        } catch {}
+    }
+
+    func testRangedRewriteKeepsNotesOutsideTheRange() async throws {
+        let s = song()
+        let (notes, _) = try await MusicEngine.rewrite(model: FakeModel(), track: .piano, song: s, seconds: 5, seed: 3,
+                                                       range: 1.6...3.2, busyness: 0.5, noteLength: 0.5, music: music)
+        let outside = s[.piano]!.filter { $0.start < 1.6 || $0.start >= 3.2 }
+        for n in outside {
+            XCTAssertTrue(notes.contains { $0.pitch == n.pitch && abs($0.start - n.start) < 1e-9 }, "kept note at \(n.start)")
+        }
+        XCTAssertTrue(notes.contains { $0.start >= 1.6 && $0.start < 3.2 }, "new notes inside the range")
+    }
+
+    func testExtendKeepsTheOldNotesAndAddsAfterTheEnd() async throws {
+        let s = song()
+        let result = try await MusicEngine.extend(model: FakeModel(), song: s, seconds: 5, by: 4, seed: 2,
+                                                  tracks: [.piano, .bass], busyness: [:], noteLength: [:], music: music)
+        XCTAssertEqual(result.seconds, 9, accuracy: 1e-9)
+        for t in [TrackID.piano, .bass] {
+            XCTAssertEqual(Array(result.tracks[t]!.prefix(s[t]!.count)), s[t]!, t.rawValue)
+        }
+        XCTAssertTrue(result.tracks.values.joined().contains { $0.start >= 5 }, "new notes after the old end")
+    }
+
+    func testAChosenTempoGivesAGrid() async throws {
+        var m = music
+        m.tempo = 90
+        let result = try await MusicEngine.generate(model: FakeModel(), seconds: 4, seed: 5, tracks: [.piano],
+                                                    busyness: [:], noteLength: [:], music: m)
+        XCTAssertEqual(result.tempo?.bpm, 90)
     }
 }

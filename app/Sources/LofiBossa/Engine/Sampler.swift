@@ -237,11 +237,13 @@ enum Sampler {
 
     /// New notes for `instruments` around fixed events; retried with rests discouraged, then
     /// forbidden, while sparser than `minNotesPerSecond`. Returns only the new events.
+    /// `restPenalties` are the attempts in order (the server's are 0, 4, then forbidden).
     static func accompany(model: LogitsModel, fixed: [Event], seconds: Double, instruments: [Int],
                           options: SamplerOptions = SamplerOptions(), seed: UInt64,
-                          minNotesPerSecond: Double = 0.5, progress: ((Double) -> Void)? = nil) async throws -> [Event] {
+                          minNotesPerSecond: Double = 0.5, restPenalties: [Float] = [0, 4, .infinity],
+                          progress: ((Double) -> Void)? = nil) async throws -> [Event] {
         var new: [Event] = []
-        for penalty in [Float(0), 4, .infinity] {
+        for penalty in restPenalties {
             var o = options
             o.restPenalty = penalty
             o.maxNotesPerSecond = 12

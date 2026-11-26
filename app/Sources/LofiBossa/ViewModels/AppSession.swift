@@ -24,9 +24,10 @@ final class AppSession {
     }
 
     /// `--fake-generator` swaps the model for an instant fake on every platform, so UI tests and
-    /// simulator checks need no Python and no model. Otherwise the Mac launches its local server;
-    /// iOS uses the in-app engine (not ready yet, see OnDeviceGeneratorClient), or with
-    /// `--local-generator` a server already running on the Mac (reachable from the Simulator).
+    /// simulator checks need no Python and no model. Otherwise the app uses the model inside it
+    /// (OnDeviceGeneratorClient) when the model files are present; the Mac falls back to
+    /// launching its Python server, and iOS with `--local-generator` reaches a server already
+    /// running on the Mac (from the Simulator).
     static func defaultGenerator() -> any GeneratorClient {
         let args = CommandLine.arguments
         if args.contains("--fake-generator") {
@@ -37,8 +38,11 @@ final class AppSession {
             }
             return fake
         }
+        // The model inside the app when its files are there (bundled, or `--model-dir`);
+        // `--server-generator` (Mac) / `--local-generator` (iOS Simulator) use the Python server.
         #if os(macOS)
-        return LocalGeneratorClient()
+        if args.contains("--server-generator") || !ModelFiles.isAvailable { return LocalGeneratorClient() }
+        return OnDeviceGeneratorClient()
         #else
         return args.contains("--local-generator") ? LocalGeneratorClient() : OnDeviceGeneratorClient()
         #endif
