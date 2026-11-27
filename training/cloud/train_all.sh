@@ -4,12 +4,13 @@
 #
 #   bash training/cloud/train_all.sh            # full run
 #   EPOCHS=1 bash training/cloud/train_all.sh   # shorter
+#   LICENSES=all bash ...                       # also GigaMIDI (CC BY-NC): never ship the result
 set -euo pipefail
 mkdir -p logs
 for style in bossa lofi; do
   .venv/bin/python -u training/finetune.py --style "$style" \
     --epochs "${EPOCHS:-1}" --batch-size "${BATCH:-8}" \
     --transpose --boost-vibes 3 --boost-lead 1 \
-    --save-last 2>&1 | tee "logs/$style.log"
+    --licenses "${LICENSES:-cc-by}" --save-last 2>&1 | tee "logs/$style.log"
 done
 bash training/cloud/pack.sh

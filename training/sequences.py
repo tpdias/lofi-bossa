@@ -30,6 +30,7 @@ from anticipation.convert import midi_to_events
 from anticipation.tokenize import extract_instruments, extract_spans
 from anticipation.vocab import ANTICIPATE, AUTOREGRESS, NOTE_OFFSET
 
+from licenses import filter_rows
 from tracks import ALL_FAMILY
 
 DRUMS = 128
@@ -113,11 +114,13 @@ def file_rows(job):
 
 
 def build(index_path, processed_dir, style, tiers, copies, core_boost, limit=None, workers=None, seed=0,
-          boosts=None, transpose=False):
+          boosts=None, transpose=False, licenses="all"):
     """Return (train, validation) int32 arrays of shape [rows, 1024], padded with PAD.
-    Validation is never boosted or transposed, so losses stay comparable between runs."""
-    entries = [json.loads(line) for line in open(index_path)]
-    entries = [e for e in entries if e["style"] == style and e["tier"] in tiers]
+    Validation is never boosted or transposed, so losses stay comparable between runs.
+    `licenses` ("all" or "cc-by") leaves out files whose source that license group excludes."""
+    with open(index_path) as f:
+        entries = [json.loads(line) for line in f]
+    entries = [e for e in filter_rows(entries, licenses) if e["style"] == style and e["tier"] in tiers]
     random.Random(seed).shuffle(entries)
     if limit:
         entries = entries[:limit]
