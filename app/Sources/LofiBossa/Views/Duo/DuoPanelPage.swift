@@ -54,8 +54,8 @@ struct DuoPanelPage: View {
 
 // MARK: - Sound
 
-/// The three effect cards (`.macro`), "Lo-Fi defaults, adjusted" with Reset, and while a take is
-/// being written, a note that the sound stays usable (view "generating").
+/// The three effect cards (`.macro`), "Lo-Fi defaults, adjusted" with Reset, while a take is
+/// being written a note that the sound stays usable (view "generating"), and the background sound.
 struct DuoSoundPane: View {
     @Bindable var model: ProjectViewModel
 
@@ -76,6 +76,8 @@ struct DuoSoundPane: View {
                         .font(.system(size: 13)).foregroundStyle(Color.lfbTextSecondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                BackgroundSoundSection(model: model, minimumTileWidth: 76)
+                    .padding(.top, 6)
             }
         }
         .scrollBounceBehavior(.basedOnSize)
@@ -89,17 +91,17 @@ struct DuoEffectCards: View {
     @Bindable var model: ProjectViewModel
     let layout: Layout
 
-    private var effects: MixEffects { model.displayedSnapshot?.effects ?? model.project.style.defaultEffects }
+    private var effects: MixEffects { model.currentEffects }
 
     private var items: [(title: LocalizedStringKey, caption: LocalizedStringKey, symbol: String, value: Binding<Double>)] {
         let e = effects
         return [
             ("Warmth", "Softens the highs", "sun.max",
-             Binding(get: { e.warmth }, set: { model.setEffects(MixEffects(warmth: $0, reverb: e.reverb, vinyl: e.vinyl)) })),
+             Binding(get: { e.warmth }, set: { var m = e; m.warmth = $0; model.setEffects(m) })),
             ("Reverb", "Room around the band", "dot.radiowaves.left.and.right",
-             Binding(get: { e.reverb }, set: { model.setEffects(MixEffects(warmth: e.warmth, reverb: $0, vinyl: e.vinyl)) })),
+             Binding(get: { e.reverb }, set: { var m = e; m.reverb = $0; model.setEffects(m) })),
             ("Vinyl", "Hiss and crackle", "record.circle",
-             Binding(get: { e.vinyl }, set: { model.setEffects(MixEffects(warmth: e.warmth, reverb: e.reverb, vinyl: $0)) })),
+             Binding(get: { e.vinyl }, set: { var m = e; m.vinyl = $0; model.setEffects(m) })),
         ]
     }
 

@@ -172,104 +172,11 @@ struct PhoneThumbnail: View {
     }
 }
 
-/// First launch (HANDOFF §5.1, artboard "iPhone · first launch"): mark, title, one sentence,
-/// the two style cards full width, length, Generate and the generator status. Generate creates
-/// the first project, starts the take and pushes the project screen.
+/// First launch: the New Project flow, full screen, with a welcome on its first step. Generate
+/// creates the first project, starts the take and pushes the project screen.
 struct PhoneFirstLaunchView: View {
-    @Environment(ProjectStore.self) private var store
-    @Environment(AppSession.self) private var session
-    @State private var style: MusicStyle = .lofi
-    @State private var length: Double = 90
-
-    private var status: GeneratorStatus { session.generator.currentStatus }
-
     var body: some View {
-        GeometryReader { geo in
-        ScrollView {
-            VStack(spacing: LFBSpace.lg) {
-                HStack(alignment: .bottom, spacing: 4) {
-                    ForEach(Array(zip(TrackID.core, [30.0, 44, 22, 36])), id: \.0) { id, h in
-                        RoundedRectangle(cornerRadius: 3).fill(id.color).frame(width: 10, height: h)
-                    }
-                }
-                .frame(height: 48)
-                .accessibilityHidden(true)
-                SaudadeMark(size: 56)
-                SaudadeWordmark(size: 34)
-                Text("Make your first track").font(.system(size: 28, weight: .bold, design: .rounded))
-                    .multilineTextAlignment(.center)
-                Text("Pick a feel. Lo-Fi & Bossa writes a short four-part song that you can mix, rework and export.")
-                    .font(.system(size: 14)).foregroundStyle(Color.lfbTextSecondary)
-                    .multilineTextAlignment(.center)
-                VStack(spacing: LFBSpace.sm) {
-                    ForEach(MusicStyle.allCases) { s in styleCard(s) }
-                }
-                HStack(spacing: LFBSpace.md) {
-                    Text("Length").font(.system(size: 13)).foregroundStyle(Color.lfbTextSecondary)
-                    Slider(value: $length, in: 15...180, step: 15).accessibilityLabel("Length")
-                    Text(formatTimecode(length)).font(.system(size: 15)).monospacedDigit().frame(width: 40, alignment: .trailing)
-                }
-                Button(action: start) { Label("Generate", systemImage: "sparkles") }
-                    .buttonStyle(PhoneBigButtonStyle())
-                    .accessibilityIdentifier("first-generate")
-                statusLine
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, LFBSpace.xl)
-            .frame(maxWidth: 520)
-            .frame(maxWidth: .infinity, minHeight: geo.size.height)
-        }
-        .scrollBounceBehavior(.basedOnSize)
-        }
-        .background(Color.lfbWindow)
-    }
-
-    private func styleCard(_ s: MusicStyle) -> some View {
-        Button { style = s } label: {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(s.title).font(.system(size: 16, weight: .semibold, design: .rounded))
-                Text(s == .lofi
-                     ? L("Electric piano, soft guitar, round bass and a dusty kit, with tape warmth and a little vinyl.")
-                     : L("Nylon guitar, grand piano, upright bass and light percussion, with an open, airy room."))
-                    .font(.system(size: 13)).foregroundStyle(Color.lfbTextSecondary)
-                    .multilineTextAlignment(.leading)
-            }
-            .padding(.horizontal, 16).padding(.vertical, 14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(style == s ? Color.lfbAccentWash : Color.lfbSurface, in: RoundedRectangle(cornerRadius: 16))
-            .overlay(RoundedRectangle(cornerRadius: 16)
-                .strokeBorder(style == s ? Color.lfbAccent : Color.lfbControlHairline, lineWidth: style == s ? 2 : 1))
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(style == s ? .isSelected : [])
-    }
-
-    @ViewBuilder private var statusLine: some View {
-        HStack(spacing: 6) {
-            switch status {
-            case .ready:
-                Circle().fill(Color.lfbReady).frame(width: 7, height: 7)
-                Text("Generator ready · usually under a minute")
-            case .starting:
-                ProgressView().controlSize(.mini)
-                Text("Loading the music model…")
-            case .offline:
-                Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Color.lfbCaution)
-                Text("The generator isn't running. You can still start an empty project.")
-            }
-        }
-        .font(.system(size: 13)).foregroundStyle(Color.lfbTextSecondary)
-        .multilineTextAlignment(.center)
-        .frame(minHeight: 30)
-        .accessibilityElement(children: .combine)
-    }
-
-    private func start() {
-        var project = store.create(style: style)
-        project.lengthSeconds = length
-        store.update(project)
-        session.open(project)
-        if case .ready = status { session.activeModel?.generate() }
+        NewProjectFlow(welcome: true)
     }
 }
 #endif

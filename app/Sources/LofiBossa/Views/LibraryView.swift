@@ -10,6 +10,7 @@ enum SidebarSelection: Hashable {
 /// New Project pinned to the bottom.
 struct SidebarView: View {
     @Environment(ProjectStore.self) private var store
+    @Environment(AppSession.self) private var session
     @Binding var selection: SidebarSelection
 
     var body: some View {
@@ -35,8 +36,7 @@ struct SidebarView: View {
         .listStyle(.sidebar)
         .safeAreaInset(edge: .bottom) {
             Button {
-                let p = store.create()
-                selection = .project(p.id)
+                session.newProject()
             } label: {
                 Label("New Project", systemImage: "plus").frame(maxWidth: .infinity)
             }
@@ -59,6 +59,7 @@ struct SidebarView: View {
 /// Project library grid, and the same component filtered to Recently Deleted.
 struct LibraryGridView: View {
     @Environment(ProjectStore.self) private var store
+    @Environment(AppSession.self) private var session
     let isTrash: Bool
     var status: GeneratorStatus = .starting
     var onOpen: (Project) -> Void
@@ -125,8 +126,7 @@ struct LibraryGridView: View {
                     }
                     .pickerStyle(.menu)
                     Button {
-                        let p = store.create()
-                        onOpen(p)
+                        session.newProject()
                     } label: {
                         Label("New Project", systemImage: "plus")
                     }
@@ -232,87 +232,12 @@ private struct ProjectCard: View {
     }
 }
 
-/// No projects yet: a short welcome plus the same style/length/Generate controls as the
-/// recipe bar, so the first song can be made without the grid existing yet.
+/// No projects yet: the New Project flow fills the window, with a welcome on its first step
+/// and nothing to cancel.
 struct FirstLaunchView: View {
-    @Environment(ProjectStore.self) private var store
-    var onCreated: (Project) -> Void = { _ in }
-
-    @State private var style: MusicStyle = .lofi
-    @State private var length: Double = 90
-    let status: GeneratorStatus
-
-    init(status: GeneratorStatus = .starting, onCreated: @escaping (Project) -> Void = { _ in }) {
-        self.status = status
-        self.onCreated = onCreated
-    }
+    init(status: GeneratorStatus = .starting, onCreated: @escaping (Project) -> Void = { _ in }) {}
 
     var body: some View {
-        VStack(spacing: LFBSpace.xl) {
-            SaudadeMark(size: 64)
-            SaudadeWordmark(size: 32)
-            VStack(spacing: LFBSpace.xs) {
-                Text("Make your first track").font(.lfbLargeTitle)
-                Text("Pick a style and length, and the generator writes piano, guitar, bass and drums.")
-                    .font(.lfbBody).foregroundStyle(Color.lfbTextSecondary)
-            }
-            HStack(spacing: LFBSpace.md) {
-                ForEach(MusicStyle.allCases) { s in
-                    StyleCard(style: s, isSelected: style == s) { style = s }
-                }
-            }
-            VStack(spacing: LFBSpace.xs) {
-                HStack {
-                    Text("Length").foregroundStyle(Color.lfbTextSecondary)
-                    Spacer()
-                    Text(formatTimecode(length)).monospacedDigit()
-                }
-                Slider(value: $length, in: 15...180, step: 15)
-                    .accessibilityLabel("Length")
-                    .accessibilityValue(formatTimecode(length))
-            }
-            .frame(width: 280)
-            Button {
-                let p = store.create(style: style)
-                var updated = p; updated.lengthSeconds = length
-                store.update(updated)
-                onCreated(updated)
-            } label: {
-                Label("Generate", systemImage: "sparkles").frame(minWidth: 140)
-            }
-            .buttonStyle(LFBPrimaryButtonStyle()).controlSize(.large)
-            .accessibilityHint("Creates the project and writes the first take")
-            .accessibilityInputLabels(["Generate", "Make music"])
-            GeneratorStatusPill(status: status)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.lfbWindow)
-        .environment(\.lfbTheme, LFBTheme(style))
-    }
-}
-
-private struct StyleCard: View {
-    let style: MusicStyle
-    let isSelected: Bool
-    let action: () -> Void
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 6) {
-                Text(style.title).font(.lfbHeadline)
-                HStack(spacing: 3) {
-                    ForEach(TrackID.core) { id in
-                        RoundedRectangle(cornerRadius: 1.5).fill(id.color).frame(width: 16, height: 6)
-                    }
-                }
-            }
-            .padding(LFBSpace.lg)
-            .frame(width: 140)
-            .background(isSelected ? Color.lfbAccentWash : Color.lfbSurface, in: RoundedRectangle(cornerRadius: LFBRadius.card))
-            .overlay(RoundedRectangle(cornerRadius: LFBRadius.card)
-                .strokeBorder(isSelected ? Color.lfbAccent : Color.lfbControlHairline, lineWidth: isSelected ? 2 : 1))
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(style.title)
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        NewProjectFlow(welcome: true)
     }
 }

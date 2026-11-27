@@ -33,6 +33,14 @@ struct AdaptiveRootView: View {
         .environment(\.noteClock, NoteClock { [weak session] in
             (session?.activeModel?.position ?? 0, session?.activeModel?.isPlaying ?? false)
         })
+        .sheet(isPresented: Binding(get: { session.isCreatingProject }, set: { session.isCreatingProject = $0 })) {
+            NewProjectFlow(onCancel: { session.isCreatingProject = false })
+                .environment(session)
+                .environment(session.store)
+                #if os(iOS)
+                .presentationSizing(.page)
+                #endif
+        }
         .onAppear { session.syncActiveModel(); DevTools.runDemoIfAsked(session) }
         .announcesProgress(of: session.activeModel)
         .hapticBeat(of: session.activeModel)

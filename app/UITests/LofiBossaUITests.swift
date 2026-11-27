@@ -36,7 +36,11 @@ final class LofiBossaUITests: XCTestCase {
 
     /// New project, then Generate; returns once version 1 exists.
     private func makeProjectWithSong() {
-        app.typeKey("n", modifierFlags: .command)   // File ▸ New Project
+        app.typeKey("n", modifierFlags: .command)   // File ▸ New Project: style, then settings
+        let next = app.buttons["new-project-next"]
+        XCTAssertTrue(next.waitForExistence(timeout: 10), "the New Project sheet did not open")
+        next.click()
+        app.buttons["new-project-create"].click()
         let generate = app.buttons["generate"]
         XCTAssertTrue(generate.waitForExistence(timeout: 10), "project stage did not open")
         XCTAssertTrue(generate.isEnabled)

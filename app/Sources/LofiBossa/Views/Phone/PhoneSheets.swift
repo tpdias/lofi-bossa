@@ -189,10 +189,11 @@ struct PhoneTrackEffectsPage: View {
 
 // MARK: - Sound
 
-/// The three master effect cards (76 pt, the whole card is the slider) and Reset.
+/// The three master effect cards (76 pt, the whole card is the slider), Reset, and the
+/// background sound.
 struct PhoneSoundSheet: View {
     @Bindable var model: ProjectViewModel
-    private var effects: MixEffects { model.displayedSnapshot?.effects ?? model.project.style.defaultEffects }
+    private var effects: MixEffects { model.currentEffects }
 
     var body: some View {
         ScrollView {
@@ -208,12 +209,13 @@ struct PhoneSoundSheet: View {
                 Text(model.effectsAreAtStyleDefault ? "Drag anywhere on a card. \(model.project.style.title) defaults. Reset returns to them." : "Drag anywhere on a card. \(model.project.style.title) defaults, adjusted. Reset returns to them.")
                     .font(.system(size: 13)).foregroundStyle(Color.lfbTextTertiary)
                     .padding(.horizontal, 4)
+                BackgroundSoundSection(model: model, minimumTileWidth: 76)
+                    .padding(.top, LFBSpace.sm)
             }
             .padding(.horizontal, LFBSpace.lg)
             .padding(.bottom, LFBSpace.xl)
         }
         .scrollBounceBehavior(.basedOnSize)
-        .disabled(model.displayedSnapshot == nil)
     }
 
     private func card(_ title: LocalizedStringKey, _ caption: LocalizedStringKey, _ symbol: String, _ key: WritableKeyPath<MixEffects, Double>) -> some View {
@@ -222,6 +224,7 @@ struct PhoneSoundSheet: View {
             set: { var e = effects; e[keyPath: key] = $0; model.setEffects(e) }))
             .frame(height: LFBTouchSize.effectCardHeight)
             .clipShape(RoundedRectangle(cornerRadius: 16))
+            .disabled(model.displayedSnapshot == nil)   // the background works before the first take
     }
 }
 
