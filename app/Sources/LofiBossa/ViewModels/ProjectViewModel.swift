@@ -164,6 +164,11 @@ final class ProjectViewModel {
                 ) {
                     guard case .finished(var snapshot) = event else { continue }
                     snapshot = carryOverMixIfSameStyle(onto: snapshot)
+                    // The background isn't part of a style: it carries over to every new take
+                    // (the first one gets what was picked when the project was made).
+                    if let background = project.currentSnapshot?.effects.background ?? project.startingBackground {
+                        snapshot.effects.background = background
+                    }
                     for i in snapshot.tracks.indices { snapshot.tracks[i].isLocked = locked.contains(snapshot.tracks[i].id) }
                     let kept = snapshot.trackIDs.filter(locked.contains)
                     appendVersion(kind: kept.isEmpty ? .newTake(seed: snapshot.seed)
@@ -512,12 +517,36 @@ final class ProjectViewModel {
     }
 
     var effectsAreAtStyleDefault: Bool {
-        guard let e = project.currentSnapshot?.effects else { return true }
+        guard var e = project.currentSnapshot?.effects else { return true }
+        e.background = BackgroundSound()   // not one of the style's effects
         return e == project.style.defaultEffects
     }
 
     func resetEffectsToStyleDefault() {
-        setEffects(project.style.defaultEffects)
+        var defaults = project.style.defaultEffects
+        defaults.background = currentEffects.background   // Reset is about the style's effects
+        setEffects(defaults)
+    }
+
+    /// The mix effects in use: the current version's, or (before the first take) the style's
+    /// with the background picked for the project.
+    var currentEffects: MixEffects {
+        if let e = displayedSnapshot?.effects { return e }
+        var e = project.style.defaultEffects
+        e.background = project.startingBackground ?? BackgroundSound()
+        return e
+    }
+
+    /// Before the first take the background is kept on the project; after, in the version.
+    func setBackground(_ background: BackgroundSound) {
+        if currentIndex == nil {
+            project.startingBackground = background
+            persist()
+        } else {
+            var e = project.currentSnapshot?.effects ?? currentEffects
+            e.background = background
+            setEffects(e)
+        }
     }
 
     private func pushMixToAudio() {

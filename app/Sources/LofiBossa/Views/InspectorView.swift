@@ -24,7 +24,12 @@ struct InspectorView: View {
 private struct SoundTab: View {
     @Bindable var model: ProjectViewModel
 
-    private var effects: MixEffects { model.displayedSnapshot?.effects ?? model.project.style.defaultEffects }
+    private var effects: MixEffects { model.currentEffects }
+
+    /// One effect's amount; setting it keeps every other part of the mix (the background too).
+    private func binding(_ key: WritableKeyPath<MixEffects, Double>) -> Binding<Double> {
+        Binding(get: { effects[keyPath: key] }, set: { var e = effects; e[keyPath: key] = $0; model.setEffects(e) })
+    }
 
     var body: some View {
         ScrollView {
@@ -34,12 +39,9 @@ private struct SoundTab: View {
                     Text("The whole mix. Each track has its own effects too: use the slider button on its row.")
                         .font(.lfbCaption).foregroundStyle(Color.lfbTextSecondary)
                 }
-                EffectCard(title: "Warmth", caption: "Low-pass filter", symbol: "thermometer.sun",
-                          amount: Binding(get: { effects.warmth }, set: { model.setEffects(MixEffects(warmth: $0, reverb: effects.reverb, vinyl: effects.vinyl)) }))
-                EffectCard(title: "Reverb", caption: "Space and depth", symbol: "waveform.path.ecg",
-                          amount: Binding(get: { effects.reverb }, set: { model.setEffects(MixEffects(warmth: effects.warmth, reverb: $0, vinyl: effects.vinyl)) }))
-                EffectCard(title: "Vinyl", caption: "Hiss and crackle", symbol: "circle.dotted",
-                          amount: Binding(get: { effects.vinyl }, set: { model.setEffects(MixEffects(warmth: effects.warmth, reverb: effects.reverb, vinyl: $0)) }))
+                EffectCard(title: "Warmth", caption: "Low-pass filter", symbol: "thermometer.sun", amount: binding(\.warmth))
+                EffectCard(title: "Reverb", caption: "Space and depth", symbol: "waveform.path.ecg", amount: binding(\.reverb))
+                EffectCard(title: "Vinyl", caption: "Hiss and crackle", symbol: "circle.dotted", amount: binding(\.vinyl))
 
                 HStack {
                     Text(model.effectsAreAtStyleDefault ? "\(model.project.style.title) defaults" : "\(model.project.style.title) defaults, adjusted")
@@ -54,6 +56,9 @@ private struct SoundTab: View {
 
                 Text("Effects apply to the whole mix, after the four tracks.")
                     .font(.lfbCaption).foregroundStyle(Color.lfbTextTertiary)
+
+                Divider().padding(.vertical, LFBSpace.xs)
+                BackgroundSoundSection(model: model)
             }
             .padding(LFBSpace.md)
         }

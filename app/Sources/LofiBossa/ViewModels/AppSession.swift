@@ -50,7 +50,20 @@ final class AppSession {
 
     func open(_ project: Project) { selection = .project(project.id) }
 
-    func newProject() { selection = .project(store.create().id) }
+    /// Shows the New Project flow (style, then the song's settings) as a sheet on every layout.
+    var isCreatingProject = false
+
+    func newProject() { isCreatingProject = true }
+
+    /// Makes the project the flow described and opens it; `generate` also starts its first take
+    /// when the generator is ready (otherwise the project opens empty, ready for Generate).
+    func createProject(from draft: ProjectDraft, generate: Bool) {
+        let project = store.create(from: draft)
+        isCreatingProject = false
+        selection = .project(project.id)
+        syncActiveModel()
+        if generate, case .ready = generator.currentStatus { activeModel?.generate() }
+    }
 
     /// Keeps `activeModel` matching `selection`: creates the view model when a project opens and
     /// tears the old one down when it closes.

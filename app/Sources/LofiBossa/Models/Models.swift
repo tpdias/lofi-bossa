@@ -305,6 +305,79 @@ struct MixEffects: Codable, Hashable {
     var warmth: Double = 0.6        // low-pass amount
     var reverb: Double = 0.3
     var vinyl: Double = 0.4         // hiss and crackle
+    /// A bed of rain, forest, wind, waves or noise under the song (none by default).
+    var background = BackgroundSound()
+}
+
+// Written out so projects saved before `background` existed still decode (see Track).
+extension MixEffects {
+    private enum CodingKeys: String, CodingKey { case warmth, reverb, vinyl, background }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        warmth = try c.decodeIfPresent(Double.self, forKey: .warmth) ?? 0.6
+        reverb = try c.decodeIfPresent(Double.self, forKey: .reverb) ?? 0.3
+        vinyl = try c.decodeIfPresent(Double.self, forKey: .vinyl) ?? 0.4
+        background = try c.decodeIfPresent(BackgroundSound.self, forKey: .background) ?? BackgroundSound()
+    }
+}
+
+/// The sounds that can play under a song. All are synthesized while playing (Audio/
+/// BackgroundNoise.swift), so the app ships no recordings and none need a license.
+enum Ambience: String, CaseIterable, Codable, Identifiable {
+    case none, rain, forest, wind, ocean, white, grey, brown
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .none: String(localized: "None")
+        case .rain: String(localized: "Rain")
+        case .forest: String(localized: "Forest")
+        case .wind: String(localized: "Wind")
+        case .ocean: String(localized: "Ocean")
+        case .white: String(localized: "White noise")
+        case .grey: String(localized: "Grey noise")
+        case .brown: String(localized: "Brown noise")
+        }
+    }
+
+    /// One line on what it sounds like.
+    var caption: String {
+        switch self {
+        case .none: String(localized: "Just the music")
+        case .rain: String(localized: "Steady rain with drops on the window")
+        case .forest: String(localized: "Rustling leaves and distant birds")
+        case .wind: String(localized: "Slow gusts rising and falling")
+        case .ocean: String(localized: "Waves rolling in and out")
+        case .white: String(localized: "Bright, even hiss")
+        case .grey: String(localized: "Balanced to sound even to the ear")
+        case .brown: String(localized: "Deep, soft rumble")
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .none: "speaker.slash"
+        case .rain: "cloud.rain"
+        case .forest: "tree"
+        case .wind: "wind"
+        case .ocean: "water.waves"
+        case .white: "aqi.low"
+        case .grey: "aqi.medium"
+        case .brown: "circle.hexagongrid.fill"
+        }
+    }
+
+    /// Nature sounds first, then the plain noise colors.
+    static let nature: [Ambience] = [.rain, .forest, .wind, .ocean]
+    static let noises: [Ambience] = [.white, .grey, .brown]
+}
+
+struct BackgroundSound: Codable, Hashable {
+    var ambience: Ambience = .none
+    var level: Double = 0.5         // 0...1
+
+    var isOn: Bool { ambience != .none && level > 0 }
 }
 
 // MARK: - Versions
@@ -436,6 +509,9 @@ struct Project: Identifiable, Codable, Hashable {
     var songDynamics: Double { dynamics ?? Self.defaultDynamics }
     static let defaultDynamics = 0.5
     static let tempoRange: ClosedRange<Double> = 60...140
+    /// The background sound chosen when the project was made, for its first take (a take's
+    /// mix lives in its snapshot; there is none before the first Generate).
+    var startingBackground: BackgroundSound? = nil
 
     /// The song-wide settings sent with every generate, rewrite and extend.
     var music: MusicSettings {

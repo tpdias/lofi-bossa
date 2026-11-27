@@ -1,7 +1,7 @@
 import AVFoundation
 
 /// Plays a SongSnapshot: one sampler per track -> track mix -> low-pass -> reverb -> output,
-/// with vinyl noise mixed in after the effects.
+/// with vinyl noise and the background sound (rain, waves, noise...) mixed in after the effects.
 final class AudioEngine {
     enum ExportFormat { case wav, m4a }
 
@@ -13,6 +13,7 @@ final class AudioEngine {
     private let lowPass = AVAudioUnitEQ(numberOfBands: 1)
     private let reverb = AVAudioUnitReverb()
     private let vinyl = VinylNoise()
+    private let background = BackgroundNoise()
     /// Created by `load` and nowhere else. It must not exist before the first song: a second
     /// sequencer on the same engine (the one a lazy property made just to be stopped, then
     /// replaced) left the real one silent in live playback while offline renders still worked.
@@ -42,9 +43,14 @@ final class AudioEngine {
 
     /// The vinyl noise is part of the song's sound, so it only plays while the song does (or while
     /// an export is rendering). `vinylLevel` is the user's setting; the gate decides if it's heard.
+    /// The background sound follows the same gate.
     private var vinylLevel: Float = 0
+    private var backgroundLevel: Float = 0
     private var vinylGate = false {
-        didSet { vinyl.level = vinylGate ? vinylLevel : 0 }
+        didSet {
+            vinyl.level = vinylGate ? vinylLevel : 0
+            background.level = vinylGate ? backgroundLevel : 0
+        }
     }
 
     /// One track's effects, in signal order: sampler -> eq -> distortion -> delay -> reverb ->
@@ -73,7 +79,7 @@ final class AudioEngine {
     init(soundBank: URL? = AudioEngine.defaultSoundBank) {
         self.soundBank = soundBank
         let format = AVAudioFormat(standardFormatWithSampleRate: 44100, channels: 2)!
-        for node in [trackMix, lowPass, reverb, vinyl.node] as [AVAudioNode] { engine.attach(node) }
+        for node in [trackMix, lowPass, reverb, vinyl.node, background.node] as [AVAudioNode] { engine.attach(node) }
         for id in TrackID.allCases {
             let sampler = AVAudioUnitSampler()
             let chain = TrackChain()
@@ -89,6 +95,7 @@ final class AudioEngine {
         engine.connect(lowPass, to: reverb, format: format)
         engine.connect(reverb, to: engine.mainMixerNode, format: format)
         engine.connect(vinyl.node, to: engine.mainMixerNode, format: format)
+        engine.connect(background.node, to: engine.mainMixerNode, format: format)
 
         lowPass.bands[0].filterType = .lowPass
         lowPass.bands[0].bypass = false
@@ -162,6 +169,9 @@ final class AudioEngine {
         reverb.wetDryMix = Float(effects.reverb * 60)
         vinylLevel = Float(effects.vinyl)
         vinyl.level = vinylGate ? vinylLevel : 0
+        background.ambience = effects.background.ambience
+        backgroundLevel = effects.background.isOn ? Float(effects.background.level) : 0
+        background.level = vinylGate ? backgroundLevel : 0
     }
 
     // MARK: Song and transport
@@ -238,7 +248,8 @@ final class AudioEngine {
 
     /// One WAV (or M4A) per track that has notes, plus the song's MIDI, written into `folder`.
     /// Each stem is the track alone through its own effects and the master chain, at the
-    /// track's own volume whether or not it is muted in the mix, without the vinyl noise.
+    /// track's own volume whether or not it is muted in the mix, without the vinyl noise or the
+    /// background sound.
     /// Returns the audio files written.
     @discardableResult
     func exportStems(_ snapshot: SongSnapshot, to folder: URL, format: ExportFormat = .wav,

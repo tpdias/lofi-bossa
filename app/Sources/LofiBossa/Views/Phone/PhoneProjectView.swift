@@ -235,7 +235,7 @@ struct PhoneProjectView: View {
                 })
                 .presentationDetents([.medium, .large])
             case .sound:
-                PhoneSoundSheet(model: model).presentationDetents([.medium])
+                PhoneSoundSheet(model: model).presentationDetents([.medium, .large])
             case .versions:
                 PhoneVersionsSheet(model: model).presentationDetents([.medium, .large])
             case .export:
