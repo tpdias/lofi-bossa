@@ -74,8 +74,14 @@ _lock = threading.Lock()  # one generation at a time
 MODEL_CHOICES = ("auto", "pretrained", "finetuned")
 
 
+WEIGHT_FILES = ("model.safetensors", "pytorch_model.bin", "model.safetensors.index.json")
+
+
 def has_finetuned(style):
-    return (CHECKPOINTS / style / "config.json").is_file()
+    """A checkpoint counts only with its weights: a folder left with just config.json (weights
+    moved or deleted) would otherwise be chosen on auto and fail every request."""
+    folder = CHECKPOINTS / style
+    return (folder / "config.json").is_file() and any((folder / w).is_file() for w in WEIGHT_FILES)
 
 
 def trained_tracks(style):
@@ -104,7 +110,8 @@ def get_model(style, choice="auto", wanted=()):
     if choice not in MODEL_CHOICES:
         raise HTTPException(422, f"model must be one of {MODEL_CHOICES}")
     if choice == "finetuned" and not has_finetuned(style):
-        raise HTTPException(422, f"there is no fine-tuned model for {style} (checkpoints/{style}/ is missing)")
+        raise HTTPException(422, f"there is no fine-tuned model for {style} "
+                                 f"(checkpoints/{style}/ is missing or has no model weights)")
     source = model_source(style, choice, wanted)
     if source not in _models:
         _models[source] = load_model(source).to(device).eval()
